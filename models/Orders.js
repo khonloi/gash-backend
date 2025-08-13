@@ -59,4 +59,21 @@ const OrdersSchema = new mongoose.Schema({
   },
 });
 
+// Pre-save hook to automatically set order_status to 'cancelled' when pay_status is 'failed'
+OrdersSchema.pre('save', function(next) {
+  if (this.pay_status === 'failed' && this.order_status !== 'cancelled') {
+    this.order_status = 'cancelled';
+  }
+  next();
+});
+
+// Pre-findOneAndUpdate hook to automatically set order_status to 'cancelled' when pay_status is 'failed'
+OrdersSchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate();
+  if (update && update.pay_status === 'failed' && (!update.order_status || update.order_status !== 'cancelled')) {
+    update.order_status = 'cancelled';
+  }
+  next();
+});
+
 module.exports = mongoose.model('Orders', OrdersSchema);

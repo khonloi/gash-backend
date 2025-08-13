@@ -89,6 +89,18 @@ async function searchOrdersService(queryParams, user) {
   let orderIdsByProduct = [];
   if (q && typeof q === 'string' && q.trim() !== '') {
     const trimmedQuery = q.trim();
+    // Check if q matches DD/MM/YYYY
+    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const dateMatch = trimmedQuery.match(dateRegex);
+    if (dateMatch) {
+      // Parse date
+      const day = parseInt(dateMatch[1], 10);
+      const month = parseInt(dateMatch[2], 10) - 1; // JS months are 0-based
+      const year = parseInt(dateMatch[3], 10);
+      const startDate = new Date(year, month, day, 0, 0, 0, 0);
+      const endDate = new Date(year, month, day, 23, 59, 59, 999);
+      query.orderDate = { $gte: startDate, $lte: endDate };
+    } else {
     // Search OrderDetails for product name
     const matchingDetails = await OrderDetails.find().populate({
       path: 'variant_id',
@@ -114,6 +126,7 @@ async function searchOrdersService(queryParams, user) {
     // If any orderIdsByProduct found, add to $or
     if (orderIdsByProduct.length > 0) {
       query.$or.push({ _id: { $in: orderIdsByProduct } });
+      }
     }
   }
   return await Orders.find(query).populate('acc_id', 'username name');
@@ -155,6 +168,12 @@ async function updateOrderService(id, updateData, user) {
       throw err;
     }
   }
+  
+  // If payment status is set to failed, automatically set order status to cancelled
+  if (rest.pay_status === 'failed' && (!rest.order_status || rest.order_status !== 'cancelled')) {
+    rest.order_status = 'cancelled';
+  }
+  
   const updatedOrder = await Orders.findByIdAndUpdate(
     id,
     { ...rest, ...(acc_id && { acc_id }), ...(username && { username }) },

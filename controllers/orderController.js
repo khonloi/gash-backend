@@ -58,7 +58,11 @@ exports.updateOrder = async (req, res) => {
     // Emit socket event for real-time updates
     const io = req.app.get('io');
     if (io && updatedOrder && updatedOrder.acc_id) {
-      io.emit('orderUpdated', { userId: updatedOrder.acc_id, order: updatedOrder });
+      // Always emit userId as string (handle both populated and non-populated acc_id)
+      const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
+        ? updatedOrder.acc_id._id.toString()
+        : updatedOrder.acc_id.toString();
+      io.emit('orderUpdated', { userId, order: updatedOrder });
     }
     res.status(200).json({
       message: 'Order updated successfully',

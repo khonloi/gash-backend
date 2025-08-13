@@ -138,13 +138,14 @@ exports.handleReturn = async (vnp_Params) => {
 
     if (rspCode === "00") {
       if (order.pay_status === 'paid') {
-        return { code: "02", message: 'Order already paid' };
+        return { code: "00", message: 'Payment successful' };
       }
       order.pay_status = 'paid';
       await order.save();
       return { code: rspCode, message: 'Payment successful' };
     } else {
       order.pay_status = 'failed';
+      order.order_status = 'cancelled'; // Set order status to cancelled when payment fails
       await order.save();
       return { code: rspCode, message: 'Payment failed or cancelled' };
     }
@@ -192,6 +193,7 @@ exports.handleIpn = async (vnp_Params) => {
       return { RspCode: '00', Message: 'Success' };
     } else {
       order.pay_status = 'failed';
+      order.order_status = 'cancelled'; // Set order status to cancelled when payment fails
       await order.save();
       return { RspCode: '00', Message: 'Payment failed' };
     }
