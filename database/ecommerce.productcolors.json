@@ -1,0 +1,70 @@
+[{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1beed"
+  },
+  "color_name": "White",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1beee"
+  },
+  "color_name": "Black",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1beef"
+  },
+  "color_name": "Gray",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1bef0"
+  },
+  "color_name": "Beige",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1bef1"
+  },
+  "color_name": "Cream",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1bef2"
+  },
+  "color_name": "Ivory",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1bef3"
+  },
+  "color_name": "Taupe",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1bef4"
+  },
+  "color_name": "Navy",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1bef5"
+  },
+  "color_name": "Charcoal",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba933e54fd20023e1bef6"
+  },
+  "color_name": "Off-White",
+  "__v": 0
+}]

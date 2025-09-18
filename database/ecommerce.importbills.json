@@ -1,0 +1,220 @@
+[{
+  "_id": {
+    "$oid": "687dd7c03464936c20839aea"
+  },
+  "create_date": {
+    "$date": "2025-01-01T00:00:00.000Z"
+  },
+  "total_amount": 1000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839aeb"
+  },
+  "create_date": {
+    "$date": "2025-01-16T00:00:00.000Z"
+  },
+  "total_amount": 2500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839aec"
+  },
+  "create_date": {
+    "$date": "2025-02-01T00:00:00.000Z"
+  },
+  "total_amount": 5000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839aed"
+  },
+  "create_date": {
+    "$date": "2025-02-16T00:00:00.000Z"
+  },
+  "total_amount": 7500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839aee"
+  },
+  "create_date": {
+    "$date": "2025-03-01T00:00:00.000Z"
+  },
+  "total_amount": 10000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839aef"
+  },
+  "create_date": {
+    "$date": "2025-03-16T00:00:00.000Z"
+  },
+  "total_amount": 12500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af0"
+  },
+  "create_date": {
+    "$date": "2025-04-01T00:00:00.000Z"
+  },
+  "total_amount": 15000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af1"
+  },
+  "create_date": {
+    "$date": "2025-04-16T00:00:00.000Z"
+  },
+  "total_amount": 17500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af2"
+  },
+  "create_date": {
+    "$date": "2025-05-01T00:00:00.000Z"
+  },
+  "total_amount": 20000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af3"
+  },
+  "create_date": {
+    "$date": "2025-05-16T00:00:00.000Z"
+  },
+  "total_amount": 22500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af4"
+  },
+  "create_date": {
+    "$date": "2025-06-01T00:00:00.000Z"
+  },
+  "total_amount": 25000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af5"
+  },
+  "create_date": {
+    "$date": "2025-06-16T00:00:00.000Z"
+  },
+  "total_amount": 27500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af6"
+  },
+  "create_date": {
+    "$date": "2025-07-01T00:00:00.000Z"
+  },
+  "total_amount": 30000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af7"
+  },
+  "create_date": {
+    "$date": "2025-07-16T00:00:00.000Z"
+  },
+  "total_amount": 32500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af8"
+  },
+  "create_date": {
+    "$date": "2025-08-01T00:00:00.000Z"
+  },
+  "total_amount": 35000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839af9"
+  },
+  "create_date": {
+    "$date": "2025-08-16T00:00:00.000Z"
+  },
+  "total_amount": 37500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839afa"
+  },
+  "create_date": {
+    "$date": "2025-09-01T00:00:00.000Z"
+  },
+  "total_amount": 40000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839afb"
+  },
+  "create_date": {
+    "$date": "2025-09-16T00:00:00.000Z"
+  },
+  "total_amount": 42500000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839afc"
+  },
+  "create_date": {
+    "$date": "2025-10-01T00:00:00.000Z"
+  },
+  "total_amount": 45000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687dd7c03464936c20839afd"
+  },
+  "create_date": {
+    "$date": "2025-10-16T00:00:00.000Z"
+  },
+  "total_amount": 50000000,
+  "image_bill": "https://www.geektonight.com/wp-content/uploads/Export-Invoice.webp",
+  "__v": 0
+}]

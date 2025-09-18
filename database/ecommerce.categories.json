@@ -1,0 +1,140 @@
+[{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1becb"
+  },
+  "cat_name": "T-Shirt",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1becc"
+  },
+  "cat_name": "Jeans",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1becd"
+  },
+  "cat_name": "Jacket",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bece"
+  },
+  "cat_name": "Sweater",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1becf"
+  },
+  "cat_name": "Shirt",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed0"
+  },
+  "cat_name": "Skirt",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed1"
+  },
+  "cat_name": "Dress",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed2"
+  },
+  "cat_name": "Shorts",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed3"
+  },
+  "cat_name": "Hoodie",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed4"
+  },
+  "cat_name": "Blouse",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed5"
+  },
+  "cat_name": "Coat",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed6"
+  },
+  "cat_name": "Leggings",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed7"
+  },
+  "cat_name": "Cardigan",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed8"
+  },
+  "cat_name": "Polo Shirt",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bed9"
+  },
+  "cat_name": "Chinos",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1beda"
+  },
+  "cat_name": "Blazer",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bedb"
+  },
+  "cat_name": "Tank Top",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bedc"
+  },
+  "cat_name": "Sweatpants",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bedd"
+  },
+  "cat_name": "Vest",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba8afe54fd20023e1bede"
+  },
+  "cat_name": "Jumpsuit",
+  "__v": 0
+}]

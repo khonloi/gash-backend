@@ -1,0 +1,35 @@
+[{
+  "_id": {
+    "$oid": "687ba9f8e54fd20023e1bf05"
+  },
+  "size_name": "S",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba9f8e54fd20023e1bf06"
+  },
+  "size_name": "M",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba9f8e54fd20023e1bf07"
+  },
+  "size_name": "L",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba9f8e54fd20023e1bf08"
+  },
+  "size_name": "XL",
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "687ba9f8e54fd20023e1bf09"
+  },
+  "size_name": "XXL",
+  "__v": 0
+}]
