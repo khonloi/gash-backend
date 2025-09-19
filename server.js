@@ -18,6 +18,7 @@ const statisticsRoutes = require('./routes/statisticRoutes');
 const productVarRoutes = require('./routes/variantRoutes');
 require('dotenv').config();
 
+
 const app = express();
 const server = http.createServer(app); // <-- Create HTTP server
 const { Server } = require('socket.io');
@@ -56,12 +57,16 @@ app.use('/specifications', productSpecRoutes);
 app.use('/statistics', statisticsRoutes);
 
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/ecommerce', {
+const mongoUri = process.env.MONGO_URI;
+
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true
-}).then(() => {
-  console.log('Connected to MongoDB');
-}).catch(err => {
+})
+.then(() => {
+  console.log('Connected to MongoDB database gash');
+})
+.catch(err => {
   console.error('MongoDB connection error:', err);
 });
 
