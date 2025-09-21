@@ -1,42 +1,43 @@
 const express = require('express');
-const upload = require('../middleware/cloudinaryUtils'); 
+const upload = require('../middleware/cloudinaryUtils'); // sử dụng Cloudinary middleware
 
 const router = express.Router();
 
-// API upload 1 hoặc nhiều ảnh
-router.post(
-  '/',
-  upload.fields([
-    { name: 'image', maxCount: 1 },   // cho phép 1 ảnh
-    { name: 'images', maxCount: 10 }, // cho phép nhiều ảnh
-  ]),
-  (req, res) => {
-    try {
-      if ((!req.files['image'] || req.files['image'].length === 0) &&
-          (!req.files['images'] || req.files['images'].length === 0)) {
-        return res.status(400).json({ success: false, message: 'No file uploaded' });
-      }
-
-      // Gom tất cả ảnh (1 hoặc nhiều) lại thành 1 mảng
-      const allFiles = [
-        ...(req.files['image'] || []),
-        ...(req.files['images'] || []),
-      ];
-
-      const files = allFiles.map(file => ({
-        url: file.path,        // link ảnh Cloudinary
-        filename: file.filename // public_id
-      }));
-
-      res.json({
-        success: true,
-        message: 'File(s) uploaded successfully',
-        files,
-      });
-    } catch (err) {
-      res.status(500).json({ success: false, message: err.message });
+// API upload 1 file (key: image)
+router.post('/', upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
+    res.json({
+      success: true,
+      message: 'File uploaded successfully',
+      url: req.file.path,      // link ảnh Cloudinary
+      filename: req.file.filename, // public_id
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
-);
+});
+
+// API upload nhiều file (key: images)
+router.post('/multiple', upload.array('images', 10), (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No files uploaded' });
+    }
+    const files = req.files.map(file => ({
+      url: file.path,         // link ảnh Cloudinary
+      filename: file.filename // public_id
+    }));
+    res.json({
+      success: true,
+      message: 'Files uploaded successfully',
+      files
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 module.exports = router;
