@@ -27,7 +27,7 @@ const ProductsSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    maxlength: [500, "Description cannot exceed 500 characters"],
+    maxlength: [1000, "Description cannot exceed 1000 characters"],
   },
   status_product: {
     type: String,
