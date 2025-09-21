@@ -1,45 +1,60 @@
-var express = require('express');
-var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('morgan');
-var cookieParser = require('cookie-parser');
-var bodyParser = require('body-parser');
-// var order = require('./routes/order'); // Old route
-var orderRoutes = require('./routes/orderRoutes'); // New route
+// app.js
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
+const path = require('path');
 
-var app = express();
+// Routes
+const authRoutes = require('./routes/authRoutes');
+const accountsRoutes = require('./routes/accountRoutes');
+const productsRoutes = require('./routes/productRoutes');
+const categoriesRoutes = require('./routes/categoryRoutes');
+const ordersRoutes = require('./routes/orderRoutes');
+const orderDetailsRoutes = require('./routes/orderDetailRoutes');
+const cartsRoutes = require('./routes/cartRoutes');
+const favoritesRoutes = require('./routes/favoriteRoutes');
+const importBillRoutes = require('./routes/importBillRoutes');
+const productSpecRoutes = require('./routes/specRoutes');
+const statisticsRoutes = require('./routes/statisticRoutes');
+const productVarRoutes = require('./routes/variantRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'jade');
+const app = express();
 
-// uncomment after placing your favicon in /public
-//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-app.use(logger('dev'));
-app.use(bodyParser.json());
+// Middleware
+app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001'], credentials: true }));
+// app.use(morgan('dev'));
+app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// app.use('/order', order); // Old route
-app.use('/orders', orderRoutes); // New route
+// Routes
+app.use('/auth', authRoutes);
+app.use('/accounts', accountsRoutes);
+app.use('/products', productsRoutes);
+app.use('/categories', categoriesRoutes);
+app.use('/orders', ordersRoutes);
+app.use('/order-details', orderDetailsRoutes);
+app.use('/carts', cartsRoutes);
+app.use('/variants', productVarRoutes);
+app.use('/favorites', favoritesRoutes);
+app.use('/imports', importBillRoutes);
+app.use('/specifications', productSpecRoutes);
+app.use('/statistics', statisticsRoutes);
+app.use('/upload', uploadRoutes);
 
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  var err = new Error('Not Found');
-  err.status = 404;
-  next(err);
+// 404 handler
+app.use((req, res, next) => {
+  res.status(404).json({ success: false, message: 'Not Found' });
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('🔥 Error:', err.message);
+  res.status(err.status || 500).json({ success: false, message: err.message });
 });
 
 module.exports = app;
