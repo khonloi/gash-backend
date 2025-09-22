@@ -15,7 +15,10 @@ router.get('/:id', authenticateJWT, accountController.getAccountById);
 // Update an account (Admin or self)
 router.put('/:id', authenticateJWT, accountController.updateAccount);
 
-// Delete an account (Admin or self)
+// Soft delete an account (Admin or self)
+router.delete('/soft/:id', authenticateJWT, accountController.softDeleteAccount);
+
+// Delete an account permanently (Admin or self)
 router.delete('/:id', authenticateJWT, accountController.deleteAccount);
 
 module.exports = router;

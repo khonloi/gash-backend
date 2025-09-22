@@ -1,4 +1,3 @@
-// accountService.js
 const Accounts = require('../models/Accounts');
 
 exports.createAccount = async (data) => {
@@ -39,7 +38,22 @@ exports.createAccount = async (data) => {
 };
 
 exports.getAllAccounts = async () => {
-  return await Accounts.find().select('-password');
+  const accounts = await Accounts.find().select('-password');
+  return accounts.map(acc => {
+    if (acc.is_deleted) {
+      return {
+        ...acc.toObject(),
+        username: '[deleted]',
+        name: '[deleted]',
+        email: '[deleted]',
+        phone: '[deleted]',
+        address: '[deleted]',
+        image: '[deleted]',
+        google_id: '[deleted]'
+      };
+    }
+    return acc;
+  });
 };
 
 exports.getAccountById = async (id, user) => {
@@ -50,12 +64,32 @@ exports.getAccountById = async (id, user) => {
   if (!account) {
     return { status: 404, response: { message: 'Account not found' } };
   }
+  if (account.is_deleted) {
+    const deletedAccount = {
+      ...account.toObject(),
+      username: '[deleted]',
+      name: '[deleted]',
+      email: '[deleted]',
+      phone: '[deleted]',
+      address: '[deleted]',
+      image: '[deleted]',
+      google_id: '[deleted]'
+    };
+    return { status: 200, response: deletedAccount };
+  }
   return { status: 200, response: account };
 };
 
 exports.updateAccount = async (id, data, user) => {
   if (user.role !== 'admin' && user.id !== id.toString()) {
     return { status: 403, response: { message: 'Access denied: Can only update own account' } };
+  }
+  const account = await Accounts.findById(id);
+  if (!account) {
+    return { status: 404, response: { message: 'Account not found' } };
+  }
+  if (account.is_deleted === true) {
+    return { status: 403, response: { message: 'Cannot update a deleted account' } };
   }
   const { username, email, ...updateData } = data;
   if (username || email) {
@@ -66,10 +100,6 @@ exports.updateAccount = async (id, data, user) => {
     if (existingAccount) {
       return { status: 400, response: { message: 'Username or email already exists' } };
     }
-  }
-  const account = await Accounts.findById(id);
-  if (!account) {
-    return { status: 404, response: { message: 'Account not found' } };
   }
   // Update fields
   if (username) account.username = username;
@@ -82,13 +112,35 @@ exports.updateAccount = async (id, data, user) => {
   return { status: 200, response: { message: 'Account updated successfully', account: accountObj } };
 };
 
+exports.softDeleteAccount = async (id, user) => {
+  if (user.role !== 'admin' && user.id !== id.toString()) {
+    return { status: 403, response: { message: 'Access denied: Can only soft delete own account' } };
+  }
+  const account = await Accounts.findById(id);
+  if (!account) {
+    return { status: 404, response: { message: 'Account not found' } };
+  }
+  if (account.is_deleted === true) {
+    return { status: 403, response: { message: 'Account is already soft-deleted' } };
+  }
+  account.is_deleted = true;
+  account.role = 'user';
+  account.acc_status = 'inactive';
+  await account.save();
+  return { status: 200, response: { message: 'Account soft deleted successfully' } };
+};
+
 exports.deleteAccount = async (id, user) => {
   if (user.role !== 'admin' && user.id !== id.toString()) {
     return { status: 403, response: { message: 'Access denied: Can only delete own account' } };
   }
-  const account = await Accounts.findByIdAndDelete(id);
+  const account = await Accounts.findById(id);
   if (!account) {
     return { status: 404, response: { message: 'Account not found' } };
   }
-  return { status: 200, response: { message: 'Account deleted successfully' } };
-}; 
+  if (account.acc_status === 'inactive' && account.username === 'deleted') {
+    return { status: 403, response: { message: 'Cannot hard delete a soft-deleted account' } };
+  }
+  await Accounts.findByIdAndDelete(id);
+  return { status: 200, response: { message: 'Account permanently deleted successfully' } };
+};

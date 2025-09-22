@@ -48,10 +48,15 @@ const accountSchema = new mongoose.Schema({
   },
   acc_status: { 
     type: String, 
-    enum: ['active', 'inactive', 'suspended'], 
+    enum: ['active', 'inactive', 'suspended', 'deleted'], 
     default: 'active' 
   },
   // passkeys field removed
+  is_deleted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
 }, {
   timestamps: true
 });

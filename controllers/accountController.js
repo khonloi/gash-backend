@@ -1,4 +1,3 @@
-// accountController.js
 const accountService = require('../services/accountService');
 
 exports.createAccount = async (req, res) => {
@@ -37,6 +36,15 @@ exports.updateAccount = async (req, res) => {
   }
 };
 
+exports.softDeleteAccount = async (req, res) => {
+  try {
+    const result = await accountService.softDeleteAccount(req.params.id, req.user);
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    res.status(500).json({ message: 'Error soft deleting account', error: error.message });
+  }
+};
+
 exports.deleteAccount = async (req, res) => {
   try {
     const result = await accountService.deleteAccount(req.params.id, req.user);
@@ -44,4 +52,4 @@ exports.deleteAccount = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Error deleting account', error: error.message });
   }
-}; 
+};
