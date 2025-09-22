@@ -69,6 +69,20 @@ async function deleteCategoryService(id, user) {
     err.status = 400;
     throw err;
   }
+  // Check if any product is using this category (handle both ObjectId and legacy string storage)
+  const Products = require('../models/Products');
+  const objectId = mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null;
+  const productCount = await Products.countDocuments({
+    $or: [
+      ...(objectId ? [{ cat_id: objectId }] : []),
+      { cat_id: id }
+    ]
+  });
+  if (productCount > 0) {
+    const err = new Error('Không thể xóa Category vì còn sản phẩm đang thuộc Category này. Hãy cập nhật/xóa các sản phẩm liên quan trước.');
+    err.status = 409;
+    throw err;
+  }
   const category = await Categories.findByIdAndDelete(id);
   if (!category) {
     const err = new Error('Category not found');

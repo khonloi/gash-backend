@@ -122,6 +122,14 @@ async function deleteProductColorService(id) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid color ID"); err.status = 400; throw err;
   }
+  // Prevent delete if any variant is using this color
+  const ProductVariants = require('../models/ProductVariants');
+  const inUseCount = await ProductVariants.countDocuments({ color_id: id });
+  if (inUseCount > 0) {
+    const err = new Error('Không thể xóa Color vì còn biến thể sản phẩm đang dùng Color này. Hãy cập nhật/xóa các biến thể liên quan trước.');
+    err.status = 409;
+    throw err;
+  }
   const color = await ProductColors.findByIdAndDelete(id);
   if (!color) {
     const err = new Error("Product color not found"); err.status = 404; throw err;
@@ -177,6 +185,14 @@ async function updateProductSizeService(id, { size_name }) {
 async function deleteProductSizeService(id) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid size ID"); err.status = 400; throw err;
+  }
+  // Prevent delete if any variant is using this size
+  const ProductVariants = require('../models/ProductVariants');
+  const inUseCount = await ProductVariants.countDocuments({ size_id: id });
+  if (inUseCount > 0) {
+    const err = new Error('Không thể xóa Size vì còn biến thể sản phẩm đang dùng Size này. Hãy cập nhật/xóa các biến thể liên quan trước.');
+    err.status = 409;
+    throw err;
   }
   const size = await ProductSizes.findByIdAndDelete(id);
   if (!size) {
