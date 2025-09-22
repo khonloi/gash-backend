@@ -19,6 +19,8 @@ exports.searchOrderDetails = async (queryParams, user) => {
   } = queryParams;
   const query = {
     feedback_details: { $nin: ['None', '', null] },
+    // include both active and deleted ones for management; UI can label
+    // If needed, allow filtering later
   };
 
   // Role-based access
@@ -235,8 +237,10 @@ exports.deleteOrderDetail = async (id, user) => {
       return { status: 403, response: { message: 'Access denied: Can only delete own order detail' } };
     }
   }
-  await OrderDetails.findByIdAndDelete(id);
-  return { status: 200, response: { message: 'Order detail deleted successfully' } };
+  // Soft delete instead of hard delete
+  orderDetail.is_deleted = true;
+  await orderDetail.save();
+  return { status: 200, response: { message: 'Order detail soft-deleted successfully' } };
 };
 
 exports.getOrderDetailsByProduct = async (pro_id) => {
@@ -251,6 +255,7 @@ exports.getOrderDetailsByProduct = async (pro_id) => {
   return await OrderDetails.find({
     variant_id: { $in: variantIds },
     feedback_details: { $nin: ['None', '', null] },
+    is_deleted: false,
   })
     .populate({
       path: 'order_id',
