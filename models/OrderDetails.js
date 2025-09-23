@@ -25,6 +25,11 @@ const OrderDetailsSchema = new mongoose.Schema({
     type: String,
     maxlength: [500, 'Feedback cannot exceed 500 characters'],
   },
+  // soft delete flag for product feedback
+  is_deleted: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 module.exports = mongoose.model('OrderDetails', OrderDetailsSchema);
