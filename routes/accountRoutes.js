@@ -9,6 +9,9 @@ router.post('/', authenticateJWT, authorizeRole(['admin']), accountController.cr
 // Get all accounts (Admin only)
 router.get('/', authenticateJWT, authorizeRole(['admin']), accountController.getAllAccounts);
 
+// Search accounts (Admin only)
+router.get('/search', authenticateJWT, authorizeRole(['admin']), accountController.searchAccounts);
+
 // Get a single account by ID (Admin or self)
 router.get('/:id', authenticateJWT, accountController.getAccountById);
 

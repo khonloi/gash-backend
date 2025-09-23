@@ -1,4 +1,5 @@
 const Accounts = require('../models/Accounts');
+const mongoose = require('mongoose');
 
 exports.createAccount = async (data) => {
   const { username, name, email, phone, address, password, image, role } = data;
@@ -39,6 +40,77 @@ exports.createAccount = async (data) => {
 
 exports.getAllAccounts = async () => {
   const accounts = await Accounts.find().select('-password');
+  return accounts.map(acc => {
+    if (acc.is_deleted) {
+      return {
+        ...acc.toObject(),
+        username: '[deleted]',
+        name: '[deleted]',
+        email: '[deleted]',
+        phone: '[deleted]',
+        address: '[deleted]',
+        image: '[deleted]',
+        google_id: '[deleted]'
+      };
+    }
+    return acc;
+  });
+};
+
+exports.searchAccountsService = async (queryParams) => {
+  const {
+    q,
+    role,
+    acc_status,
+    hasImage,
+    dateFrom,
+    dateTo
+  } = queryParams;
+  let query = {};
+  if (role) {
+    query.role = role;
+  }
+  if (acc_status) {
+    query.acc_status = acc_status;
+  }
+  if (hasImage === 'true') {
+    query.image = { $ne: 'http://localhost:4000/default-pfp.jpg' };
+  } else if (hasImage === 'false') {
+    query.image = 'http://localhost:4000/default-pfp.jpg';
+  }
+  if (dateFrom || dateTo) {
+    query.createdAt = {};
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      if (!isNaN(fromDate)) query.createdAt.$gte = fromDate;
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      if (!isNaN(toDate)) {
+        toDate.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = toDate;
+      }
+    }
+    if (Object.keys(query.createdAt).length === 0) {
+      delete query.createdAt;
+    }
+  }
+  if (q && typeof q === 'string' && q.trim() !== '') {
+    const trimmedQuery = q.trim();
+    query.$or = [
+      { username: { $regex: trimmedQuery, $options: 'i' } },
+      { name: { $regex: trimmedQuery, $options: 'i' } },
+      { email: { $regex: trimmedQuery, $options: 'i' } },
+      { phone: { $regex: trimmedQuery, $options: 'i' } },
+      { address: { $regex: trimmedQuery, $options: 'i' } },
+      { role: { $regex: trimmedQuery, $options: 'i' } },
+      { acc_status: { $regex: trimmedQuery, $options: 'i' } }
+    ];
+    if (mongoose.isValidObjectId(trimmedQuery)) {
+      query.$or.push({ _id: new mongoose.Types.ObjectId(trimmedQuery) });
+    }
+  }
+  const accounts = await Accounts.find(query).select('-password').sort({ username: 1 });
   return accounts.map(acc => {
     if (acc.is_deleted) {
       return {

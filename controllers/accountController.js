@@ -18,6 +18,15 @@ exports.getAllAccounts = async (req, res) => {
   }
 };
 
+exports.searchAccounts = async (req, res) => {
+  try {
+    const accounts = await accountService.searchAccountsService(req.query);
+    res.status(200).json(accounts);
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || "Error searching accounts" });
+  }
+};
+
 exports.getAccountById = async (req, res) => {
   try {
     const result = await accountService.getAccountById(req.params.id, req.user);
