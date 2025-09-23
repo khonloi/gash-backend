@@ -19,11 +19,11 @@ exports.createOrder = async (req, res) => {
 };
 
 exports.getAllOrders = async (req, res) => {
-  console.log('[getAllOrders] Endpoint hit', req.method, req.path);
+  // console.log('[getAllOrders] Endpoint hit', req.method, req.path);
   try {
-    console.log('[getAllOrders] req.user:', req.user);
+    // console.log('[getAllOrders] req.user:', req.user);
     const orders = await orderService.getAllOrdersService(req.user);
-    console.log('[getAllOrders] result orders:', orders);
+    // console.log('[getAllOrders] result orders:', orders);
     res.status(200).json(orders);
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message || 'Error retrieving orders' });
@@ -31,12 +31,12 @@ exports.getAllOrders = async (req, res) => {
 };
 
 exports.searchOrders = async (req, res) => {
-  console.log('[searchOrders] Endpoint hit', req.method, req.path);
+  // console.log('[searchOrders] Endpoint hit', req.method, req.path);
   try {
-    console.log('[searchOrders] req.user:', req.user);
-    console.log('[searchOrders] req.query:', req.query);
+    // console.log('[searchOrders] req.user:', req.user);
+    // console.log('[searchOrders] req.query:', req.query);
     const orders = await orderService.searchOrdersService(req.query, req.user);
-    console.log('[searchOrders] result orders:', orders);
+    // console.log('[searchOrders] result orders:', orders);
     res.status(200).json(orders);
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message || 'Error searching orders' });
@@ -85,21 +85,21 @@ exports.deleteOrder = async (req, res) => {
 exports.createVnpayPaymentUrl = async (req, res) => {
   try {
     const { orderId, bankCode, language } = req.body;
-    
+
     if (!orderId) {
       return res.status(400).json({ message: 'Order ID is required' });
     }
 
     const paymentUrl = await vnpayService.createPaymentUrl(orderId, bankCode, language, req.user, req);
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       success: true,
       message: 'Payment URL created successfully',
-      paymentUrl 
+      paymentUrl
     });
   } catch (error) {
     console.error("Payment URL creation error:", error);
-    res.status(error.status || 500).json({ 
+    res.status(error.status || 500).json({
       success: false,
       message: error.message || 'Error creating payment URL',
       error: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -110,14 +110,14 @@ exports.createVnpayPaymentUrl = async (req, res) => {
 exports.vnpayReturn = async (req, res) => {
   try {
     if (!req.query || Object.keys(req.query).length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Invalid return data from VNPay' 
+        message: 'Invalid return data from VNPay'
       });
     }
 
     const result = await vnpayService.handleReturn(req.query);
-    
+
     if (result.code === "00") {
       res.status(200).json({
         success: true,
@@ -133,7 +133,7 @@ exports.vnpayReturn = async (req, res) => {
     }
   } catch (error) {
     console.error("VNPay return error:", error);
-    res.status(error.status || 400).json({ 
+    res.status(error.status || 400).json({
       success: false,
       message: error.message || 'Payment verification failed',
       error: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -144,19 +144,19 @@ exports.vnpayReturn = async (req, res) => {
 exports.vnpayIpn = async (req, res) => {
   try {
     if (!req.query || Object.keys(req.query).length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         RspCode: '99',
-        Message: 'Invalid IPN data' 
+        Message: 'Invalid IPN data'
       });
     }
 
     const result = await vnpayService.handleIpn(req.query);
-    
+
     // VNPay yêu cầu response phải có RspCode và Message
     res.status(200).json(result);
   } catch (error) {
     console.error("VNPay IPN error:", error);
-    res.status(200).json({ 
+    res.status(200).json({
       RspCode: '99',
       Message: 'Internal server error'
     });
