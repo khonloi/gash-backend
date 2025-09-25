@@ -1,3 +1,4 @@
+// Updated orderService.js
 const Orders = require("../models/Orders");
 const Accounts = require("../models/Accounts");
 const mongoose = require("mongoose");
@@ -13,7 +14,7 @@ async function createOrderService(orderData, user) {
     totalPrice,
     order_status,
     pay_status,
-    shipping_status,
+    payment_method,
     feedback_order,
   } = orderData;
   if (
@@ -40,8 +41,8 @@ async function createOrderService(orderData, user) {
     totalPrice,
     order_status: order_status || "pending",
     pay_status: pay_status || "unpaid",
-    shipping_status: shipping_status || "not_shipped",
-    feedback_order: feedback_order || "None",
+    payment_method,
+    feedback_order: feedback_order || "",
   });
   return await order.save();
 }
@@ -63,7 +64,6 @@ async function searchOrdersService(queryParams, user) {
     acc_id,
     order_status,
     pay_status,
-    shipping_status,
     dateFrom,
     dateTo,
     minPrice,
@@ -82,7 +82,6 @@ async function searchOrdersService(queryParams, user) {
   }
   if (order_status) query.order_status = order_status;
   if (pay_status) query.pay_status = pay_status;
-  if (shipping_status) query.shipping_status = shipping_status;
   if (dateFrom || dateTo) {
     query.orderDate = {};
     if (dateFrom) {
@@ -136,16 +135,14 @@ async function searchOrdersService(queryParams, user) {
       query.$or = [
         { order_status: { $regex: trimmedQuery, $options: "i" } },
         { pay_status: { $regex: trimmedQuery, $options: "i" } },
-        { shipping_status: { $regex: trimmedQuery, $options: "i" } },
         { addressReceive: { $regex: trimmedQuery, $options: "i" } },
         { phone: { $regex: trimmedQuery, $options: "i" } },
       ];
       if (mongoose.isValidObjectId(trimmedQuery)) {
         query.$or.push({ _id: new mongoose.Types.ObjectId(trimmedQuery) });
       }
-      // If any orderIdsByProduct found, add to $or
       if (orderIdsByProduct.length > 0) {
-        query.$or.push({ _id: { $in: orderIdsByProduct } });
+        query.$or.push({ _id: { $in: orderIdsByProduct.map(id => new mongoose.Types.ObjectId(id)) } });
       }
     }
   }
@@ -153,6 +150,11 @@ async function searchOrdersService(queryParams, user) {
 }
 
 async function getOrderByIdService(id, user) {
+  if (!mongoose.isValidObjectId(id)) {
+    const err = new Error("Invalid order ID");
+    err.status = 400;
+    throw err;
+  }
   const order = await Orders.findById(id).populate("acc_id", "username name");
   if (!order) {
     const err = new Error("Order not found");
@@ -172,27 +174,38 @@ async function getOrderByIdService(id, user) {
 }
 
 async function updateOrderService(id, updateData, user) {
-  const order = await Orders.findById(id);
+  const order = await Orders.findById(id).populate("acc_id");
   if (!order) {
     const err = new Error("Order not found");
     err.status = 404;
     throw err;
   }
-
-  // 1. Chỉ admin/manager hoặc chính chủ acc_id được phép update order
   if (
     user.role !== "admin" &&
     user.role !== "manager" &&
-    order.acc_id.toString() !== user.id
+    order.acc_id._id.toString() !== user.id
   ) {
     const err = new Error("Access denied: Can only update own order");
     err.status = 403;
     throw err;
   }
 
-  // 2. Không cho phép update thông tin tài khoản
-  const { acc_id, username, ...rest } = updateData;
-  if (acc_id || username) {
+  const rest = { ...updateData };
+
+  // 1. Không cho phép update acc_id
+  if (rest.acc_id) {
+    const err = new Error("Updating account ID is not allowed");
+    err.status = 400;
+    throw err;
+  }
+
+  // 2. Không cho phép update các trường không cần thiết
+  if (
+    rest.addressReceive ||
+    rest.phone ||
+    rest.totalPrice ||
+    rest.payment_method
+  ) {
     const err = new Error("Updating account info is not allowed");
     err.status = 400;
     throw err;
@@ -313,8 +326,6 @@ async function updateOrderService(id, updateData, user) {
 
   return updatedOrder;
 }
-
-
 
 async function deleteOrderService(id, user) {
   const order = await Orders.findById(id);

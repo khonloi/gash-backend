@@ -24,7 +24,16 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const app = express();
 
 // Middleware
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:3001'], credentials: true }));
+app.use(cors({
+  origin: [
+    'http://localhost:5173', // Vite
+    'http://localhost:3000', // CRA hoặc client khác
+    'http://localhost:3001'  // nếu chạy song song
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true,
+}));
+
 // app.use(morgan('dev'));
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
