@@ -1,93 +1,149 @@
-// cartController.js
-const cartService = require('../services/cartService');
-const mongoose = require('mongoose');
+const Cart = require("../models/Carts");
+const ProductVariants = require("../models/ProductVariants");
+const Products = require("../models/Products");
+const ProductColors = require("../models/ProductColors");
+const ProductSizes = require("../models/ProductSizes");
 
-// Create a new cart item
-exports.createCartItem = async (req, res) => {
+// Lấy toàn bộ giỏ hàng theo acc_id
+const getAllCartItems = async (req, res) => {
   try {
-    const { acc_id, variant_id, pro_quantity, pro_price } = req.body;
-    if (
-      req.user.role !== 'admin' &&
-      req.user.role !== 'manager' &&
-      req.user.id !== acc_id.toString()
-    ) {
-      return res.status(403).json({ message: 'Access denied: Can only create cart for own account' });
-    }
-    const savedCartItem = await cartService.createCartItem(req.body);
-    res.status(201).json({ message: 'Cart item created successfully', cartItem: savedCartItem });
-  } catch (error) {
-    res.status(500).json({ message: 'Error creating cart item', error: error.message });
-  }
-};
+    const { acc_id } = req.query;
+    const filter = acc_id ? { acc_id } : {};
 
-// Get all cart items
-exports.getAllCartItems = async (req, res) => {
-  try {
-    const cartItems = await cartService.getAllCartItems(req.user);
+    const cartItems = await Cart.find(filter)
+      .populate({
+        path: "variant_id",
+        model: "ProductVariants",
+        populate: [
+          {
+            path: "pro_id",
+            model: "Products",
+            select: "pro_name pro_price imageURL fullImageURL",
+          },
+          { path: "color_id", model: "ProductColors", select: "color_name" },
+          { path: "size_id", model: "ProductSizes", select: "size_name" },
+          { path: "image_id", model: "ProductImages" },
+        ],
+      });
+
     res.status(200).json(cartItems);
   } catch (error) {
-    res.status(500).json({ message: 'Error retrieving cart items', error: error.message });
+    console.error("Error fetching cart items:", error);
+    res.status(500).json({ message: "Error fetching cart items" });
   }
 };
 
-// Get a single cart item by ID
-exports.getCartItemById = async (req, res) => {
+// Lấy 1 sản phẩm trong giỏ theo ID
+const getCartItemById = async (req, res) => {
   try {
-    const cartItem = await cartService.getCartItemById(req.params.id);
+    const { id } = req.params;
+    const cartItem = await Cart.findById(id).populate({
+      path: "variant_id",
+      model: "ProductVariants",
+      populate: [
+        {
+          path: "pro_id",
+          model: "Products",
+          select: "pro_name pro_price imageURL fullImageURL",
+        },
+        { path: "color_id", model: "ProductColors", select: "color_name" },
+        { path: "size_id", model: "ProductSizes", select: "size_name" },
+        { path: "image_id", model: "ProductImages" },
+      ],
+    });
+
     if (!cartItem) {
-      return res.status(404).json({ message: 'Cart item not found' });
+      return res.status(404).json({ message: "Cart item not found" });
     }
-    if (
-      req.user.role !== 'admin' &&
-      req.user.role !== 'manager' &&
-      cartItem.acc_id._id.toString() !== req.user.id
-    ) {
-      return res.status(403).json({ message: 'Access denied: Can only view own cart item' });
-    }
+
     res.status(200).json(cartItem);
   } catch (error) {
-    res.status(500).json({ message: 'Error retrieving cart item', error: error.message });
+    console.error("Error fetching cart item:", error);
+    res.status(500).json({ message: "Error fetching cart item" });
   }
 };
 
-// Update a cart item
-exports.updateCartItem = async (req, res) => {
+// Thêm sản phẩm vào giỏ hàng
+const createCartItem = async (req, res) => {
   try {
-    const cartItem = await cartService.getCartItemByIdRaw(req.params.id);
-    if (!cartItem) {
-      return res.status(404).json({ message: 'Cart item not found' });
+    const { acc_id, variant_id, pro_quantity, pro_price } = req.body;
+
+    if (!acc_id || !variant_id || !pro_quantity || !pro_price) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
-    if (
-      req.user.role !== 'admin' &&
-      req.user.role !== 'manager' &&
-      cartItem.acc_id.toString() !== req.user.id
-    ) {
-      return res.status(403).json({ message: 'Access denied: Can only update own cart item' });
+
+    // Kiểm tra nếu sản phẩm đã tồn tại trong giỏ
+    let existingItem = await Cart.findOne({ acc_id, variant_id });
+    if (existingItem) {
+      existingItem.pro_quantity += pro_quantity;
+      existingItem.Total_price = existingItem.pro_quantity * existingItem.pro_price;
+      await existingItem.save();
+      return res.status(200).json(existingItem);
     }
-    const updatedCartItem = await cartService.updateCartItem(req.params.id, req.body, cartItem);
-    res.status(200).json({ message: 'Cart item updated successfully', cartItem: updatedCartItem });
+
+    const cartItem = new Cart({
+      acc_id,
+      variant_id,
+      pro_quantity,
+      pro_price,
+      Total_price: pro_quantity * pro_price,
+    });
+
+    await cartItem.save();
+    res.status(201).json(cartItem);
   } catch (error) {
-    res.status(500).json({ message: 'Error updating cart item', error: error.message });
+    console.error("Error creating cart item:", error);
+    res.status(500).json({ message: "Error creating cart item" });
   }
 };
 
-// Delete a cart item
-exports.deleteCartItem = async (req, res) => {
+// Cập nhật số lượng sản phẩm trong giỏ
+const updateCartItem = async (req, res) => {
   try {
-    const cartItem = await cartService.getCartItemByIdRaw(req.params.id);
+    const { id } = req.params;
+    const { pro_quantity } = req.body;
+
+    if (!pro_quantity) {
+      return res.status(400).json({ message: "Quantity is required" });
+    }
+
+    const cartItem = await Cart.findById(id);
     if (!cartItem) {
-      return res.status(404).json({ message: 'Cart item not found' });
+      return res.status(404).json({ message: "Cart item not found" });
     }
-    if (
-      req.user.role !== 'admin' &&
-      req.user.role !== 'manager' &&
-      cartItem.acc_id.toString() !== req.user.id
-    ) {
-      return res.status(403).json({ message: 'Access denied: Can only delete own cart item' });
-    }
-    await cartService.deleteCartItem(req.params.id);
-    res.status(200).json({ message: 'Cart item deleted successfully' });
+
+    cartItem.pro_quantity = pro_quantity;
+    cartItem.Total_price = cartItem.pro_quantity * cartItem.pro_price;
+    await cartItem.save();
+
+    res.status(200).json(cartItem);
   } catch (error) {
-    res.status(500).json({ message: 'Error deleting cart item', error: error.message });
+    console.error("Error updating cart item:", error);
+    res.status(500).json({ message: "Error updating cart item" });
   }
-}; 
+};
+
+// Xóa sản phẩm khỏi giỏ hàng
+const deleteCartItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Cart.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Cart item not found" });
+    }
+
+    res.status(200).json({ message: "Cart item removed" });
+  } catch (error) {
+    console.error("Error deleting cart item:", error);
+    res.status(500).json({ message: "Error deleting cart item" });
+  }
+};
+
+module.exports = {
+  getAllCartItems,
+  getCartItemById,
+  createCartItem,
+  updateCartItem,
+  deleteCartItem,
+};
