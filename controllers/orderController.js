@@ -1,13 +1,32 @@
+// orderController.js
 const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
 
 exports.createOrder = async (req, res) => {
   try {
+    const { acc_id, addressReceive, phone, totalPrice, order_status, pay_status, payment_method, refund_status, feedback_order } = req.body;
+    
+    // Validate required fields and enums
+    if (!acc_id || !addressReceive || !phone || !totalPrice || !payment_method) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+    if (!['COD', 'VNPAY'].includes(payment_method)) {
+      return res.status(400).json({ message: 'Invalid payment method' });
+    }
+    if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
+      return res.status(400).json({ message: 'Invalid order status' });
+    }
+    if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
+      return res.status(400).json({ message: 'Invalid pay status' });
+    }
+    if (refund_status && !['not_applicable', 'pending_refund', 'refunded'].includes(refund_status)) {
+      return res.status(400).json({ message: 'Invalid refund status' });
+    }
+
     const savedOrder = await orderService.createOrderService(req.body, req.user);
-    // Emit socket event for real-time updates
     const io = req.app.get('io');
     if (io && savedOrder && savedOrder.acc_id) {
-      io.emit('orderUpdated', { userId: savedOrder.acc_id, order: savedOrder });
+      io.emit('orderUpdated', { userId: savedOrder.acc_id.toString(), order: savedOrder });
     }
     res.status(201).json({
       message: 'Order created successfully',
@@ -19,11 +38,8 @@ exports.createOrder = async (req, res) => {
 };
 
 exports.getAllOrders = async (req, res) => {
-  // console.log('[getAllOrders] Endpoint hit', req.method, req.path);
   try {
-    // console.log('[getAllOrders] req.user:', req.user);
     const orders = await orderService.getAllOrdersService(req.user);
-    // console.log('[getAllOrders] result orders:', orders);
     res.status(200).json(orders);
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message || 'Error retrieving orders' });
@@ -31,12 +47,8 @@ exports.getAllOrders = async (req, res) => {
 };
 
 exports.searchOrders = async (req, res) => {
-  // console.log('[searchOrders] Endpoint hit', req.method, req.path);
   try {
-    // console.log('[searchOrders] req.user:', req.user);
-    // console.log('[searchOrders] req.query:', req.query);
     const orders = await orderService.searchOrdersService(req.query, req.user);
-    // console.log('[searchOrders] result orders:', orders);
     res.status(200).json(orders);
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message || 'Error searching orders' });
@@ -54,11 +66,22 @@ exports.getOrderById = async (req, res) => {
 
 exports.updateOrder = async (req, res) => {
   try {
+    const { order_status, pay_status, refund_status, feedback_order } = req.body;
+    
+    // Validate enums
+    if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
+      return res.status(400).json({ message: 'Invalid order status' });
+    }
+    if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
+      return res.status(400).json({ message: 'Invalid pay status' });
+    }
+    if (refund_status && !['not_applicable', 'pending_refund', 'refunded'].includes(refund_status)) {
+      return res.status(400).json({ message: 'Invalid refund status' });
+    }
+
     const updatedOrder = await orderService.updateOrderService(req.params.id, req.body, req.user);
-    // Emit socket event for real-time updates
     const io = req.app.get('io');
     if (io && updatedOrder && updatedOrder.acc_id) {
-      // Always emit userId as string (handle both populated and non-populated acc_id)
       const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
         ? updatedOrder.acc_id._id.toString()
         : updatedOrder.acc_id.toString();
@@ -152,7 +175,6 @@ exports.vnpayIpn = async (req, res) => {
 
     const result = await vnpayService.handleIpn(req.query);
 
-    // VNPay yêu cầu response phải có RspCode và Message
     res.status(200).json(result);
   } catch (error) {
     console.error("VNPay IPN error:", error);
@@ -161,4 +183,4 @@ exports.vnpayIpn = async (req, res) => {
       Message: 'Internal server error'
     });
   }
-}; 
+};

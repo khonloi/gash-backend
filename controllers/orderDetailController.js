@@ -1,19 +1,34 @@
+// orderDetailController.js
 const orderDetailService = require('../services/orderDetailService');
 const mongoose = require('mongoose');
 
-// Advanced search/filter for order details with feedback
 exports.searchOrderDetails = async (req, res) => {
   try {
     const result = await orderDetailService.searchOrderDetails(req.query, req.user);
     res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({ message: 'Error searching feedbacks', error: error.message });
+    res.status(500).json({ message: 'Error searching order details', error: error.message });
   }
 };
 
-// Create a new order detail
 exports.createOrderDetail = async (req, res) => {
   try {
+    const { order_id, variant_id, UnitPrice, Quantity, feedback_details } = req.body;
+    
+    // Validate required fields
+    if (!order_id || !variant_id || !UnitPrice || !Quantity) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+    if (UnitPrice < 0) {
+      return res.status(400).json({ message: 'Unit price cannot be negative' });
+    }
+    if (Quantity < 1) {
+      return res.status(400).json({ message: 'Quantity must be at least 1' });
+    }
+    if (feedback_details && feedback_details.length > 500) {
+      return res.status(400).json({ message: 'Feedback cannot exceed 500 characters' });
+    }
+
     const result = await orderDetailService.createOrderDetail(req.body, req.user);
     res.status(result.status).json(result.response);
   } catch (error) {
@@ -21,7 +36,6 @@ exports.createOrderDetail = async (req, res) => {
   }
 };
 
-// Get all order details
 exports.getAllOrderDetails = async (req, res) => {
   try {
     const { order_id } = req.query;
@@ -32,7 +46,6 @@ exports.getAllOrderDetails = async (req, res) => {
   }
 };
 
-// Get a single order detail by ID
 exports.getOrderDetailById = async (req, res) => {
   try {
     const result = await orderDetailService.getOrderDetailById(req.params.id);
@@ -52,9 +65,21 @@ exports.getOrderDetailById = async (req, res) => {
   }
 };
 
-// Update an order detail
 exports.updateOrderDetail = async (req, res) => {
   try {
+    const { UnitPrice, Quantity, feedback_details, is_deleted } = req.body;
+    
+    // Validate fields
+    if (UnitPrice !== undefined && UnitPrice < 0) {
+      return res.status(400).json({ message: 'Unit price cannot be negative' });
+    }
+    if (Quantity !== undefined && Quantity < 1) {
+      return res.status(400).json({ message: 'Quantity must be at least 1' });
+    }
+    if (feedback_details && feedback_details.length > 500) {
+      return res.status(400).json({ message: 'Feedback cannot exceed 500 characters' });
+    }
+
     const result = await orderDetailService.updateOrderDetail(req.params.id, req.body, req.user);
     res.status(result.status).json(result.response);
   } catch (error) {
@@ -62,7 +87,6 @@ exports.updateOrderDetail = async (req, res) => {
   }
 };
 
-// Delete an order detail
 exports.deleteOrderDetail = async (req, res) => {
   try {
     const result = await orderDetailService.deleteOrderDetail(req.params.id, req.user);
@@ -72,11 +96,9 @@ exports.deleteOrderDetail = async (req, res) => {
   }
 };
 
-// Get all order details for a product with non-empty feedback
 exports.getOrderDetailsByProduct = async (req, res) => {
   try {
     const result = await orderDetailService.getOrderDetailsByProduct(req.params.pro_id);
-    console.log("result : ", result);
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ message: 'Error retrieving product feedback', error: error.message });
