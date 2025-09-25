@@ -1,3 +1,4 @@
+// orderDetailService.js
 const mongoose = require('mongoose');
 const OrderDetails = require('../models/OrderDetails');
 const Orders = require('../models/Orders');
@@ -18,14 +19,12 @@ exports.searchOrderDetails = async (queryParams, user) => {
     q
   } = queryParams;
   const query = {
-    feedback_details: { $nin: ['None', '', null] },
-    // include both active and deleted ones for management; UI can label
-    // If needed, allow filtering later
+    is_deleted: false, // Only return non-deleted order details
+    feedback_details: { $nin: ['', null] }, // Exclude empty feedback
   };
 
   // Role-based access
   if (user.role !== 'admin' && user.role !== 'manager') {
-    // Only feedbacks for user's own orders
     const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
     const userOrderIds = userOrders.map(order => order._id);
     query.order_id = { $in: userOrderIds };
@@ -33,11 +32,21 @@ exports.searchOrderDetails = async (queryParams, user) => {
 
   // Filter by order_id
   if (order_id) {
+    if (!mongoose.isValidObjectId(order_id)) {
+      const err = new Error("Invalid order ID");
+      err.status = 400;
+      throw err;
+    }
     query.order_id = order_id;
   }
 
   // Filter by variant_id
   if (variant_id) {
+    if (!mongoose.isValidObjectId(variant_id)) {
+      const err = new Error("Invalid variant ID");
+      err.status = 400;
+      throw err;
+    }
     query.variant_id = variant_id;
   }
 
@@ -56,7 +65,6 @@ exports.searchOrderDetails = async (queryParams, user) => {
   if (username) {
     const userDoc = await Accounts.findOne({ username }).select('_id');
     if (!userDoc) {
-      // Return empty result if user not found
       return [];
     }
     const userOrders = await Orders.find({ acc_id: userDoc._id }).select('_id');
@@ -95,7 +103,6 @@ exports.searchOrderDetails = async (queryParams, user) => {
     ];
   }
 
-  // Find and populate
   return await OrderDetails.find(query)
     .populate({
       path: 'order_id',
@@ -115,6 +122,21 @@ exports.searchOrderDetails = async (queryParams, user) => {
 
 exports.createOrderDetail = async (data, user) => {
   const { order_id, variant_id, UnitPrice, Quantity, feedback_details } = data;
+
+  // Validate required fields
+  if (!order_id || !variant_id || !UnitPrice || !Quantity) {
+    return { status: 400, response: { message: 'Missing required fields' } };
+  }
+  if (UnitPrice < 0) {
+    return { status: 400, response: { message: 'Unit price cannot be negative' } };
+  }
+  if (Quantity < 1) {
+    return { status: 400, response: { message: 'Quantity must be at least 1' } };
+  }
+  if (feedback_details && feedback_details.length > 500) {
+    return { status: 400, response: { message: 'Feedback cannot exceed 500 characters' } };
+  }
+
   const order = await Orders.findById(order_id);
   if (!order) {
     return { status: 404, response: { message: 'Order not found' } };
@@ -130,19 +152,31 @@ exports.createOrderDetail = async (data, user) => {
   if (!variant) {
     return { status: 404, response: { message: 'Product variant not found' } };
   }
-  const orderDetail = new OrderDetails({ order_id, variant_id, UnitPrice, Quantity, feedback_details });
+  const orderDetail = new OrderDetails({
+    order_id,
+    variant_id,
+    UnitPrice,
+    Quantity,
+    feedback_details: feedback_details || '',
+    is_deleted: false,
+  });
   const savedOrderDetail = await orderDetail.save();
   return { status: 201, response: { message: 'Order detail created successfully', orderDetail: savedOrderDetail } };
 };
 
 exports.getAllOrderDetails = async (user, order_id) => {
-  const query = {};
+  const query = { is_deleted: false };
   if (user.role !== 'admin' && user.role !== 'manager') {
     const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
     const orderIds = userOrders.map(order => order._id);
     query.order_id = { $in: orderIds };
   }
   if (order_id) {
+    if (!mongoose.isValidObjectId(order_id)) {
+      const err = new Error("Invalid order ID");
+      err.status = 400;
+      throw err;
+    }
     query.order_id = order_id;
   }
   return await OrderDetails.find(query)
@@ -163,7 +197,12 @@ exports.getAllOrderDetails = async (user, order_id) => {
 };
 
 exports.getOrderDetailById = async (id) => {
-  return await OrderDetails.findById(id)
+  if (!mongoose.isValidObjectId(id)) {
+    const err = new Error("Invalid order detail ID");
+    err.status = 400;
+    throw err;
+  }
+  return await OrderDetails.findOne({ _id: id, is_deleted: false })
     .populate({
       path: 'order_id',
       select: 'orderDate totalPrice acc_id feedback_order',
@@ -181,9 +220,12 @@ exports.getOrderDetailById = async (id) => {
 };
 
 exports.updateOrderDetail = async (id, data, user) => {
-  const orderDetail = await OrderDetails.findById(id);
+  if (!mongoose.isValidObjectId(id)) {
+    return { status: 400, response: { message: 'Invalid order detail ID' } };
+  }
+  const orderDetail = await OrderDetails.findOne({ _id: id, is_deleted: false });
   if (!orderDetail) {
-    return { status: 404, response: { message: 'Order detail not found' } };
+    return { status: 404, response: { message: 'Order detail not found or deleted' } };
   }
   if (user.role !== 'admin' && user.role !== 'manager') {
     const order = await Orders.findById(orderDetail.order_id);
@@ -191,22 +233,47 @@ exports.updateOrderDetail = async (id, data, user) => {
       return { status: 403, response: { message: 'Access denied: Can only update own order detail' } };
     }
   }
-  const { order_id, variant_id, ...updateData } = data;
+  const { order_id, variant_id, UnitPrice, Quantity, feedback_details, is_deleted } = data;
+
+  // Validate fields
+  if (UnitPrice !== undefined && UnitPrice < 0) {
+    return { status: 400, response: { message: 'Unit price cannot be negative' } };
+  }
+  if (Quantity !== undefined && Quantity < 1) {
+    return { status: 400, response: { message: 'Quantity must be at least 1' } };
+  }
+  if (feedback_details && feedback_details.length > 500) {
+    return { status: 400, response: { message: 'Feedback cannot exceed 500 characters' } };
+  }
   if (order_id) {
+    if (!mongoose.isValidObjectId(order_id)) {
+      return { status: 400, response: { message: 'Invalid order ID' } };
+    }
     const order = await Orders.findById(order_id);
     if (!order) {
       return { status: 404, response: { message: 'Order not found' } };
     }
   }
   if (variant_id) {
+    if (!mongoose.isValidObjectId(variant_id)) {
+      return { status: 400, response: { message: 'Invalid variant ID' } };
+    }
     const variant = await ProductVariants.findById(variant_id);
     if (!variant) {
       return { status: 404, response: { message: 'Product variant not found' } };
     }
   }
+
   const updatedOrderDetail = await OrderDetails.findByIdAndUpdate(
     id,
-    { ...updateData, ...(order_id && { order_id }), ...(variant_id && { variant_id }) },
+    {
+      ...(order_id && { order_id }),
+      ...(variant_id && { variant_id }),
+      ...(UnitPrice !== undefined && { UnitPrice }),
+      ...(Quantity !== undefined && { Quantity }),
+      ...(feedback_details !== undefined && { feedback_details }),
+      ...(is_deleted !== undefined && { is_deleted }),
+    },
     { new: true, runValidators: true }
   )
     .populate({
@@ -227,9 +294,12 @@ exports.updateOrderDetail = async (id, data, user) => {
 };
 
 exports.deleteOrderDetail = async (id, user) => {
-  const orderDetail = await OrderDetails.findById(id);
+  if (!mongoose.isValidObjectId(id)) {
+    return { status: 400, response: { message: 'Invalid order detail ID' } };
+  }
+  const orderDetail = await OrderDetails.findOne({ _id: id, is_deleted: false });
   if (!orderDetail) {
-    return { status: 404, response: { message: 'Order detail not found' } };
+    return { status: 404, response: { message: 'Order detail not found or already deleted' } };
   }
   if (user.role !== 'admin' && user.role !== 'manager') {
     const order = await Orders.findById(orderDetail.order_id);
@@ -237,7 +307,6 @@ exports.deleteOrderDetail = async (id, user) => {
       return { status: 403, response: { message: 'Access denied: Can only delete own order detail' } };
     }
   }
-  // Soft delete instead of hard delete
   orderDetail.is_deleted = true;
   await orderDetail.save();
   return { status: 200, response: { message: 'Order detail soft-deleted successfully' } };
@@ -245,16 +314,15 @@ exports.deleteOrderDetail = async (id, user) => {
 
 exports.getOrderDetailsByProduct = async (pro_id) => {
   if (!mongoose.isValidObjectId(pro_id)) {
-      const err = new Error("Invalid productss ID"); err.status = 400; throw err;
-      console.log("error proId: ", err);
+    const err = new Error("Invalid product ID");
+    err.status = 400;
+    throw err;
   }
   const variants = await ProductVariants.find({ pro_id }).select('_id');
-  console.log("variane: ",variants);
   const variantIds = variants.map(variant => variant._id);
- console.log("variantIds: ", variantIds);
   return await OrderDetails.find({
     variant_id: { $in: variantIds },
-    feedback_details: { $nin: ['None', '', null] },
+    feedback_details: { $nin: ['', null] },
     is_deleted: false,
   })
     .populate({
