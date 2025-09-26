@@ -38,8 +38,6 @@ const statisticsRoutes = require('./routes/statisticRoutes');
 const productVarRoutes = require('./routes/variantRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 
-const app = express();
-
 // Middleware
 app.use(cors({
   origin: [

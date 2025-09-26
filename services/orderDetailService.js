@@ -19,18 +19,16 @@ exports.searchOrderDetails = async (queryParams, user) => {
     q
   } = queryParams;
   const query = {
-    is_deleted: false, // Only return non-deleted order details
-    feedback_details: { $nin: ['', null] }, // Exclude empty feedback
+    is_deleted: false,
+    feedback_details: { $nin: ['', null] },
   };
 
-  // Role-based access
   if (user.role !== 'admin' && user.role !== 'manager') {
     const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
     const userOrderIds = userOrders.map(order => order._id);
     query.order_id = { $in: userOrderIds };
   }
 
-  // Filter by order_id
   if (order_id) {
     if (!mongoose.isValidObjectId(order_id)) {
       const err = new Error("Invalid order ID");
@@ -40,7 +38,6 @@ exports.searchOrderDetails = async (queryParams, user) => {
     query.order_id = order_id;
   }
 
-  // Filter by variant_id
   if (variant_id) {
     if (!mongoose.isValidObjectId(variant_id)) {
       const err = new Error("Invalid variant ID");
@@ -50,7 +47,6 @@ exports.searchOrderDetails = async (queryParams, user) => {
     query.variant_id = variant_id;
   }
 
-  // Filter by product/color/size via variant
   if (pro_id || color_id || size_id) {
     const variantQuery = {};
     if (pro_id) variantQuery.pro_id = pro_id;
@@ -61,12 +57,9 @@ exports.searchOrderDetails = async (queryParams, user) => {
     query.variant_id = { $in: variantIds };
   }
 
-  // Filter by username (account)
   if (username) {
     const userDoc = await Accounts.findOne({ username }).select('_id');
-    if (!userDoc) {
-      return [];
-    }
+    if (!userDoc) return [];
     const userOrders = await Orders.find({ acc_id: userDoc._id }).select('_id');
     const userOrderIds = userOrders.map(order => order._id);
     query.order_id = query.order_id
@@ -74,7 +67,6 @@ exports.searchOrderDetails = async (queryParams, user) => {
       : { $in: userOrderIds };
   }
 
-  // Date range filter (orderDate)
   if (startDate || endDate) {
     const dateQuery = {};
     if (startDate) dateQuery.$gte = new Date(startDate);
@@ -90,12 +82,10 @@ exports.searchOrderDetails = async (queryParams, user) => {
       : { $in: orderIds };
   }
 
-  // Feedback text filter
   if (feedback) {
     query.feedback_details = { $regex: feedback, $options: 'i' };
   }
 
-  // General search (q)
   if (q && typeof q === 'string' && q.trim() !== '') {
     const trimmedQuery = q.trim();
     query.$or = [
@@ -113,7 +103,11 @@ exports.searchOrderDetails = async (queryParams, user) => {
       path: 'variant_id',
       select: 'pro_id color_id size_id',
       populate: [
-        { path: 'pro_id', select: 'pro_name' },
+        { 
+          path: 'pro_id',
+          select: 'pro_name imageURL',
+          options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
+        },
         { path: 'color_id', select: 'color_name' },
         { path: 'size_id', select: 'size_name' },
       ],
@@ -123,7 +117,6 @@ exports.searchOrderDetails = async (queryParams, user) => {
 exports.createOrderDetail = async (data, user) => {
   const { order_id, variant_id, UnitPrice, Quantity, feedback_details } = data;
 
-  // Validate required fields
   if (!order_id || !variant_id || !UnitPrice || !Quantity) {
     return { status: 400, response: { message: 'Missing required fields' } };
   }
@@ -141,11 +134,7 @@ exports.createOrderDetail = async (data, user) => {
   if (!order) {
     return { status: 404, response: { message: 'Order not found' } };
   }
-  if (
-    user.role !== 'admin' &&
-    user.role !== 'manager' &&
-    order.acc_id.toString() !== user.id
-  ) {
+  if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id.toString() !== user.id) {
     return { status: 403, response: { message: 'Access denied: Can only create order detail for own order' } };
   }
   const variant = await ProductVariants.findById(variant_id);
@@ -189,7 +178,11 @@ exports.getAllOrderDetails = async (user, order_id) => {
       path: 'variant_id',
       select: 'pro_id color_id size_id',
       populate: [
-        { path: 'pro_id', select: 'pro_name' },
+        { 
+          path: 'pro_id',
+          select: 'pro_name imageURL',
+          options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
+        },
         { path: 'color_id', select: 'color_name' },
         { path: 'size_id', select: 'size_name' },
       ],
@@ -212,7 +205,11 @@ exports.getOrderDetailById = async (id) => {
       path: 'variant_id',
       select: 'pro_id color_id size_id',
       populate: [
-        { path: 'pro_id', select: 'pro_name' },
+        { 
+          path: 'pro_id',
+          select: 'pro_name imageURL',
+          options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
+        },
         { path: 'color_id', select: 'color_name' },
         { path: 'size_id', select: 'size_name' },
       ],
@@ -235,7 +232,6 @@ exports.updateOrderDetail = async (id, data, user) => {
   }
   const { order_id, variant_id, UnitPrice, Quantity, feedback_details, is_deleted } = data;
 
-  // Validate fields
   if (UnitPrice !== undefined && UnitPrice < 0) {
     return { status: 400, response: { message: 'Unit price cannot be negative' } };
   }
@@ -285,7 +281,11 @@ exports.updateOrderDetail = async (id, data, user) => {
       path: 'variant_id',
       select: 'pro_id color_id size_id',
       populate: [
-        { path: 'pro_id', select: 'pro_name' },
+        { 
+          path: 'pro_id',
+          select: 'pro_name imageURL',
+          options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
+        },
         { path: 'color_id', select: 'color_name' },
         { path: 'size_id', select: 'size_name' },
       ],
@@ -334,7 +334,11 @@ exports.getOrderDetailsByProduct = async (pro_id) => {
       path: 'variant_id',
       select: 'pro_id color_id size_id',
       populate: [
-        { path: 'pro_id', select: 'pro_name' },
+        { 
+          path: 'pro_id',
+          select: 'pro_name imageURL',
+          options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
+        },
         { path: 'color_id', select: 'color_name' },
         { path: 'size_id', select: 'size_name' },
       ],
