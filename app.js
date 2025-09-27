@@ -7,7 +7,7 @@ const path = require('path');
 
 const app = express();
 
-// ✅ CORS — phải đặt ngay sau app được tạo và trước các middleware khác
+//  CORS — phải đặt ngay sau app được tạo và trước các middleware khác
 app.use(cors({
   origin: [
     'http://localhost:5173', // Vite
@@ -41,7 +41,7 @@ const statisticsRoutes = require('./routes/statisticRoutes');
 const productVarRoutes = require('./routes/variantRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 
-// ✅ Các route được giữ nguyên, KHÔNG XÓA
+// Mount routes
 app.use('/auth', authRoutes);
 app.use('/accounts', accountsRoutes);
 app.use('/products', productsRoutes);
