@@ -7,20 +7,23 @@ const path = require('path');
 
 const app = express();
 
-// ===== Middleware =====
+// ✅ CORS — phải đặt ngay sau app được tạo và trước các middleware khác
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true
+  origin: [
+    'http://localhost:5173', // Vite
+    'http://localhost:3000', // CRA hoặc client khác
+    'http://localhost:3001'  // nếu chạy song song
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true,
 }));
+
+// Middleware
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
-
-// Public folder (CSS, JS, static files)
 app.use(express.static(path.join(__dirname, 'public')));
-
-// ✅ Cho phép truy cập ảnh trong thư mục uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ===== Routes =====
@@ -38,24 +41,7 @@ const statisticsRoutes = require('./routes/statisticRoutes');
 const productVarRoutes = require('./routes/variantRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 
-// Middleware
-app.use(cors({
-  origin: [
-    'http://localhost:5173', // Vite
-    'http://localhost:3000', // CRA hoặc client khác
-    'http://localhost:3001'  // nếu chạy song song
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true,
-}));
-
-// app.use(morgan('dev'));
-app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Routes
+// ✅ Các route được giữ nguyên, KHÔNG XÓA
 app.use('/auth', authRoutes);
 app.use('/accounts', accountsRoutes);
 app.use('/products', productsRoutes);
