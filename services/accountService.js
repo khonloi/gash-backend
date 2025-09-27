@@ -152,18 +152,58 @@ exports.getAccountById = async (id, user) => {
   return { status: 200, response: account };
 };
 
-exports.updateAccount = async (id, data, user) => {
+// exports.updateAccount = async (id, data, user) => {
+//   if (user.role !== 'admin' && user.id !== id.toString()) {
+//     return { status: 403, response: { message: 'Access denied: Can only update own account' } };
+//   }
+//   const account = await Accounts.findById(id);
+//   if (!account) {
+//     return { status: 404, response: { message: 'Account not found' } };
+//   }
+//   if (account.is_deleted === true) {
+//     return { status: 403, response: { message: 'Cannot update a deleted account' } };
+//   }
+//   const { username, email, ...updateData } = data;
+//   if (username || email) {
+//     const existingAccount = await Accounts.findOne({
+//       $or: [{ username }, { email }],
+//       _id: { $ne: id }
+//     });
+//     if (existingAccount) {
+//       return { status: 400, response: { message: 'Username or email already exists' } };
+//     }
+//   }
+//   // Update fields
+//   if (username) account.username = username;
+//   if (email) account.email = email;
+//   Object.keys(updateData).forEach(key => {
+//     account[key] = updateData[key];
+//   });
+//   await account.save(); // This will trigger the pre-save hook for password hashing
+//   const { password, ...accountObj } = account.toObject();
+//   return { status: 200, response: { message: 'Account updated successfully', account: accountObj } };
+// };
+
+
+
+
+exports.updateProfile = async (id, data, user) => {
   if (user.role !== 'admin' && user.id !== id.toString()) {
-    return { status: 403, response: { message: 'Access denied: Can only update own account' } };
+    return { status: 403, response: { message: 'Access denied: Can only update own profile' } };
   }
+
   const account = await Accounts.findById(id);
   if (!account) {
     return { status: 404, response: { message: 'Account not found' } };
   }
+
   if (account.is_deleted === true) {
     return { status: 403, response: { message: 'Cannot update a deleted account' } };
   }
-  const { username, email, ...updateData } = data;
+
+  // Không cho cập nhật trực tiếp password ở đây
+  const { username, email, password, ...updateData } = data;
+
   if (username || email) {
     const existingAccount = await Accounts.findOne({
       $or: [{ username }, { email }],
@@ -173,16 +213,49 @@ exports.updateAccount = async (id, data, user) => {
       return { status: 400, response: { message: 'Username or email already exists' } };
     }
   }
-  // Update fields
+
   if (username) account.username = username;
   if (email) account.email = email;
   Object.keys(updateData).forEach(key => {
     account[key] = updateData[key];
   });
-  await account.save(); // This will trigger the pre-save hook for password hashing
-  const { password, ...accountObj } = account.toObject();
-  return { status: 200, response: { message: 'Account updated successfully', account: accountObj } };
+
+  await account.save();
+
+  const { password: _, ...accountObj } = account.toObject();
+  return { status: 200, response: { message: 'Profile updated successfully', account: accountObj } };
 };
+
+// Đổi mật khẩu
+exports.updatePassword = async (id, oldPassword, newPassword, user) => {
+  if (user.role !== 'admin' && user.id !== id.toString()) {
+    return { status: 403, response: { message: 'Access denied: Can only update own password' } };
+  }
+
+  const account = await Accounts.findById(id).select('+password');
+  if (!account) {
+    return { status: 404, response: { message: 'Account not found' } };
+  }
+
+  if (account.is_deleted === true) {
+    return { status: 403, response: { message: 'Cannot update a deleted account' } };
+  }
+
+  // Nếu không phải admin thì phải check mật khẩu cũ
+  if (user.role !== 'admin') {
+    const isMatch = await account.comparePassword(oldPassword);
+    if (!isMatch) {
+      return { status: 400, response: { message: 'Old password is incorrect' } };
+    }
+  }
+
+  account.password = newPassword; // sẽ được hash bởi pre-save hook
+  await account.save();
+
+  return { status: 200, response: { message: 'Password updated successfully' } };
+};
+
+
 
 exports.softDeleteAccount = async (id, user) => {
   if (user.role !== 'admin' && user.id !== id.toString()) {
