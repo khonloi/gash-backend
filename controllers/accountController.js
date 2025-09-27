@@ -36,14 +36,36 @@ exports.getAccountById = async (req, res) => {
   }
 };
 
-exports.updateAccount = async (req, res) => {
+// exports.updateAccount = async (req, res) => {
+//   try {
+//     const result = await accountService.updateAccount(req.params.id, req.body, req.user);
+//     res.status(result.status).json(result.response);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Error updating account', error: error.message });
+//   }
+// };
+
+// Controller update profile
+exports.updateProfile = async (req, res) => {
   try {
-    const result = await accountService.updateAccount(req.params.id, req.body, req.user);
+    const result = await accountService.updateProfile(req.params.id, req.body, req.user);
     res.status(result.status).json(result.response);
   } catch (error) {
-    res.status(500).json({ message: 'Error updating account', error: error.message });
+    res.status(500).json({ message: 'Error updating profile', error: error.message });
   }
 };
+
+// Controller update password
+exports.updatePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const result = await accountService.updatePassword(req.params.id, oldPassword, newPassword, req.user);
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating password', error: error.message });
+  }
+};
+
 
 exports.softDeleteAccount = async (req, res) => {
   try {
