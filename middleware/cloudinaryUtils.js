@@ -6,8 +6,8 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: 'gash_app',
-    allowed_formats: ['jpg', 'jpeg', 'png'],
     transformation: [{ width: 1200, crop: 'limit' }],
+    resource_type: 'image', // chỉ cho phép ảnh, chặn video/file khác
   },
 });
 
