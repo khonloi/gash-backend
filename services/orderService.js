@@ -205,49 +205,63 @@ async function getOrderByIdService(id, user) {
 }
 
 async function updateOrderService(id, updateData, user) {
-  const order = await Orders.findById(id).populate("acc_id");
+  const order = await Orders.findById(id);
   if (!order) {
     const err = new Error("Order not found");
     err.status = 404;
     throw err;
   }
+
+  /**
+   * 1. Chỉ admin/manager hoặc chính chủ acc_id được phép update order
+   */
   if (
     user.role !== "admin" &&
     user.role !== "manager" &&
-    order.acc_id._id.toString() !== user.id
+    order.acc_id.toString() !== user.id
   ) {
     const err = new Error("Access denied: Can only update own order");
     err.status = 403;
     throw err;
   }
 
-  const { order_status, pay_status, refund_status, feedback_order } = updateData;
-
-  // Validate enums
-  if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
-    const err = new Error("Invalid order status");
-    err.status = 400;
-    throw err;
-  }
-  if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
-    const err = new Error("Invalid pay status");
-    err.status = 400;
-    throw err;
-  }
-  if (refund_status && !['not_applicable', 'pending_refund', 'refunded'].includes(refund_status)) {
-    const err = new Error("Invalid refund status");
+  /**
+   * 2. Không cho phép update thông tin tài khoản (acc_id, username)
+   */
+  const { acc_id, username, ...rest } = updateData;
+  if (acc_id || username) {
+    const err = new Error("Updating account info is not allowed");
     err.status = 400;
     throw err;
   }
 
-  // Prevent updates to immutable fields
-  if (updateData.acc_id || updateData.addressReceive || updateData.phone || updateData.totalPrice || updateData.payment_method) {
-    const err = new Error("Updating account info or payment method is not allowed");
+  /**
+   * 3. Không cho phép update khi order đã hoàn tất (finalized)
+   *  - COD: delivered+paid hoặc cancelled+unpaid
+   *  - VNPAY: delivered+paid hoặc cancelled+refunded
+   */
+  if (
+    (order.payment_method === "COD" &&
+      order.order_status === "delivered" &&
+      order.pay_status === "paid") ||
+    (order.payment_method === "COD" &&
+      order.order_status === "cancelled" &&
+      order.pay_status === "unpaid") ||
+    (order.payment_method === "VNPAY" &&
+      order.order_status === "delivered" &&
+      order.pay_status === "paid") ||
+    (order.payment_method === "VNPAY" &&
+      order.order_status === "cancelled" &&
+      order.refund_status === "refunded")
+  ) {
+    const err = new Error("This order is finalized and cannot be updated");
     err.status = 400;
     throw err;
   }
 
-  // Validate order status transitions
+  /**
+   * 4. Validate allowed order_status transition
+   */
   const allowedTransitions = {
     pending: ["confirmed", "shipping", "delivered", "cancelled"],
     confirmed: ["shipping", "delivered"],
@@ -257,54 +271,83 @@ async function updateOrderService(id, updateData, user) {
   };
 
   const currentStatus = order.order_status;
-  if (order_status && !allowedTransitions[currentStatus].includes(order_status)) {
+  if (
+    rest.order_status &&
+    !allowedTransitions[currentStatus].includes(rest.order_status)
+  ) {
     const err = new Error(
-      `Invalid status transition: ${currentStatus} → ${order_status}. Allowed: ${allowedTransitions[currentStatus].join(", ") || "none"}`
+      `Invalid status transition: ${currentStatus} → ${rest.order_status}. Allowed: ${allowedTransitions[currentStatus].join(", ") || "none"
+      }`
     );
     err.status = 400;
     throw err;
   }
 
-  // Business rules
-  let newStatus = order_status || order.order_status;
-  let newPayStatus = pay_status || order.pay_status;
-  let newRefund = refund_status || order.refund_status;
+  /**
+   * 5. Business rules + Auto handling pay_status & refund_status
+   */
+  const newStatus = rest.order_status || order.order_status;
+  let newPayStatus = rest.pay_status || order.pay_status;
+  let newRefund = rest.refund_status || order.refund_status;
 
-  // Auto-set refund_status for VNPAY cancelled orders
-  if (order.payment_method === "VNPAY" && newStatus === "cancelled" && newPayStatus === "paid") {
-    if (!["pending_refund", "refunded"].includes(newRefund)) {
-      newRefund = "pending_refund";
-    }
-  }
-
-  // Auto-set pay_status to paid when delivered
+  // 🚀 Auto: Khi delivered → luôn set pay_status = paid
   if (newStatus === "delivered") {
     newPayStatus = "paid";
   }
 
-  // COD rules
+  /**
+   * 6. COD rules
+   *  - pending/confirmed/shipping → không thể paid
+   *  - chỉ khi delivered mới được paid
+   */
   if (order.payment_method === "COD") {
-    if (["pending", "confirmed", "shipping"].includes(newStatus) && newPayStatus === "paid") {
+    if (
+      ["pending", "confirmed", "shipping"].includes(newStatus) &&
+      newPayStatus === "paid"
+    ) {
       const err = new Error("COD orders cannot be paid before delivery");
       err.status = 400;
       throw err;
     }
   }
 
-  // VNPAY rules
+  /**
+   * 7. VNPAY rules
+   *  - Các trạng thái khác cancelled → luôn phải paid
+   *  - Nếu cancelled + paid → refund_status phải pending_refund hoặc refunded
+   *  - Nếu đang ở pending_refund → chỉ được update refund_status/proof
+   */
   if (order.payment_method === "VNPAY") {
     if (newStatus !== "cancelled" && newPayStatus !== "paid") {
       const err = new Error("VNPAY orders must remain paid unless cancelled");
       err.status = 400;
       throw err;
     }
+
     if (newStatus === "cancelled" && newPayStatus === "paid") {
       if (order.refund_status === "pending_refund") {
-        const keys = Object.keys(updateData);
+        const keys = Object.keys(rest);
         const allowedKeys = ["refund_status", "refund_proof"];
         const hasInvalidUpdate = keys.some((k) => !allowedKeys.includes(k));
         if (hasInvalidUpdate) {
-          const err = new Error("When order is cancelled+paid (pending_refund), only refund_status/proof can be updated");
+          const err = new Error(
+            "When order is cancelled+paid (pending_refund), only refund_status/proof can be updated"
+          );
+          err.status = 400;
+          throw err;
+        }
+        if (!["pending_refund", "refunded"].includes(newRefund)) {
+          const err = new Error(
+            "Refund status must be pending_refund or refunded"
+          );
+          err.status = 400;
+          throw err;
+        }
+      } else {
+        if (!["pending_refund", "refunded"].includes(newRefund)) {
+          const err = new Error(
+            "Cancelled paid VNPAY orders must have refund_status = pending_refund or refunded"
+          );
           err.status = 400;
           throw err;
         }
@@ -312,10 +355,18 @@ async function updateOrderService(id, updateData, user) {
     }
   }
 
-  // Update order
+  /**
+   * 8. Ghi đè lại pay_status & refund_status vào object update
+   */
+  rest.pay_status = newPayStatus;
+  rest.refund_status = newRefund;
+
+  /**
+   * 9. Thực hiện update vào DB
+   */
   const updatedOrder = await Orders.findByIdAndUpdate(
     id,
-    { order_status: newStatus, pay_status: newPayStatus, refund_status: newRefund, feedback_order },
+    { ...rest },
     { new: true, runValidators: true }
   ).populate("acc_id", "username name phone");
 
