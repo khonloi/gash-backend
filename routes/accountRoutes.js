@@ -15,8 +15,8 @@ router.get('/search', authenticateJWT, authorizeRole(['admin']), accountControll
 // Get a single account by ID (Admin or self)
 router.get('/:id', authenticateJWT, accountController.getAccountById);
 
-// // Update an account (Admin or self)
-// router.put('/:id', authenticateJWT, accountController.updateAccount);
+// Update an account (Admin or self)
+router.put('/:id', authenticateJWT, accountController.updateAccount);
 
 // Cập nhật thông tin profile (Admin hoặc chính chủ)
 router.put('/change-profile/:id', authenticateJWT, accountController.updateProfile);

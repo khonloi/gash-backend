@@ -152,37 +152,37 @@ exports.getAccountById = async (id, user) => {
   return { status: 200, response: account };
 };
 
-// exports.updateAccount = async (id, data, user) => {
-//   if (user.role !== 'admin' && user.id !== id.toString()) {
-//     return { status: 403, response: { message: 'Access denied: Can only update own account' } };
-//   }
-//   const account = await Accounts.findById(id);
-//   if (!account) {
-//     return { status: 404, response: { message: 'Account not found' } };
-//   }
-//   if (account.is_deleted === true) {
-//     return { status: 403, response: { message: 'Cannot update a deleted account' } };
-//   }
-//   const { username, email, ...updateData } = data;
-//   if (username || email) {
-//     const existingAccount = await Accounts.findOne({
-//       $or: [{ username }, { email }],
-//       _id: { $ne: id }
-//     });
-//     if (existingAccount) {
-//       return { status: 400, response: { message: 'Username or email already exists' } };
-//     }
-//   }
-//   // Update fields
-//   if (username) account.username = username;
-//   if (email) account.email = email;
-//   Object.keys(updateData).forEach(key => {
-//     account[key] = updateData[key];
-//   });
-//   await account.save(); // This will trigger the pre-save hook for password hashing
-//   const { password, ...accountObj } = account.toObject();
-//   return { status: 200, response: { message: 'Account updated successfully', account: accountObj } };
-// };
+exports.updateAccount = async (id, data, user) => {
+  if (user.role !== 'admin' && user.id !== id.toString()) {
+    return { status: 403, response: { message: 'Access denied: Can only update own account' } };
+  }
+  const account = await Accounts.findById(id);
+  if (!account) {
+    return { status: 404, response: { message: 'Account not found' } };
+  }
+  if (account.is_deleted === true) {
+    return { status: 403, response: { message: 'Cannot update a deleted account' } };
+  }
+  const { username, email, ...updateData } = data;
+  if (username || email) {
+    const existingAccount = await Accounts.findOne({
+      $or: [{ username }, { email }],
+      _id: { $ne: id }
+    });
+    if (existingAccount) {
+      return { status: 400, response: { message: 'Username or email already exists' } };
+    }
+  }
+  // Update fields
+  if (username) account.username = username;
+  if (email) account.email = email;
+  Object.keys(updateData).forEach(key => {
+    account[key] = updateData[key];
+  });
+  await account.save(); // This will trigger the pre-save hook for password hashing
+  const { password, ...accountObj } = account.toObject();
+  return { status: 200, response: { message: 'Account updated successfully', account: accountObj } };
+};
 
 
 
