@@ -2,15 +2,22 @@ const Voucher = require('../models/Voucher');
 const mongoose = require('mongoose');
 
 //get all vouchers for admin
-const getAllVouchers = async (req, res) => {
+const getAllVouchersForAdmin = async (req, res) => {
     try {
+        // Check phân quyền
+        if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Only admin and staff can view vouchers'
+            });
+        }
+
         // Lấy tất cả voucher (cả isDeleted true/false)
         const vouchers = await Voucher.find()
             .sort({ createdAt: -1 });
 
-        // Map lại để thêm trạng thái "deleted" cho FE
         const result = vouchers.map(v => {
-            const obj = v.toJSON(); // dùng transform đã định nghĩa
+            const obj = v.toJSON();
             obj.status = obj.isDeleted ? 'deleted' : 'active';
             return obj;
         });
@@ -32,9 +39,17 @@ const getAllVouchers = async (req, res) => {
 //create voucher for admin
 const createVoucher = async (req, res) => {
     try {
+        // Check phân quyền
+        if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Only admin and staff can view vouchers'
+            });
+        }
+
         const {
             code,
-            discountType, // 'percentage' | 'fixed'
+            discountType,
             discountValue,
             minOrderValue,
             maxDiscount,
@@ -43,10 +58,7 @@ const createVoucher = async (req, res) => {
             usageLimit,
         } = req.body;
 
-        // =========================
-        // 1. Input validation (follow field order)
-        // =========================
-
+        // 1. Input validation 
         // 1.1 Code
         if (!/^[A-Z0-9]{3,30}$/.test(code)) {
             return res.status(400).json({
@@ -122,9 +134,7 @@ const createVoucher = async (req, res) => {
             });
         }
 
-        // =========================
         // 2. Create voucher
-        // =========================
         const newVoucher = new Voucher({
             code,
             discountType,
@@ -145,9 +155,7 @@ const createVoucher = async (req, res) => {
         });
 
     } catch (error) {
-        // =========================
         // 3. Handle MongoDB errors
-        // =========================
         if (error.name === 'ValidationError') {
             return res.status(400).json({
                 success: false,
@@ -172,6 +180,15 @@ const createVoucher = async (req, res) => {
 //update voucher for admin
 const updateVoucher = async (req, res) => {
     try {
+        // Check phân quyền
+        if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Only admin and staff can update voucher'
+            });
+        }
+
+
         const { id } = req.params;
         const {
             code,
@@ -192,10 +209,8 @@ const updateVoucher = async (req, res) => {
             });
         }
 
-        // =========================
-        // 1. Input validation (follow field order)
-        // =========================
 
+        // 1. Input validation (follow field order)
         // 1.1 Code
         if (code !== undefined) {
             if (!/^[A-Z0-9]{3,30}$/.test(code)) {
@@ -310,9 +325,7 @@ const updateVoucher = async (req, res) => {
             voucher.usageLimit = usageLimit;
         }
 
-        // =========================
         // 2. Save updates
-        // =========================
         const updatedVoucher = await voucher.save();
 
         return res.status(200).json({
@@ -322,9 +335,7 @@ const updateVoucher = async (req, res) => {
         });
 
     } catch (error) {
-        // =========================
         // 3. Handle MongoDB errors
-        // =========================
         if (error.name === 'ValidationError') {
             return res.status(400).json({
                 success: false,
@@ -345,14 +356,21 @@ const updateVoucher = async (req, res) => {
 };
 
 
-// DELETE /vouchers/:id (soft delete)
 
-
+//disable voucher for admin (soft delete)
 const deleteVoucher = async (req, res) => {
     try {
+        // Check phân quyền
+        if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Only admin and staff can disable voucher'
+            });
+        }
+
         const { id } = req.params;
 
-        // 1️⃣ Kiểm tra định dạng ID hợp lệ
+        // Kiểm tra định dạng ID hợp lệ
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
                 success: false,
@@ -360,7 +378,7 @@ const deleteVoucher = async (req, res) => {
             });
         }
 
-        // 2️⃣ Tìm voucher kể cả soft delete
+        // Tìm voucher kể cả soft delete
         const voucher = await Voucher.findById(id);
         if (!voucher) {
             return res.status(404).json({
@@ -369,7 +387,7 @@ const deleteVoucher = async (req, res) => {
             });
         }
 
-        // 3️⃣ Nếu voucher đã bị xóa mềm rồi
+        // Nếu voucher đã bị xóa mềm rồi
         if (voucher.isDeleted) {
             return res.status(400).json({
                 success: false,
@@ -377,11 +395,11 @@ const deleteVoucher = async (req, res) => {
             });
         }
 
-        // 4️⃣ Gắn cờ xóa mềm
+        // Gắn cờ xóa mềm
         voucher.isDeleted = true;
         await voucher.save();
 
-        // 5️⃣ Trả về kết quả
+        // Trả về kết quả
         return res.status(200).json({
             success: true,
             message: 'Voucher disabled successfully.',
@@ -403,10 +421,30 @@ const deleteVoucher = async (req, res) => {
 };
 
 
+const getAllVouchersForUser = async (req, res) => {
+    try {
+        // Lấy tất cả voucher (cả isDeleted true/false)
+        const vouchers = await Voucher.find()
+            .sort({ createdAt: -1 });
 
+        const result = vouchers.map(v => {
+            const obj = v.toJSON();
+            obj.status = obj.isDeleted ? 'deleted' : 'active';
+            return obj;
+        });
 
+        return res.status(200).json({
+            success: true,
+            message: 'Vouchers retrieved successfully',
+            data: result
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message
+        });
+    }
+};
 
-
-
-
-module.exports = { createVoucher, updateVoucher, getAllVouchers, deleteVoucher };
+module.exports = { createVoucher, updateVoucher, deleteVoucher, getAllVouchersForAdmin, getAllVouchersForUser };
