@@ -41,6 +41,8 @@ const statisticsRoutes = require('./routes/statisticRoutes');
 const productVarRoutes = require('./routes/variantRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const voucherRoutes = require('./routes/voucherRoutes');
+const conversationRoutes = require('./routes/conversationRoutes');
+const messageRoutes = require('./routes/messageRoutes');
 
 // Mount routes
 app.use('/auth', authRoutes);
@@ -58,6 +60,8 @@ app.use('/statistics', statisticsRoutes);
 app.use('/upload', uploadRoutes);
 
 app.use('/vouchers', voucherRoutes);
+app.use('/conversations', conversationRoutes);
+app.use('/conversations', messageRoutes);
 
 // ===== 404 handler =====
 app.use((req, res, next) => {

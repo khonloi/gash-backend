@@ -1,15 +1,15 @@
-// server.js
 const http = require('http');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
-const app = require('./app'); // Import app
+const app = require('./app');
+const chatSocket = require('./sockets/chat');
 
-// Tạo HTTP server từ Express app
+// Tạo HTTP server
 const server = http.createServer(app);
 
-// Khởi tạo Socket.io
+// Socket.IO
 const io = new Server(server, {
   cors: {
     origin: [
@@ -21,26 +21,16 @@ const io = new Server(server, {
     credentials: true,
   },
 });
-
-// Gắn io vào app để dùng trong routes/controller
 app.set('io', io);
 
 // Kết nối MongoDB
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB error:', err));
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB error:', err.message));
 
-// Socket.io events
-io.on('connection', (socket) => {
-  console.log('⚡ Client connected:', socket.id);
-
-  socket.on('disconnect', () => {
-    console.log('❌ Client disconnected:', socket.id);
-  });
-});
+// Socket chat
+chatSocket(io);
 
 // Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
