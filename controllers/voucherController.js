@@ -176,7 +176,6 @@ const createVoucher = async (req, res) => {
 };
 
 
-
 //update voucher for admin
 const updateVoucher = async (req, res) => {
     try {
@@ -356,7 +355,6 @@ const updateVoucher = async (req, res) => {
 };
 
 
-
 //disable voucher for admin (soft delete)
 const deleteVoucher = async (req, res) => {
     try {
@@ -420,7 +418,6 @@ const deleteVoucher = async (req, res) => {
     }
 };
 
-
 const getAllVouchersForUser = async (req, res) => {
     try {
         // Lấy tất cả voucher (cả isDeleted true/false)
@@ -447,4 +444,83 @@ const getAllVouchersForUser = async (req, res) => {
     }
 };
 
-module.exports = { createVoucher, updateVoucher, deleteVoucher, getAllVouchersForAdmin, getAllVouchersForUser };
+
+const applyVoucher = async (voucherCode, totalPrice) => {
+    if (!totalPrice || totalPrice <= 0) {
+        throw new Error('Total price must be greater than 0.');
+    }
+
+    // Không nhập voucher
+    if (!voucherCode) {
+        return {
+            voucher: null,
+            discountAmount: 0,
+            finalPrice: totalPrice,
+        };
+    }
+
+    // Tìm voucher
+    const voucher = await Voucher.findOne({ code: voucherCode });
+    if (!voucher || voucher.isDeleted) {
+        throw new Error('Voucher not found or has been disabled.');
+    }
+
+    const now = new Date();
+    if (now < voucher.startDate) {
+        throw new Error('Voucher is not active yet.');
+    }
+    if (now > voucher.endDate) {
+        throw new Error('Voucher has expired.');
+    }
+    if (voucher.usedCount >= voucher.usageLimit) {
+        throw new Error('Voucher usage limit reached.');
+    }
+    if (totalPrice < voucher.minOrderValue) {
+        throw new Error(`Order must be at least ${voucher.minOrderValue} to use this voucher.`);
+    }
+
+    // Tính discount
+    let discountAmount = 0;
+    if (voucher.discountType === 'percentage') {
+        discountAmount = (totalPrice * voucher.discountValue) / 100;
+        if (voucher.maxDiscount && discountAmount > voucher.maxDiscount) {
+            discountAmount = voucher.maxDiscount;
+        }
+    } else {
+        discountAmount = voucher.discountValue;
+    }
+
+    const finalPrice = Math.max(totalPrice - discountAmount, 0);
+
+    return {
+        voucher,
+        discountAmount,
+        finalPrice,
+    };
+};
+
+const previewVoucher = async (req, res) => {
+    try {
+        const { voucherCode, totalPrice } = req.body;
+        const { voucher, discountAmount, finalPrice } = await applyVoucher(voucherCode, totalPrice);
+
+        return res.status(200).json({
+            success: true,
+            message: voucher ? 'Voucher applied successfully.' : 'No voucher applied.',
+            data: {
+                voucherId: voucher ? voucher.id : null,
+                code: voucher ? voucher.code : null,
+                discountAmount,
+                finalPrice,
+            },
+        });
+    } catch (error) {
+        console.error('Error previewing voucher:', error);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Internal server error.',
+        });
+    }
+};
+
+module.exports = { applyVoucher, createVoucher, updateVoucher, deleteVoucher, getAllVouchersForAdmin, getAllVouchersForUser, previewVoucher };

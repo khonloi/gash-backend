@@ -56,7 +56,6 @@ const VoucherSchema = new mongoose.Schema(
             },
         },
 
-
         usageLimit: {
             type: Number,
             default: 1,

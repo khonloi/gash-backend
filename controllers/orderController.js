@@ -5,7 +5,7 @@ const vnpayService = require('../services/vnpayService');
 exports.createOrder = async (req, res) => {
   try {
     const { acc_id, addressReceive, phone, totalPrice, order_status, pay_status, payment_method, refund_status, feedback_order } = req.body;
-    
+
     // Validate required fields and enums
     if (!acc_id || !addressReceive || !phone || !totalPrice || !payment_method) {
       return res.status(400).json({ message: 'Missing required fields' });
@@ -67,7 +67,7 @@ exports.getOrderById = async (req, res) => {
 exports.updateOrder = async (req, res) => {
   try {
     const { order_status, pay_status, refund_status, feedback_order } = req.body;
-    
+
     // Validate enums
     if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
       return res.status(400).json({ message: 'Invalid order status' });
@@ -184,3 +184,88 @@ exports.vnpayIpn = async (req, res) => {
     });
   }
 };
+
+
+
+// controllers/orderController.js
+const Orders = require('../models/Orders');
+const Accounts = require('../models/Accounts');
+const Voucher = require('../models/Voucher');
+const { applyVoucher } = require('./voucherController');
+
+exports.checkout = async (req, res) => {
+  try {
+    // lấy user từ token
+    const userId = req.user.id;
+
+    const { addressReceive, phone, totalPrice, payment_method, voucherCode } = req.body;
+
+    // validate input
+    if (!addressReceive || !phone || !totalPrice || !payment_method) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+    if (!['COD', 'VNPAY'].includes(payment_method)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment method' });
+    }
+
+    // check account tồn tại
+    const account = await Accounts.findById(userId);
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    }
+
+    // tính toán voucher (nếu có)
+    let voucher = null;
+    let discountAmount = 0;
+    let finalPrice = totalPrice;
+
+    if (voucherCode) {
+      try {
+        const applied = await applyVoucher(voucherCode, totalPrice);
+        voucher = applied.voucher;
+        discountAmount = applied.discountAmount;
+        finalPrice = applied.finalPrice;
+      } catch (err) {
+        console.warn("Voucher không áp dụng được:", err.message);
+        // bỏ qua voucher, giữ nguyên giá gốc
+      }
+    }
+
+    // tạo order
+    const newOrder = new Orders({
+      acc_id: userId,
+      addressReceive,
+      phone,
+      totalPrice,
+      voucher_id: voucher ? voucher._id : null,
+      discountAmount,
+      finalPrice,
+      order_status: 'pending',
+      pay_status: 'unpaid',
+      payment_method,
+    });
+
+    const savedOrder = await newOrder.save();
+
+    // nếu có voucher thì tăng usedCount
+    if (voucher) {
+      voucher.usedCount += 1;
+      await voucher.save();
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Order created successfully',
+      data: savedOrder,
+    });
+
+  } catch (error) {
+    console.error('Checkout error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Internal server error',
+    });
+  }
+};
+
+
