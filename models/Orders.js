@@ -25,6 +25,25 @@ const OrdersSchema = new mongoose.Schema(
       required: [true, 'Total price is required'],
     },
 
+    // voucher áp dụng (nếu có)
+    voucher_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Voucher',
+      default: null,
+    },
+
+    // số tiền được giảm
+    discountAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    // tổng tiền sau khi giảm
+    finalPrice: {
+      type: Number,
+      required: [true, 'Final price is required'],
+    },
+
     // trạng thái đơn hàng
     order_status: {
       type: String,

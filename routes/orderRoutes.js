@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
-    const {
+const {
   createOrder,
   getAllOrders,
   searchOrders,
@@ -12,6 +12,8 @@ const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware
   vnpayReturn,
   vnpayIpn
 } = require('../controllers/orderController');
+const orderController = require('../controllers/orderController');
+
 
 router.post('/', authenticateJWT, createOrder);
 router.get('/', authenticateJWT, getAllOrders);
@@ -23,4 +25,6 @@ router.get('/:id', authenticateJWT, getOrderById);
 router.put('/:id', authenticateJWT, updateOrder);
 router.delete('/:id', authenticateJWT, deleteOrder);
 
+//apply voucher
+router.post('/checkout', authenticateJWT, orderController.checkout);
 module.exports = router;
