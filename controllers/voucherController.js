@@ -190,7 +190,7 @@ const updateVoucher = async (req, res) => {
 
         const { id } = req.params;
         const {
-            code,
+            // code,
             discountType, // 'percentage' | 'fixed'
             discountValue,
             minOrderValue,
@@ -211,23 +211,23 @@ const updateVoucher = async (req, res) => {
 
         // 1. Input validation (follow field order)
         // 1.1 Code
-        if (code !== undefined) {
-            if (!/^[A-Z0-9]{3,30}$/.test(code)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Voucher code must contain only uppercase letters and numbers, 3 to 30 characters long.',
-                });
-            }
-            // Check duplicate code
-            const existing = await Voucher.findOne({ code });
-            if (existing && existing._id.toString() !== id) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Voucher code already exists.',
-                });
-            }
-            voucher.code = code;
-        }
+        // if (code !== undefined) {
+        //     if (!/^[A-Z0-9]{3,30}$/.test(code)) {
+        //         return res.status(400).json({
+        //             success: false,
+        //             message: 'Voucher code must contain only uppercase letters and numbers, 3 to 30 characters long.',
+        //         });
+        //     }
+        //     // Check duplicate code
+        //     const existing = await Voucher.findOne({ code });
+        //     if (existing && existing._id.toString() !== id) {
+        //         return res.status(400).json({
+        //             success: false,
+        //             message: 'Voucher code already exists.',
+        //         });
+        //     }
+        //     voucher.code = code;
+        // }
 
         // 1.2 Discount type
         if (discountType !== undefined) {
@@ -341,12 +341,12 @@ const updateVoucher = async (req, res) => {
                 message: 'Invalid input: ' + error.message,
             });
         }
-        if (error.code === 11000) {
-            return res.status(400).json({
-                success: false,
-                message: 'Voucher code already exists.',
-            });
-        }
+        // if (error.code === 11000) {
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: 'Voucher code already exists.',
+        //     });
+        // }
         return res.status(500).json({
             success: false,
             message: 'Server error. Please try again later.',
