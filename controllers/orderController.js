@@ -141,17 +141,36 @@ exports.vnpayReturn = async (req, res) => {
 
     const result = await vnpayService.handleReturn(req.query);
 
+    // Lấy orderId từ VNPay (chính là vnp_TxnRef đã gửi khi tạo URL)
+    const orderId = req.query.vnp_TxnRef;
+
+    // Lấy số tiền (VNPay trả về nhân 100)
+    const amount = req.query.vnp_Amount ? Number(req.query.vnp_Amount) / 100 : 0;
+
+    // Phương thức thanh toán
+    const paymentMethod = "VNPay";
+
     if (result.code === "00") {
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         message: result.message,
-        data: result
+        data: {
+          ...result,
+          orderId,
+          amount,
+          paymentMethod
+        }
       });
     } else {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         message: result.message,
-        data: result
+        data: {
+          ...result,
+          orderId,
+          amount,
+          paymentMethod
+        }
       });
     }
   } catch (error) {
@@ -163,6 +182,7 @@ exports.vnpayReturn = async (req, res) => {
     });
   }
 };
+
 
 exports.vnpayIpn = async (req, res) => {
   try {
