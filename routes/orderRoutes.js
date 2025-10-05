@@ -24,7 +24,7 @@ router.get('/vnpay-ipn', vnpayIpn);
 router.get('/:id', authenticateJWT, getOrderById);
 router.put('/:id', authenticateJWT, updateOrder);
 router.delete('/:id', authenticateJWT, deleteOrder);
-
 //apply voucher
 router.post('/checkout', authenticateJWT, orderController.checkout);
+// router.delete('/batch', authenticateJWT, orderController.batchRemoveCartItems);
 module.exports = router;
