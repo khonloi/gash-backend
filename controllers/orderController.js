@@ -187,21 +187,22 @@ exports.vnpayIpn = async (req, res) => {
 
 
 
-// controllers/orderController.js
-const Orders = require('../models/Orders');
-const Accounts = require('../models/Accounts');
-const Voucher = require('../models/Voucher');
+const mongoose = require("mongoose");
+const Accounts = require("../models/Accounts");
+const Orders = require("../models/Orders");
+const OrderDetails = require("../models/OrderDetails");
+const ProductVariants = require("../models/ProductVariants");
+const Voucher = require("../models/Voucher");
+const Carts = require('../models/Carts');
 const { applyVoucher } = require('./voucherController');
 
 exports.checkout = async (req, res) => {
   try {
-    // lấy user từ token
     const userId = req.user.id;
-
-    const { addressReceive, phone, totalPrice, payment_method, voucherCode } = req.body;
+    const { addressReceive, phone, totalPrice, payment_method, voucherCode, items } = req.body;
 
     // validate input
-    if (!addressReceive || !phone || !totalPrice || !payment_method) {
+    if (!addressReceive || !phone || !totalPrice || !payment_method || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
     if (!['COD', 'VNPAY'].includes(payment_method)) {
@@ -226,7 +227,7 @@ exports.checkout = async (req, res) => {
         discountAmount = applied.discountAmount;
         finalPrice = applied.finalPrice;
       } catch (err) {
-        console.warn("Voucher không áp dụng được:", err.message);
+        console.warn("Voucher không áp dụng được, bỏ qua:", err.message);
         // bỏ qua voucher, giữ nguyên giá gốc
       }
     }
@@ -253,10 +254,60 @@ exports.checkout = async (req, res) => {
       await voucher.save();
     }
 
+    // tạo order details từ items
+    const orderDetailsToSave = [];
+    const boughtVariantIds = [];
+    for (const item of items) {
+      const { variant_id, UnitPrice, Quantity, feedback_details } = item;
+
+      // validate item
+      if (!variant_id || !UnitPrice || !Quantity) {
+        return res.status(400).json({ success: false, message: 'Invalid item in order details' });
+      }
+      if (UnitPrice < 0) {
+        return res.status(400).json({ success: false, message: 'Unit price cannot be negative' });
+      }
+      if (Quantity < 1) {
+        return res.status(400).json({ success: false, message: 'Quantity must be at least 1' });
+      }
+      if (feedback_details && feedback_details.length > 500) {
+        return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
+      }
+
+      const variant = await ProductVariants.findById(variant_id);
+      if (!variant) {
+        return res.status(404).json({ success: false, message: `Product variant not found: ${variant_id}` });
+      }
+
+      const orderDetail = new OrderDetails({
+        order_id: savedOrder._id,
+        variant_id,
+        UnitPrice,
+        Quantity,
+        feedback_details: feedback_details || '',
+        is_deleted: false,
+      });
+      const savedDetail = await orderDetail.save();
+      orderDetailsToSave.push(savedDetail);
+      boughtVariantIds.push(variant_id.toString());
+    }
+
+    // XÓA CÁC SẢN PHẨM ĐÃ MUA KHỎI CART (chỉ xóa đúng sản phẩm đã mua của user)
+    const objectUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+    const objectVariantIds = boughtVariantIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
+
+    await Carts.deleteMany({
+      acc_id: objectUserId,
+      variant_id: { $in: objectVariantIds }
+    });
+
     return res.status(201).json({
       success: true,
-      message: 'Order created successfully',
-      data: savedOrder,
+      message: 'Order created successfully with details, cart cleared',
+      data: {
+        order: savedOrder,
+        orderDetails: orderDetailsToSave,
+      },
     });
 
   } catch (error) {
@@ -269,3 +320,28 @@ exports.checkout = async (req, res) => {
 };
 
 
+// DELETE /carts/batch
+// exports.batchRemoveCartItems = async (req, res) => {
+//   try {
+//     const userId = req.user.id; // lấy từ middleware xác thực
+//     const { ids } = req.body; // mảng _id của cart item
+
+//     if (!Array.isArray(ids) || ids.length === 0) {
+//       return res.status(400).json({ success: false, message: 'No cart item ids provided' });
+//     }
+
+//     // Chỉ xóa cart item thuộc user hiện tại
+//     const result = await Cart.deleteMany({
+//       _id: { $in: ids },
+//       acc_id: userId
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `Deleted ${result.deletedCount} cart items`,
+//     });
+//   } catch (error) {
+//     console.error('Batch remove cart error:', error);
+//     return res.status(500).json({ success: false, message: 'Internal server error' });
+//   }
+// };
