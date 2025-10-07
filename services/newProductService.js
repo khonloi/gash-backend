@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const newProduct = require('../models/newProduct');
+const newProductVariant = require('../models/newProductVariant');
 
 // Create a new product with validation
 const createProduct = async (productData) => {

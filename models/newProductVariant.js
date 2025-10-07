@@ -4,12 +4,12 @@ const Schema = mongoose.Schema;
 const newProductVariantSchema = new Schema({
   productId: {
     type: Schema.Types.ObjectId,
-    ref: 'newProduct',
+    ref: 'newProducts',
     required: true
   },
   productColorId: {
     type: Schema.Types.ObjectId,
-    ref: 'ProductColor',
+    ref: 'ProductColors',
     required: true
   },
   productSizeId: {

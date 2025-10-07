@@ -8,7 +8,7 @@ const newProductSchema = new Schema({
   },
   categoryId: {
     type: Schema.Types.ObjectId,
-    ref: 'Category',
+    ref: 'Categories',
     required: true
   },
   description: {
