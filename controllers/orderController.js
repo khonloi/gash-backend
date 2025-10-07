@@ -2,6 +2,7 @@
 const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
 
+
 exports.createOrder = async (req, res) => {
   try {
     const { acc_id, addressReceive, phone, totalPrice, order_status, pay_status, payment_method, refund_status, feedback_order } = req.body;
@@ -340,28 +341,67 @@ exports.checkout = async (req, res) => {
 };
 
 
-// DELETE /carts/batch
-// exports.batchRemoveCartItems = async (req, res) => {
-//   try {
-//     const userId = req.user.id; // lấy từ middleware xác thực
-//     const { ids } = req.body; // mảng _id của cart item
+exports.getOrderByIdForUser = async (req, res) => {
+  try {
+    const user = req.user;
+    const orderId = req.params.id;
 
-//     if (!Array.isArray(ids) || ids.length === 0) {
-//       return res.status(400).json({ success: false, message: 'No cart item ids provided' });
-//     }
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res.status(400).json({ success: false, message: 'Invalid order ID' });
+    }
 
-//     // Chỉ xóa cart item thuộc user hiện tại
-//     const result = await Cart.deleteMany({
-//       _id: { $in: ids },
-//       acc_id: userId
-//     });
+    const order = await Orders.findById(orderId)
+      .populate('acc_id', 'username name')
+      .populate('voucher_id', 'code discountType discountValue');
 
-//     return res.status(200).json({
-//       success: true,
-//       message: `Deleted ${result.deletedCount} cart items`,
-//     });
-//   } catch (error) {
-//     console.error('Batch remove cart error:', error);
-//     return res.status(500).json({ success: false, message: 'Internal server error' });
-//   }
-// };
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Kiểm tra quyền
+    if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id._id.toString() !== user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied: Can only view own order' });
+    }
+
+
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: error.message || 'Error retrieving order' });
+  }
+};
+
+
+
+exports.cancelOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+
+    // Lấy thông tin order hiện tại
+    const order = await orderService.getOrderById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Chỉ cho phép hủy khi trạng thái là pending
+    if (order.order_status !== 'pending') {
+      return res.status(400).json({ message: 'Only pending orders can be cancelled' });
+    }
+
+    // Cập nhật trạng thái sang cancelled
+    const updatedOrder = await orderService.updateOrderService(
+      orderId,
+      { order_status: 'cancelled' },
+      req.user
+    );
+
+    res.status(200).json({
+      message: 'Order cancelled successfully',
+      order: updatedOrder
+    });
+  } catch (error) {
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || 'Error cancelling order' });
+  }
+};

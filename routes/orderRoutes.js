@@ -10,7 +10,9 @@ const {
   deleteOrder,
   createVnpayPaymentUrl,
   vnpayReturn,
-  vnpayIpn
+  vnpayIpn,
+  getOrderByIdForUser,
+  cancelOrder
 } = require('../controllers/orderController');
 const orderController = require('../controllers/orderController');
 
@@ -26,5 +28,6 @@ router.put('/:id', authenticateJWT, updateOrder);
 router.delete('/:id', authenticateJWT, deleteOrder);
 //apply voucher
 router.post('/checkout', authenticateJWT, orderController.checkout);
-// router.delete('/batch', authenticateJWT, orderController.batchRemoveCartItems);
+router.get('/get-order/:id', authenticateJWT, getOrderByIdForUser);
+router.patch('/:id/cancel', authenticateJWT, cancelOrder);
 module.exports = router;

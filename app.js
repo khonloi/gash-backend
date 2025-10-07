@@ -14,7 +14,7 @@ app.use(cors({
     'http://localhost:3000', // CRA hoặc client khác
     'http://localhost:3001'  // nếu chạy song song
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
 }));
 
