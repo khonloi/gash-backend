@@ -305,7 +305,6 @@ exports.checkout = async (req, res) => {
         UnitPrice,
         Quantity,
         feedback_details: feedback_details || '',
-        is_deleted: false,
       });
       const savedDetail = await orderDetail.save();
       orderDetailsToSave.push(savedDetail);
@@ -462,7 +461,6 @@ exports.addFeedbackProduct = async (req, res) => {
     const orderDetail = await OrderDetails.findOne({
       order_id: orderId,
       variant_id: variantId,
-      is_deleted: false,
     });
 
     if (!orderDetail) {
@@ -480,6 +478,10 @@ exports.addFeedbackProduct = async (req, res) => {
     if (content !== undefined) {
       updateData['feedback.content'] = content.trim();
     }
+    // Reset is_deleted và set timestamps khi tạo feedback mới
+    updateData['feedback.is_deleted'] = false;
+    updateData['feedback.created_at'] = new Date();
+    updateData['feedback.updated_at'] = new Date();
 
     // Cập nhật trực tiếp vào database
     const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
@@ -550,7 +552,7 @@ exports.getOrderFeedbacks = async (req, res) => {
       });
     }
 
-    // Lấy tất cả feedback từ feedback_ids
+    // Lấy tất cả feedback từ feedback_ids và lọc ra những feedback chưa bị xóa
     const feedbacks = await OrderDetails.find({
       _id: { $in: order.feedback_ids || [] }
     }).populate('variant_id', 'pro_id color_id size_id')
@@ -560,6 +562,12 @@ exports.getOrderFeedbacks = async (req, res) => {
         select: 'pro_name'
       });
 
+    // Lọc ra những feedback chưa bị xóa
+    const activeFeedbacks = feedbacks.filter(feedback =>
+      !feedback.feedback ||
+      feedback.feedback.is_deleted !== true
+    );
+
     res.status(200).json({
       success: true,
       message: 'Order feedbacks retrieved successfully',
@@ -568,7 +576,7 @@ exports.getOrderFeedbacks = async (req, res) => {
         order_status: order.order_status,
         feedback_ids: order.feedback_ids
       },
-      feedbacks: feedbacks.map(feedback => ({
+      feedbacks: activeFeedbacks.map(feedback => ({
         _id: feedback._id,
         variant_id: feedback.variant_id,
         feedback: feedback.feedback,
@@ -612,8 +620,7 @@ exports.getUserFeedbackByProduct = async (req, res) => {
     // Tìm order detail cụ thể cho variant này trong order này
     const orderDetail = await OrderDetails.findOne({
       order_id: orderId,
-      variant_id: variantId,
-      is_deleted: false
+      variant_id: variantId
     })
       .populate({
         path: 'variant_id',
@@ -629,6 +636,25 @@ exports.getUserFeedbackByProduct = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Product not found in this order'
+      });
+    }
+
+    // Nếu feedback đã bị xóa, coi như không có feedback
+    if (orderDetail.feedback && orderDetail.feedback.is_deleted === true) {
+      return res.status(200).json({
+        success: true,
+        message: 'No feedback found for this product',
+        feedback: null,
+        orderDetail: {
+          _id: orderDetail._id,
+          order_id: orderDetail.order_id,
+          variant_id: orderDetail.variant_id._id,
+          feedback: null,
+        },
+        order: {
+          _id: order._id,
+          feedback_ids: [],
+        },
       });
     }
 
@@ -728,13 +754,20 @@ exports.editFeedbackProduct = async (req, res) => {
     const orderDetail = await OrderDetails.findOne({
       order_id: orderId,
       variant_id: variantId,
-      is_deleted: false,
     });
 
     if (!orderDetail) {
       return res.status(404).json({
         success: false,
         message: 'Product not found in this order',
+      });
+    }
+
+    // Kiểm tra feedback có bị xóa không
+    if (orderDetail.feedback && orderDetail.feedback.is_deleted === true) {
+      return res.status(404).json({
+        success: false,
+        message: 'Feedback has been deleted',
       });
     }
 
@@ -759,6 +792,8 @@ exports.editFeedbackProduct = async (req, res) => {
     if (content !== undefined) {
       updateData['feedback.content'] = content.trim();
     }
+    // Cập nhật updated_at khi edit
+    updateData['feedback.updated_at'] = new Date();
 
     // Cập nhật trực tiếp vào database
     const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
@@ -822,13 +857,20 @@ exports.deleteFeedbackProduct = async (req, res) => {
     const orderDetail = await OrderDetails.findOne({
       order_id: orderId,
       variant_id: variantId,
-      is_deleted: false,
     });
 
     if (!orderDetail) {
       return res.status(404).json({
         success: false,
         message: 'Product not found in this order',
+      });
+    }
+
+    // Kiểm tra feedback có bị xóa không
+    if (orderDetail.feedback && orderDetail.feedback.is_deleted === true) {
+      return res.status(404).json({
+        success: false,
+        message: 'Feedback has been deleted',
       });
     }
 
@@ -845,17 +887,19 @@ exports.deleteFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Xóa feedback (set về null và empty string)
+    // Soft delete feedback (set is_deleted = true)
+    console.log('Deleting feedback for orderDetail:', orderDetail._id);
     const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
       orderDetail._id,
       {
         $set: {
-          'feedback.rating': null,
-          'feedback.content': ''
+          'feedback.is_deleted': true,
+          'feedback.updated_at': new Date()
         }
       },
       { new: true, runValidators: true }
     );
+    console.log('Feedback deleted, is_deleted:', savedOrderDetail.feedback.is_deleted);
 
     if (!savedOrderDetail) {
       return res.status(500).json({
@@ -876,12 +920,24 @@ exports.deleteFeedbackProduct = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Product feedback deleted successfully',
-      feedback: savedOrderDetail.feedback,
+      feedback: {
+        rating: savedOrderDetail.feedback.rating,
+        content: savedOrderDetail.feedback.content,
+        created_at: savedOrderDetail.feedback.created_at,
+        updated_at: savedOrderDetail.feedback.updated_at,
+        is_deleted: true  // ✅ Rõ ràng là đã bị xóa
+      },
       orderDetail: {
         _id: savedOrderDetail._id,
         order_id: savedOrderDetail.order_id,
         variant_id: savedOrderDetail.variant_id,
-        feedback: savedOrderDetail.feedback
+        feedback: {
+          rating: savedOrderDetail.feedback.rating,
+          content: savedOrderDetail.feedback.content,
+          created_at: savedOrderDetail.feedback.created_at,
+          updated_at: savedOrderDetail.feedback.updated_at,
+          is_deleted: true  // ✅ Rõ ràng là đã bị xóa
+        }
       }
     });
   } catch (error) {
@@ -894,7 +950,6 @@ exports.deleteFeedbackProduct = async (req, res) => {
 };
 
 // Hàm lấy tất cả feedback của một sản phẩm (tất cả variants của product) để hiển thị trên trang product
-
 exports.getAllFeedbackOfProduct = async (req, res) => {
   try {
     const { variantId } = req.params;
@@ -943,10 +998,17 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     // Tìm tất cả feedback của tất cả variants thuộc product này
     const query = {
       variant_id: { $in: variantIds },
-      is_deleted: false,
       $or: [
         { 'feedback.rating': { $exists: true, $ne: null } },
         { 'feedback.content': { $exists: true, $ne: '' } }
+      ],
+      $and: [
+        {
+          $or: [
+            { 'feedback.is_deleted': { $exists: false } },
+            { 'feedback.is_deleted': false }
+          ]
+        }
       ]
     };
 
@@ -1055,6 +1117,9 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       feedback: {
         rating: feedback.feedback.rating,
         content: feedback.feedback.content,
+        created_at: feedback.feedback.created_at,
+        updated_at: feedback.feedback.updated_at,
+        is_deleted: feedback.feedback.is_deleted,
         has_rating: feedback.feedback.rating !== null,
         has_content: feedback.feedback.content && feedback.feedback.content.trim() !== ''
       },
