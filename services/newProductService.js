@@ -40,7 +40,7 @@ const createProduct = async (productData) => {
 };
 
 // Get all products with optional filtering
-const getAllProducts = async (filters = {}) => {
+const getAllProducts = async (filters = {}, userRole = 'customer') => {
   try {
     const { status, categoryId } = filters;
     const query = {};
@@ -53,6 +53,11 @@ const getAllProducts = async (filters = {}) => {
       query.categoryId = categoryId;
     }
 
+    // Restrict visibility of pending products for customers
+    if (userRole === 'customer') {
+      query.productStatus = { $ne: 'pending' };
+    }
+
     return await newProduct.find(query).populate('categoryId');
   } catch (error) {
     throw new Error(`Failed to fetch products: ${error.message}`);
@@ -60,7 +65,7 @@ const getAllProducts = async (filters = {}) => {
 };
 
 // Get a single product by ID
-const getProductById = async (productId) => {
+const getProductById = async (productId, userRole = 'customer') => {
   try {
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error('Invalid product ID');
@@ -71,11 +76,17 @@ const getProductById = async (productId) => {
       throw new Error('Product not found');
     }
 
+    // Restrict visibility for customers if product is pending
+    if (product.productStatus === 'pending' && userRole === 'customer') {
+      throw new Error('Access denied: product is pending approval');
+    }
+
     return product;
   } catch (error) {
     throw new Error(`Failed to fetch product: ${error.message}`);
   }
 };
+
 
 // Update a product with validation
 const updateProduct = async (productId, updateData) => {
@@ -92,8 +103,8 @@ const updateProduct = async (productId, updateData) => {
     if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
       throw new Error('Invalid category ID');
     }
-    if (productStatus && !['active', 'inactive', 'pending'].includes(productStatus)) {
-      throw new Error('Product status must be either "active", "inactive", or "pending"');
+    if (productStatus && !['active', 'inactive'].includes(productStatus)) {
+      throw new Error('Product status must be either "active" or "inactive"');
     }
 
     // Check if product is discontinued

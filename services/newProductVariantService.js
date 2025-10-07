@@ -136,6 +136,7 @@ const updateProductVariant = async (variantId, updateData) => {
       productSizeId,
       variantPrice,
       stockQuantity,
+      variantStatus,
     } = updateData;
     if (productId && !mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error("Invalid product ID");
@@ -153,12 +154,35 @@ const updateProductVariant = async (variantId, updateData) => {
       throw new Error("Stock quantity cannot be negative");
     }
 
-    // Check for duplicate variant
+    if (
+      variantStatus &&
+      !["active", "inactive", "pending"].includes(variantStatus)
+    ) {
+      throw new Error(
+        'Variant status must be either "active", "inactive" or "pending"'
+      );
+    }
+
+    // Check for existing variant
     const existingVariant = await newProductVariant.findById(variantId);
     if (!existingVariant) {
       throw new Error("Product variant not found");
     }
 
+    // Prevent activating variant with 0 stock
+    if (
+      variantStatus === "active" &&
+      (stockQuantity === 0 || existingVariant.stockQuantity === 0)
+    ) {
+      throw new Error("Cannot activate a variant with zero stock");
+    }
+
+    // Prevent updates to discontinued variants
+    if (existingVariant.variantStatus === "discontinued") {
+      throw new Error("Cannot update a discontinued variant");
+    }
+
+    // Check for duplicate variant
     if (productId || productColorId || productSizeId) {
       const existingDuplicate = await newProductVariant.findOne({
         productId: productId || existingVariant.productId,
@@ -188,7 +212,7 @@ const updateProductVariant = async (variantId, updateData) => {
   }
 };
 
-// Delete a product variant with validation
+// Soft delete a product variant with validation
 const deleteProductVariant = async (variantId) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(variantId)) {
@@ -208,12 +232,16 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Cannot delete variant with active orders");
     }
 
-    const variant = await newProductVariant.findByIdAndDelete(variantId);
+    const variant = await newProductVariant.findByIdAndUpdate(
+      variantId,
+      { variantStatus: "discontinued", updatedAt: Date.now() },
+      { new: true }
+    );
 
     if (!variant) {
       throw new Error("Product variant not found");
     }
-    return { message: "Product variant deleted successfully" };
+    return { message: "Product variant discontinued successfully" };
   } catch (error) {
     throw new Error(`Failed to delete product variant: ${error.message}`);
   }

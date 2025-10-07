@@ -70,7 +70,7 @@ const deleteProductVariant = async (req, res) => {
     await productVariantService.deleteProductVariant(req.params.id);
     res.status(200).json({
       success: true,
-      message: 'Product variant deleted successfully'
+      message: 'Product variant discontinued successfully'
     });
   } catch (error) {
     res.status(400).json({

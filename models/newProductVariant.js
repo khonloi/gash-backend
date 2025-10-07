@@ -31,7 +31,7 @@ const newProductVariantSchema = new Schema({
   },
   variantStatus: {
     type: String,
-    enum: ['active', 'discontinued'],
+    enum: ['active', 'inactive', 'discontinued'],
     default: 'active'
   },
   createdAt: {
