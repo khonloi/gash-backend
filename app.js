@@ -61,7 +61,7 @@ app.use('/upload', uploadRoutes);
 
 app.use('/vouchers', voucherRoutes);
 app.use('/conversations', conversationRoutes);
-app.use('/conversations', messageRoutes);
+app.use('/messages', messageRoutes);
 
 // ===== 404 handler =====
 app.use((req, res, next) => {
