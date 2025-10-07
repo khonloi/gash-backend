@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const newProduct = require('./newProductSchema');
+const newProduct = require('../models/newProduct');
 
 // Create a new product with validation
 const createProduct = async (productData) => {
@@ -16,8 +16,8 @@ const createProduct = async (productData) => {
     }
 
     // Validate productStatus if provided
-    if (productStatus && !['active', 'inactive'].includes(productStatus)) {
-      throw new Error('Product status must be either "active" or "inactive"');
+    if (productStatus && !['active', 'inactive', 'pending'].includes(productStatus)) {
+      throw new Error('Product status must be either "active", "inactive", or "pending"');
     }
 
     // Check for duplicate product name
@@ -26,7 +26,11 @@ const createProduct = async (productData) => {
       throw new Error('Product with this name already exists');
     }
 
-    const product = new newProduct(productData);
+    // Set default status to pending if not provided
+    const product = new newProduct({
+      ...productData,
+      productStatus: productStatus || 'pending'
+    });
     await product.save();
     return product;
   } catch (error) {
@@ -65,6 +69,7 @@ const getProductById = async (productId) => {
     if (!product) {
       throw new Error('Product not found');
     }
+
     return product;
   } catch (error) {
     throw new Error(`Failed to fetch product: ${error.message}`);
@@ -86,18 +91,35 @@ const updateProduct = async (productId, updateData) => {
     if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
       throw new Error('Invalid category ID');
     }
-    if (productStatus && !['active', 'inactive'].includes(productStatus)) {
-      throw new Error('Product status must be either "active" or "inactive"');
+    if (productStatus && !['active', 'inactive', 'pending'].includes(productStatus)) {
+      throw new Error('Product status must be either "active", "inactive", or "pending"');
+    }
+
+    // Check if product is discontinued
+    const existingProduct = await newProduct.findById(productId);
+    if (!existingProduct) {
+      throw new Error('Product not found');
+    }
+    if (existingProduct.productStatus === 'discontinued') {
+      throw new Error('Cannot update a discontinued product');
     }
 
     // Check for duplicate product name
     if (productName) {
-      const existingProduct = await newProduct.findOne({
+      const duplicateProduct = await newProduct.findOne({
         productName,
         _id: { $ne: productId }
       });
-      if (existingProduct) {
+      if (duplicateProduct) {
         throw new Error('Product with this name already exists');
+      }
+    }
+
+    // Check if product has variants to determine if status can be changed from pending
+    if (productStatus && productStatus !== 'pending') {
+      const variantCount = await newProductVariant.countDocuments({ productId });
+      if (variantCount === 0) {
+        throw new Error('Cannot set status to active/inactive without variants');
       }
     }
 
@@ -116,20 +138,25 @@ const updateProduct = async (productId, updateData) => {
   }
 };
 
-// Delete a product
+// Soft delete a product by setting status to discontinued
 const deleteProduct = async (productId) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error('Invalid product ID');
     }
 
-    const product = await newProduct.findByIdAndDelete(productId);
+    const product = await newProduct.findByIdAndUpdate(
+      productId,
+      { productStatus: 'discontinued', updatedAt: Date.now() },
+      { new: true }
+    );
+
     if (!product) {
       throw new Error('Product not found');
     }
-    return { message: 'Product deleted successfully' };
+    return { message: 'Product discontinued successfully' };
   } catch (error) {
-    throw new Error(`Failed to delete product: ${error.message}`);
+    throw new Error(`Failed to discontinue product: ${error.message}`);
   }
 };
 

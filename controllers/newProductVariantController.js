@@ -73,7 +73,7 @@ const deleteProductVariant = async (req, res) => {
       message: 'Product variant deleted successfully'
     });
   } catch (error) {
-    res.status(404).json({
+    res.status(400).json({
       success: false,
       message: error.message
     });

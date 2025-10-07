@@ -6,16 +6,16 @@ const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware
 // Create a new product (restricted to manager/admin)
 router.post('/', authenticateJWT, authorizeRole(['manager', 'admin']), productController.createProduct);
 
-// Get all products (accessible to all authenticated users, but pending products only for manager/admin)
-router.get('/', authenticateJWT, productController.getAllProducts);
+// Get all products (accessible to public)
+router.get('/', productController.getAllProducts);
 
-// Get a single product by ID (accessible to all authenticated users, but pending products only for manager/admin)
-router.get('/:id', authenticateJWT, productController.getProductById);
+// Get a single product by ID (accessible to public)
+router.get('/:id', productController.getProductById);
 
 // Update a product (restricted to manager/admin)
 router.put('/:id', authenticateJWT, authorizeRole(['manager', 'admin']), productController.updateProduct);
 
-// Delete a product (restricted to manager/admin)
+// Soft delete a product (restricted to manager/admin)
 router.delete('/:id', authenticateJWT, authorizeRole(['manager', 'admin']), productController.deleteProduct);
 
 module.exports = router;

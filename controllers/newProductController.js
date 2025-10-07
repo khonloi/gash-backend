@@ -19,8 +19,7 @@ const createProduct = async (req, res) => {
 const getAllProducts = async (req, res) => {
   try {
     const filters = req.query;
-    const userRole = req.user?.role || 'user'; // Assuming user role is available in req.user
-    const products = await productService.getAllProducts(filters, userRole);
+    const products = await productService.getAllProducts(filters);
     res.status(200).json({
       success: true,
       data: products,
@@ -36,8 +35,7 @@ const getAllProducts = async (req, res) => {
 
 const getProductById = async (req, res) => {
   try {
-    const userRole = req.user?.role || 'user'; // Assuming user role is available in req.user
-    const product = await productService.getProductById(req.params.id, userRole);
+    const product = await productService.getProductById(req.params.id);
     res.status(200).json({
       success: true,
       data: product,
@@ -72,10 +70,10 @@ const deleteProduct = async (req, res) => {
     await productService.deleteProduct(req.params.id);
     res.status(200).json({
       success: true,
-      message: 'Product deleted successfully'
+      message: 'Product discontinued successfully'
     });
   } catch (error) {
-    res.status(404).json({
+    res.status(400).json({
       success: false,
       message: error.message
     });

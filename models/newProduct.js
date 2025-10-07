@@ -17,8 +17,8 @@ const newProductSchema = new Schema({
   },
   productStatus: {
     type: String,
-    enum: ['active', 'inactive'],
-    default: 'active'
+    enum: ['active', 'inactive', 'pending', 'discontinued'],
+    default: 'pending'
   },
   createdAt: {
     type: Date,
