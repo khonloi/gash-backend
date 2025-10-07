@@ -21,10 +21,21 @@ const OrderDetailsSchema = new mongoose.Schema({
     required: [true, 'Quantity is required'],
     min: [1, 'Quantity must be at least 1'],
   },
-  feedback_details: {
-    type: String,
-    maxlength: [500, 'Feedback cannot exceed 500 characters'],
+  feedback: {
+    rating: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: null,
+    },
+    content: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Feedback cannot exceed 500 characters'],
+      default: '',
+    },
   },
+
   // soft delete flag for product feedback
   is_deleted: {
     type: Boolean,

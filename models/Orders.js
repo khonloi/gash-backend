@@ -80,12 +80,14 @@ const OrdersSchema = new mongoose.Schema(
       default: '',
     },
 
-    feedback_order: {
-      type: String,
-      default: '',
-    },
-
     orderDetails: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrderDetails',
+      },
+    ],
+
+    feedback_ids: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'OrderDetails',
