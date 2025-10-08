@@ -69,6 +69,10 @@ const newProductVariantRoutes = require('./routes/newProductVariantRoutes');
 app.use('/new-products', newProductRoutes);
 app.use('/new-variants', newProductVariantRoutes);
 
+// ===== New Cart Routes =====
+const newCartRoutes =  require('./routes/newCartRoutes');
+app.use('/new-carts', newCartRoutes);
+
 // ===== 404 handler =====
 app.use((req, res, next) => {
   res.status(404).json({ success: false, message: 'Not Found' });
