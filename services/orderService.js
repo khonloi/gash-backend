@@ -186,12 +186,67 @@ async function getOrderByIdService(id, user) {
     err.status = 400;
     throw err;
   }
-  const order = await Orders.findById(id).populate("acc_id", "username name");
+
+  const order = await Orders.findById(id)
+    .populate({
+      path: 'acc_id',
+      select: 'username name email phone address image'
+    })
+    .populate({
+      path: 'voucher_id',
+      select: 'code voucher_name discountType discountValue discount_percentage discount_amount minOrderValue maxDiscountAmount usedCount usageLimit startDate endDate isActive'
+    })
+    .populate({
+      path: 'orderDetails',
+      select: 'variant_id UnitPrice Quantity feedback',
+      populate: {
+        path: 'variant_id',
+        select: 'pro_id color_id size_id',
+        populate: [
+          {
+            path: 'pro_id',
+            select: 'pro_name imageURL'
+          },
+          {
+            path: 'color_id',
+            select: 'color_name'
+          },
+          {
+            path: 'size_id',
+            select: 'size_name'
+          }
+        ]
+      }
+    })
+    .populate({
+      path: 'feedback_ids',
+      select: 'variant_id feedback UnitPrice Quantity',
+      populate: {
+        path: 'variant_id',
+        select: 'pro_id color_id size_id',
+        populate: [
+          {
+            path: 'pro_id',
+            select: 'pro_name imageURL'
+          },
+          {
+            path: 'color_id',
+            select: 'color_name'
+          },
+          {
+            path: 'size_id',
+            select: 'size_name'
+          }
+        ]
+      }
+    });
+
   if (!order) {
     const err = new Error("Order not found");
     err.status = 404;
     throw err;
   }
+
   if (
     user.role !== "admin" &&
     user.role !== "manager" &&
@@ -201,6 +256,7 @@ async function getOrderByIdService(id, user) {
     err.status = 403;
     throw err;
   }
+
   return order;
 }
 

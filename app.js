@@ -14,7 +14,7 @@ app.use(cors({
     'http://localhost:3000', // CRA hoặc client khác
     'http://localhost:3001'  // nếu chạy song song
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
 }));
 
@@ -43,6 +43,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const voucherRoutes = require('./routes/voucherRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+const billRoutes = require('./routes/billRoutes');
 
 // Mount routes
 app.use('/auth', authRoutes);
@@ -61,16 +62,18 @@ app.use('/upload', uploadRoutes);
 
 app.use('/vouchers', voucherRoutes);
 app.use('/conversations', conversationRoutes);
+app.use('/conversations', messageRoutes);
+app.use('/bills', billRoutes);
 app.use('/messages', messageRoutes);
 
 // ===== New Product and Variant Routes =====
-const newProductRoutes =  require('./routes/newProductRoutes');
+const newProductRoutes = require('./routes/newProductRoutes');
 const newProductVariantRoutes = require('./routes/newProductVariantRoutes');
 app.use('/new-products', newProductRoutes);
 app.use('/new-variants', newProductVariantRoutes);
 
 // ===== New Cart Routes =====
-const newCartRoutes =  require('./routes/newCartRoutes');
+const newCartRoutes = require('./routes/newCartRoutes');
 app.use('/new-carts', newCartRoutes);
 
 // ===== 404 handler =====
