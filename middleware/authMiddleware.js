@@ -33,4 +33,14 @@ const authorizeRole = (roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { authenticateJWT, authorizeRole, JWT_SECRET };
+// Middleware tùy chỉnh để xử lý authentication optional
+const optionalAuth = (req, res, next) => {
+  // Nếu có token thì authenticate, nếu không thì bỏ qua
+  if (req.headers.authorization) {
+    return authenticateJWT(req, res, next);
+  }
+  // Không có token thì tiếp tục mà không có req.user
+  next();
+};
+
+module.exports = { authenticateJWT, authorizeRole, JWT_SECRET, optionalAuth };

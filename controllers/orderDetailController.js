@@ -13,8 +13,8 @@ exports.searchOrderDetails = async (req, res) => {
 
 exports.createOrderDetail = async (req, res) => {
   try {
-    const { order_id, variant_id, UnitPrice, Quantity, feedback_details } = req.body;
-    
+    const { order_id, variant_id, UnitPrice, Quantity, feedback } = req.body;
+
     // Validate required fields
     if (!order_id || !variant_id || !UnitPrice || !Quantity) {
       return res.status(400).json({ message: 'Missing required fields' });
@@ -25,9 +25,16 @@ exports.createOrderDetail = async (req, res) => {
     if (Quantity < 1) {
       return res.status(400).json({ message: 'Quantity must be at least 1' });
     }
-    if (feedback_details && feedback_details.length > 500) {
-      return res.status(400).json({ message: 'Feedback cannot exceed 500 characters' });
-    }
+
+    // Validate feedback structure if provided
+    // if (feedback) {
+    //   if (feedback.rating && (feedback.rating < 1 || feedback.rating > 5)) {
+    //     return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+    //   }
+    //   if (feedback.content && feedback.content.length > 500) {
+    //     return res.status(400).json({ message: 'Feedback content cannot exceed 500 characters' });
+    //   }
+    // }
 
     const result = await orderDetailService.createOrderDetail(req.body, req.user);
     res.status(result.status).json(result.response);
@@ -36,10 +43,11 @@ exports.createOrderDetail = async (req, res) => {
   }
 };
 
+
 exports.getAllOrderDetails = async (req, res) => {
   try {
-    const { order_id } = req.query;
-    const result = await orderDetailService.getAllOrderDetails(req.user, order_id);
+    const { orderId } = req.params;
+    const result = await orderDetailService.getAllOrderDetails(req.user, orderId);
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ message: 'Error retrieving order details', error: error.message });
@@ -67,8 +75,8 @@ exports.getOrderDetailById = async (req, res) => {
 
 exports.updateOrderDetail = async (req, res) => {
   try {
-    const { UnitPrice, Quantity, feedback_details, is_deleted } = req.body;
-    
+    const { UnitPrice, Quantity, feedback } = req.body;
+
     // Validate fields
     if (UnitPrice !== undefined && UnitPrice < 0) {
       return res.status(400).json({ message: 'Unit price cannot be negative' });
@@ -76,9 +84,16 @@ exports.updateOrderDetail = async (req, res) => {
     if (Quantity !== undefined && Quantity < 1) {
       return res.status(400).json({ message: 'Quantity must be at least 1' });
     }
-    if (feedback_details && feedback_details.length > 500) {
-      return res.status(400).json({ message: 'Feedback cannot exceed 500 characters' });
-    }
+
+    // Validate feedback structure if provided
+    // if (feedback) {
+    //   if (feedback.rating && (feedback.rating < 1 || feedback.rating > 5)) {
+    //     return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+    //   }
+    //   if (feedback.content && feedback.content.length > 500) {
+    //     return res.status(400).json({ message: 'Feedback content cannot exceed 500 characters' });
+    //   }
+    // }
 
     const result = await orderDetailService.updateOrderDetail(req.params.id, req.body, req.user);
     res.status(result.status).json(result.response);
