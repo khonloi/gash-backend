@@ -43,6 +43,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const voucherRoutes = require('./routes/voucherRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+const billRoutes = require('./routes/billRoutes');
 
 // Mount routes
 app.use('/auth', authRoutes);
@@ -62,6 +63,7 @@ app.use('/upload', uploadRoutes);
 app.use('/vouchers', voucherRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/conversations', messageRoutes);
+app.use('/bills', billRoutes);
 
 // ===== 404 handler =====
 app.use((req, res, next) => {

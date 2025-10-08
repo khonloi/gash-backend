@@ -34,17 +34,14 @@ const OrderDetailsSchema = new mongoose.Schema({
       maxlength: [500, 'Feedback cannot exceed 500 characters'],
       default: '',
     },
-    // Thời gian tạo feedback
     created_at: {
       type: Date,
       default: null,
     },
-    // Thời gian cập nhật feedback
     updated_at: {
       type: Date,
       default: null,
     },
-    // Soft delete flag chỉ cho feedback
     is_deleted: {
       type: Boolean,
       default: false,

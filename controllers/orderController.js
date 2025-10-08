@@ -59,9 +59,123 @@ exports.searchOrders = async (req, res) => {
 exports.getOrderById = async (req, res) => {
   try {
     const order = await orderService.getOrderByIdService(req.params.id, req.user);
-    res.status(200).json(order);
+
+    // Format response data
+    const formattedOrder = {
+      _id: order._id,
+      orderDate: order.orderDate,
+      addressReceive: order.addressReceive,
+      phone: order.phone,
+      totalPrice: order.totalPrice,
+      discountAmount: order.discountAmount,
+      finalPrice: order.finalPrice,
+      order_status: order.order_status,
+      pay_status: order.pay_status,
+      payment_method: order.payment_method,
+      refund_status: order.refund_status,
+      refund_proof: order.refund_proof,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+
+      // Customer information
+      customer: {
+        _id: order.acc_id._id,
+        username: order.acc_id.username,
+        name: order.acc_id.name,
+        email: order.acc_id.email,
+        phone: order.acc_id.phone,
+        address: order.acc_id.address,
+        image: order.acc_id.image
+      },
+
+      // Voucher information (if exists)
+      voucher: order.voucher_id ? {
+        _id: order.voucher_id._id,
+        code: order.voucher_id.code,
+        voucher_name: order.voucher_id.voucher_name,
+        discountType: order.voucher_id.discountType,
+        discountValue: order.voucher_id.discountValue,
+        discount_percentage: order.voucher_id.discount_percentage,
+        discount_amount: order.voucher_id.discount_amount,
+      } : null,
+
+      // Order details with product information
+      orderDetails: order.orderDetails ? order.orderDetails.map(detail => ({
+        _id: detail._id,
+        variant: {
+          _id: detail.variant_id._id,
+          product: {
+            _id: detail.variant_id.pro_id._id,
+            name: detail.variant_id.pro_id.pro_name,
+            image: detail.variant_id.pro_id.imageURL
+          },
+          color: detail.variant_id.color_id ? {
+            _id: detail.variant_id.color_id._id,
+            name: detail.variant_id.color_id.color_name
+          } : null,
+          size: detail.variant_id.size_id ? {
+            _id: detail.variant_id.size_id._id,
+            name: detail.variant_id.size_id.size_name
+          } : null
+        },
+        unitPrice: detail.UnitPrice,
+        quantity: detail.Quantity,
+        totalPrice: detail.UnitPrice * detail.Quantity,
+        feedback: detail.feedback ? {
+          rating: detail.feedback.rating,
+          content: detail.feedback.content,
+          created_at: detail.feedback.created_at,
+          updated_at: detail.feedback.updated_at,
+          is_deleted: detail.feedback.is_deleted,
+          has_rating: detail.feedback.rating !== null && detail.feedback.rating !== undefined,
+          has_content: detail.feedback.content && detail.feedback.content.trim() !== ''
+        } : null
+      })) : [],
+
+      // Feedback information
+      feedbacks: order.feedback_ids ? order.feedback_ids.map(feedback => ({
+        _id: feedback._id,
+        variant: {
+          _id: feedback.variant_id._id,
+          product: {
+            _id: feedback.variant_id.pro_id._id,
+            name: feedback.variant_id.pro_id.pro_name,
+            image: feedback.variant_id.pro_id.imageURL
+          }
+        },
+        unitPrice: feedback.UnitPrice,
+        quantity: feedback.Quantity,
+        totalPrice: feedback.UnitPrice * feedback.Quantity,
+        feedback: feedback.feedback ? {
+          rating: feedback.feedback.rating,
+          content: feedback.feedback.content,
+          created_at: feedback.feedback.created_at,
+          updated_at: feedback.feedback.updated_at,
+          is_deleted: feedback.feedback.is_deleted,
+          has_rating: feedback.feedback.rating !== null && feedback.feedback.rating !== undefined,
+          has_content: feedback.feedback.content && feedback.feedback.content.trim() !== ''
+        } : null
+      })) : [],
+
+      // Summary
+      summary: {
+        totalItems: order.orderDetails ? order.orderDetails.length : 0,
+        totalQuantity: order.orderDetails ? order.orderDetails.reduce((sum, detail) => sum + detail.Quantity, 0) : 0,
+        hasVoucher: !!order.voucher_id,
+        hasFeedback: order.feedback_ids && order.feedback_ids.length > 0
+      }
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Order retrieved successfully',
+      data: formattedOrder
+    });
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error retrieving order' });
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Error retrieving order'
+    });
   }
 };
 
@@ -311,6 +425,13 @@ exports.checkout = async (req, res) => {
       boughtVariantIds.push(variant_id.toString());
     }
 
+    // Lấy orderDetailsId từ saved order details
+    const orderDetailsIds = orderDetailsToSave.map(detail => detail._id);
+
+    // Lưu orderDetailsId vào order.orderDetails
+    savedOrder.orderDetails = orderDetailsIds;
+    await savedOrder.save();
+
     // XÓA CÁC SẢN PHẨM ĐÃ MUA KHỎI CART (chỉ xóa đúng sản phẩm đã mua của user)
     const objectUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
     const objectVariantIds = boughtVariantIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
@@ -324,8 +445,53 @@ exports.checkout = async (req, res) => {
       success: true,
       message: 'Order created successfully with details, cart cleared',
       data: {
-        order: savedOrder,
-        orderDetails: orderDetailsToSave,
+        order: {
+          _id: savedOrder._id,
+          acc_id: savedOrder.acc_id,
+          addressReceive: savedOrder.addressReceive,
+          phone: savedOrder.phone,
+          totalPrice: savedOrder.totalPrice,
+          voucher_id: savedOrder.voucher_id,
+          discountAmount: savedOrder.discountAmount,
+          finalPrice: savedOrder.finalPrice,
+          order_status: savedOrder.order_status,
+          pay_status: savedOrder.pay_status,
+          payment_method: savedOrder.payment_method,
+          orderDate: savedOrder.orderDate,
+          orderDetails: orderDetailsIds
+        },
+        orderDetails: orderDetailsToSave.map(detail => ({
+          _id: detail._id,
+          order_id: detail.order_id,
+          variant_id: detail.variant_id,
+          UnitPrice: detail.UnitPrice,
+          Quantity: detail.Quantity,
+          feedback: detail.feedback
+        })),
+        orderDetailsIds: orderDetailsIds,
+        voucher: voucher ? {
+          _id: voucher._id,
+          code: voucher.code,
+          voucher_name: voucher.voucher_name,
+          discountType: voucher.discountType,
+          discountValue: voucher.discountValue,
+          discount_percentage: voucher.discount_percentage,
+          discount_amount: voucher.discount_amount,
+          minOrderValue: voucher.minOrderValue,
+          maxDiscountAmount: voucher.maxDiscountAmount,
+          usedCount: voucher.usedCount,
+          usageLimit: voucher.usageLimit,
+          startDate: voucher.startDate,
+          endDate: voucher.endDate,
+          isActive: voucher.isActive
+        } : null,
+        summary: {
+          totalItems: orderDetailsToSave.length,
+          totalQuantity: orderDetailsToSave.reduce((sum, detail) => sum + detail.Quantity, 0),
+          originalPrice: savedOrder.totalPrice,
+          discountAmount: savedOrder.discountAmount,
+          finalPrice: savedOrder.finalPrice
+        }
       },
     });
 
@@ -925,7 +1091,7 @@ exports.deleteFeedbackProduct = async (req, res) => {
         content: savedOrderDetail.feedback.content,
         created_at: savedOrderDetail.feedback.created_at,
         updated_at: savedOrderDetail.feedback.updated_at,
-        is_deleted: true  // ✅ Rõ ràng là đã bị xóa
+        is_deleted: true
       },
       orderDetail: {
         _id: savedOrderDetail._id,
@@ -936,7 +1102,7 @@ exports.deleteFeedbackProduct = async (req, res) => {
           content: savedOrderDetail.feedback.content,
           created_at: savedOrderDetail.feedback.created_at,
           updated_at: savedOrderDetail.feedback.updated_at,
-          is_deleted: true  // ✅ Rõ ràng là đã bị xóa
+          is_deleted: true
         }
       }
     });

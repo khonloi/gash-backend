@@ -43,10 +43,11 @@ exports.createOrderDetail = async (req, res) => {
   }
 };
 
+
 exports.getAllOrderDetails = async (req, res) => {
   try {
-    const { order_id } = req.query;
-    const result = await orderDetailService.getAllOrderDetails(req.user, order_id);
+    const { orderId } = req.params;
+    const result = await orderDetailService.getAllOrderDetails(req.user, orderId);
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ message: 'Error retrieving order details', error: error.message });

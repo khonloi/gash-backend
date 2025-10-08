@@ -29,14 +29,15 @@ router.get('/search', authenticateJWT, searchOrders);
 router.post('/payment-url', authenticateJWT, createVnpayPaymentUrl);
 router.get('/vnpay-return', vnpayReturn);
 router.get('/vnpay-ipn', vnpayIpn);
-router.get('/:id', authenticateJWT, getOrderById);
+// api get 1 order by id
+router.get('/get-order-by-id/:id', authenticateJWT, getOrderById);
 router.put('/:id', authenticateJWT, updateOrder);
 router.delete('/:id', authenticateJWT, deleteOrder);
 
 // api checkout
 router.post('/checkout', authenticateJWT, orderController.checkout);
 // api get order by id for user
-router.get('/get-order/:id', authenticateJWT, getOrderByIdForUser);
+// router.get('/get-order/:id', authenticateJWT, getOrderByIdForUser);
 // api cancel order
 router.patch('/:id/cancel', authenticateJWT, cancelOrder);
 

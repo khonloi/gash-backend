@@ -162,11 +162,14 @@ exports.createOrderDetail = async (data, user) => {
 
 exports.getAllOrderDetails = async (user, order_id) => {
   const query = {};
+
+  // Check quyền: admin/staff có thể xem tất cả, user chỉ xem được order của mình
   if (user.role !== 'admin' && user.role !== 'manager') {
     const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
     const orderIds = userOrders.map(order => order._id);
     query.order_id = { $in: orderIds };
   }
+
   if (order_id) {
     if (!mongoose.isValidObjectId(order_id)) {
       const err = new Error("Invalid order ID");
@@ -175,25 +178,50 @@ exports.getAllOrderDetails = async (user, order_id) => {
     }
     query.order_id = order_id;
   }
-  return await OrderDetails.find(query)
+
+  const orderDetails = await OrderDetails.find(query)
     .populate({
       path: 'order_id',
-      select: 'orderDate totalPrice feedback_order',
-      populate: { path: 'acc_id', select: 'username image' },
+      select: 'orderDate order_status totalPrice',
+      populate: { path: 'acc_id', select: 'username name' },
     })
     .populate({
       path: 'variant_id',
       select: 'pro_id color_id size_id',
       populate: [
-        {
-          path: 'pro_id',
-          select: 'pro_name imageURL',
-          options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
-        },
+        { path: 'pro_id', select: 'pro_name imageURL' },
         { path: 'color_id', select: 'color_name' },
         { path: 'size_id', select: 'size_name' },
       ],
     });
+
+  // Trả về data gọn hơn
+  return orderDetails.map(detail => ({
+    _id: detail._id,
+    orderId: detail.order_id._id,
+    orderDate: detail.order_id.orderDate,
+    orderStatus: detail.order_id.order_status,
+    customer: {
+      username: detail.order_id.acc_id.username,
+      name: detail.order_id.acc_id.name
+    },
+    variant: {
+      name: detail.variant_id.pro_id.pro_name,
+      color: detail.variant_id.color_id?.color_name || 'N/A',
+      size: detail.variant_id.size_id?.size_name || 'N/A',
+      image: detail.variant_id.pro_id.imageURL
+    },
+    quantity: detail.Quantity,
+    unitPrice: detail.UnitPrice,
+    totalPrice: detail.UnitPrice * detail.Quantity,
+    feedback: detail.feedback ? {
+      rating: detail.feedback.rating,
+      content: detail.feedback.content,
+      hasFeedback: true
+    } : {
+      hasFeedback: false
+    }
+  }));
 };
 
 exports.getOrderDetailById = async (id) => {
