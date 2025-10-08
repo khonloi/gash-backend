@@ -534,12 +534,11 @@ exports.getOrderByIdForUser = async (req, res) => {
 };
 
 
-
 exports.cancelOrder = async (req, res) => {
   try {
     const orderId = req.params.id;
 
-    // Lấy thông tin order hiện tại
+    // Lấy thông tin order hiện tại với voucher
     const order = await orderService.getOrderByIdService(orderId, req.user);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -548,6 +547,20 @@ exports.cancelOrder = async (req, res) => {
     // Chỉ cho phép hủy khi trạng thái là pending
     if (order.order_status !== 'pending') {
       return res.status(400).json({ message: 'Only pending orders can be cancelled' });
+    }
+
+    // Xử lý voucher nếu order có sử dụng voucher
+    if (order.voucher_id) {
+
+      const voucher = await Voucher.findById(order.voucher_id);
+
+      if (voucher) {
+        // Giảm usedCount của voucher (hoàn lại số lần sử dụng)
+        if (voucher.usedCount > 0) {
+          voucher.usedCount -= 1;
+          await voucher.save();
+        }
+      }
     }
 
     // Cập nhật trạng thái sang cancelled
@@ -559,7 +572,8 @@ exports.cancelOrder = async (req, res) => {
 
     res.status(200).json({
       message: 'Order cancelled successfully',
-      order: updatedOrder
+      order: updatedOrder,
+      voucherRefunded: order.voucher_id ? true : false
     });
   } catch (error) {
     res
