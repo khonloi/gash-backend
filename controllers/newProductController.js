@@ -20,6 +20,7 @@ const getAllProducts = async (req, res) => {
   try {
     const filters = req.query;
     const userRole = req.user?.role || "customer"; // default to customer
+    console.log("User Role in getAllProducts:", userRole); // Debug log
     const products = await productService.getAllProducts(filters, userRole);
     res.status(200).json({
       success: true,
@@ -37,6 +38,7 @@ const getAllProducts = async (req, res) => {
 const getProductById = async (req, res) => {
   try {
     const userRole = req.user?.role || "customer";
+    console.log("User Role in getProductById:", userRole); // Debug log
     const product = await productService.getProductById(
       req.params.id,
       userRole
@@ -85,10 +87,43 @@ const deleteProduct = async (req, res) => {
   }
 };
 
+const addProductImage = async (req, res) => {
+  try {
+    const image = await productService.addProductImage(req.params.id, req.body);
+    res.status(201).json({
+      success: true,
+      data: image,
+      message: "Product image added successfully",
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+const deleteProductImage = async (req, res) => {
+  try {
+    await productService.deleteProductImage(req.params.id, req.params.imageId);
+    res.status(200).json({
+      success: true,
+      message: "Product image deleted successfully",
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   createProduct,
   getAllProducts,
   getProductById,
   updateProduct,
   deleteProduct,
+  addProductImage,
+  deleteProductImage
 };
