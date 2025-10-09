@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const newProduct = require('../models/newProduct');
 const newProductVariant = require('../models/newProductVariant');
+const OrderDetails = require('../models/OrderDetails');
+const Orders = require('../models/Orders');
 
 // Create a new product with validation
 const createProduct = async (productData) => {
@@ -53,9 +55,10 @@ const getAllProducts = async (filters = {}, userRole = 'customer') => {
       query.categoryId = categoryId;
     }
 
-    // Restrict visibility of pending products for customers
-    if (userRole === 'customer') {
-      query.productStatus = { $ne: 'pending' };
+    // Restrict visibility of pending and discontinued products for customers only
+    // Admin and manager can see all products
+    if (userRole === 'customer' || !userRole) {
+      query.productStatus = { $nin: ['pending', 'discontinued'] };
     }
 
     return await newProduct.find(query).populate('categoryId');
@@ -157,15 +160,41 @@ const deleteProduct = async (productId) => {
       throw new Error('Invalid product ID');
     }
 
-    const product = await newProduct.findByIdAndUpdate(
+    // Check if product exists
+    const product = await newProduct.findById(productId);
+    if (!product) {
+      throw new Error('Product not found');
+    }
+
+    // Get all variants of this product
+    const variants = await newProductVariant.find({ productId });
+    const variantIds = variants.map(v => v._id);
+
+    // Check if any variant is in active orders (pending, confirm, shipping)
+    if (variantIds.length > 0) {
+      const orderDetails = await OrderDetails.find({ 
+        variantId: { $in: variantIds } 
+      }).populate({
+        path: 'orderId',
+        select: 'orderStatus',
+      });
+
+      const hasActiveOrders = orderDetails.some(
+        (detail) => detail.orderId && ['pending', 'confirm', 'shipping'].includes(detail.orderId.orderStatus)
+      );
+
+      if (hasActiveOrders) {
+        throw new Error('Cannot delete product that is currently in pending, confirmed, or shipping orders');
+      }
+    }
+
+    // Proceed with soft delete
+    const updatedProduct = await newProduct.findByIdAndUpdate(
       productId,
       { productStatus: 'discontinued', updatedAt: Date.now() },
       { new: true }
     );
 
-    if (!product) {
-      throw new Error('Product not found');
-    }
     return { message: 'Product discontinued successfully' };
   } catch (error) {
     throw new Error(`Failed to discontinue product: ${error.message}`);

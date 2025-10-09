@@ -19,7 +19,8 @@ const createProduct = async (req, res) => {
 const getAllProducts = async (req, res) => {
   try {
     const filters = req.query;
-    const userRole = req.user?.role || "customer"; // default to customer
+    // If authenticated, use user role; otherwise treat as customer (public)
+    const userRole = req.user?.role || null;
     const products = await productService.getAllProducts(filters, userRole);
     res.status(200).json({
       success: true,

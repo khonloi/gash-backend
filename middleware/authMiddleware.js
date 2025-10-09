@@ -34,12 +34,32 @@ const authorizeRole = (roles) => (req, res, next) => {
 };
 
 // Middleware tùy chỉnh để xử lý authentication optional
-const optionalAuth = (req, res, next) => {
-  // Nếu có token thì authenticate, nếu không thì bỏ qua
-  if (req.headers.authorization) {
-    return authenticateJWT(req, res, next);
+const optionalAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  // Nếu không có token, tiếp tục mà không có req.user
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
   }
-  // Không có token thì tiếp tục mà không có req.user
+
+  // Nếu có token, thử verify nhưng không throw error nếu invalid
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const account = await Accounts.findById(decoded.id).select('-password');
+    
+    if (account && account.acc_status === 'active') {
+      req.user = { 
+        id: account._id.toString(), 
+        username: account.username, 
+        role: account.role 
+      };
+    }
+  } catch (error) {
+    // Token invalid, nhưng vẫn tiếp tục (optional auth)
+    console.log('Optional auth - token verification failed, continuing without user');
+  }
+  
   next();
 };
 
