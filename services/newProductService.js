@@ -6,7 +6,7 @@ const newProductVariant = require('../models/newProductVariant');
 // Create a new product with validation
 const createProduct = async (productData) => {
   try {
-    const { productName, categoryId, description, productStatus, productImageIds } = productData;
+    const { productName, categoryId, description, productStatus, productImageIds, productVariantIds } = productData;
     if (!productName || !categoryId || !description) {
       throw new Error('Product name, category ID, and description are required');
     }
@@ -44,9 +44,25 @@ const createProduct = async (productData) => {
       savedImageIds.push(savedImage._id);
     }
 
+    // Validate productVariantIds if provided
+    let validatedVariantIds = [];
+    if (productVariantIds && Array.isArray(productVariantIds)) {
+      for (const variantId of productVariantIds) {
+        if (!mongoose.Types.ObjectId.isValid(variantId)) {
+          throw new Error('Invalid product variant ID');
+        }
+        const variant = await newProductVariant.findById(variantId);
+        if (!variant) {
+          throw new Error(`Product variant with ID ${variantId} not found`);
+        }
+        validatedVariantIds.push(variantId);
+      }
+    }
+
     const product = new newProduct({
       ...productData,
       productImageIds: savedImageIds,
+      productVariantIds: validatedVariantIds,
       productStatus: productStatus || 'pending'
     });
     const savedProduct = await product.save();
@@ -58,7 +74,10 @@ const createProduct = async (productData) => {
       );
     }
 
-    return await newProduct.findById(savedProduct._id).populate('categoryId').populate('productImageIds');
+    return await newProduct.findById(savedProduct._id)
+      .populate('categoryId')
+      .populate('productImageIds')
+      .populate('productVariantIds');
   } catch (error) {
     throw new Error(`Failed to create product: ${error.message}`);
   }
@@ -82,7 +101,10 @@ const getAllProducts = async (filters = {}, userRole = 'customer') => {
       query.productStatus = { $ne: 'pending' };
     }
 
-    return await newProduct.find(query).populate('categoryId').populate('productImageIds');
+    return await newProduct.find(query)
+      .populate('categoryId')
+      .populate('productImageIds')
+      .populate('productVariantIds');
   } catch (error) {
     throw new Error(`Failed to fetch products: ${error.message}`);
   }
@@ -95,7 +117,10 @@ const getProductById = async (productId, userRole = 'customer') => {
       throw new Error('Invalid product ID');
     }
 
-    const product = await newProduct.findById(productId).populate('categoryId').populate('productImageIds');
+    const product = await newProduct.findById(productId)
+      .populate('categoryId')
+      .populate('productImageIds')
+      .populate('productVariantIds');
     if (!product) {
       throw new Error('Product not found');
     }
@@ -117,7 +142,7 @@ const updateProduct = async (productId, updateData) => {
       throw new Error('Invalid product ID');
     }
 
-    const { productName, categoryId, productStatus, productImageIds } = updateData;
+    const { productName, categoryId, productStatus, productImageIds, productVariantIds } = updateData;
     if (productName && productName.trim() === '') {
       throw new Error('Product name cannot be empty');
     }
@@ -188,11 +213,29 @@ const updateProduct = async (productId, updateData) => {
       }
     }
 
+    // Validate productVariantIds if provided
+    let updatedVariantIds = existingProduct.productVariantIds;
+    if (productVariantIds && Array.isArray(productVariantIds)) {
+      updatedVariantIds = [];
+      for (const variantId of productVariantIds) {
+        if (!mongoose.Types.ObjectId.isValid(variantId)) {
+          throw new Error('Invalid product variant ID');
+        }
+        const variant = await newProductVariant.findById(variantId);
+        if (!variant) {
+          throw new Error(`Product variant with ID ${variantId} not found`);
+        }
+        updatedVariantIds.push(variantId);
+      }
+    }
+
     const product = await newProduct.findByIdAndUpdate(
       productId,
-      { ...updateData, productImageIds: updatedImageIds, updatedAt: Date.now() },
+      { ...updateData, productImageIds: updatedImageIds, productVariantIds: updatedVariantIds, updatedAt: Date.now() },
       { new: true, runValidators: true }
-    ).populate('productImageIds');
+    )
+      .populate('productImageIds')
+      .populate('productVariantIds');
 
     if (!product) {
       throw new Error('Product not found');

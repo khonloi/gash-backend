@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const newProductVariant = require("../models/newProductVariant");
+const newProduct = require("../models/newProduct");
 const OrderDetails = require("../models/OrderDetails");
 const Orders = require("../models/Orders");
 
@@ -57,9 +58,26 @@ const createProductVariant = async (variantData) => {
       );
     }
 
+    // Validate product exists and is not discontinued
+    const product = await newProduct.findById(productId);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+    if (product.productStatus === "discontinued") {
+      throw new Error("Cannot add variants to a discontinued product");
+    }
+
     const variant = new newProductVariant(variantData);
-    await variant.save();
-    return variant;
+    const savedVariant = await variant.save();
+
+    // Update product's productVariantIds
+    await newProduct.findByIdAndUpdate(
+      productId,
+      { $addToSet: { productVariantIds: savedVariant._id }, updatedAt: Date.now() },
+      { new: true }
+    );
+
+    return savedVariant;
   } catch (error) {
     throw new Error(`Failed to create product variant: ${error.message}`);
   }
@@ -197,6 +215,29 @@ const updateProductVariant = async (variantId, updateData) => {
       }
     }
 
+    // Validate product exists and is not discontinued if productId is updated
+    if (productId && productId !== existingVariant.productId.toString()) {
+      const product = await newProduct.findById(productId);
+      if (!product) {
+        throw new Error("Product not found");
+      }
+      if (product.productStatus === "discontinued") {
+        throw new Error("Cannot assign variant to a discontinued product");
+      }
+
+      // Remove variant from old product's productVariantIds
+      await newProduct.findByIdAndUpdate(
+        existingVariant.productId,
+        { $pull: { productVariantIds: variantId }, updatedAt: Date.now() }
+      );
+
+      // Add variant to new product's productVariantIds
+      await newProduct.findByIdAndUpdate(
+        productId,
+        { $addToSet: { productVariantIds: variantId }, updatedAt: Date.now() }
+      );
+    }
+
     const variant = await newProductVariant.findByIdAndUpdate(
       variantId,
       { ...updateData, updatedAt: Date.now() },
@@ -219,19 +260,6 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Invalid variant ID");
     }
 
-    // Check if variant exists in any non-cancelled order details
-    const orderDetails = await OrderDetails.find({ variantId }).populate({
-      path: "orderId",
-      select: "orderStatus",
-    });
-
-    const hasNonCancelledOrders = orderDetails.some(
-      (detail) => detail.orderId.orderStatus !== "cancelled"
-    );
-    if (hasNonCancelledOrders) {
-      throw new Error("Cannot delete variant with active orders");
-    }
-
     const variant = await newProductVariant.findByIdAndUpdate(
       variantId,
       { variantStatus: "discontinued", updatedAt: Date.now() },
@@ -241,6 +269,13 @@ const deleteProductVariant = async (variantId) => {
     if (!variant) {
       throw new Error("Product variant not found");
     }
+
+    // Remove variant from product's productVariantIds
+    await newProduct.findByIdAndUpdate(
+      variant.productId,
+      { $pull: { productVariantIds: variantId }, updatedAt: Date.now() }
+    );
+
     return { message: "Product variant discontinued successfully" };
   } catch (error) {
     throw new Error(`Failed to delete product variant: ${error.message}`);

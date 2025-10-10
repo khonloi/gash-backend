@@ -3,6 +3,8 @@ const productService = require("../services/newProductService");
 const createProduct = async (req, res) => {
   try {
     const product = await productService.createProduct(req.body);
+    // Emit real-time event
+    req.app.get('io').to('productRoom').emit('productCreated', product);
     res.status(201).json({
       success: true,
       data: product,
@@ -59,6 +61,8 @@ const getProductById = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const product = await productService.updateProduct(req.params.id, req.body);
+    // Emit real-time event
+    req.app.get('io').to('productRoom').emit('productUpdated', product);
     res.status(200).json({
       success: true,
       data: product,
@@ -75,6 +79,8 @@ const updateProduct = async (req, res) => {
 const deleteProduct = async (req, res) => {
   try {
     await productService.deleteProduct(req.params.id);
+    // Emit real-time event
+    req.app.get('io').to('productRoom').emit('productDeleted', req.params.id);
     res.status(200).json({
       success: true,
       message: "Product discontinued successfully",
@@ -90,6 +96,8 @@ const deleteProduct = async (req, res) => {
 const addProductImage = async (req, res) => {
   try {
     const image = await productService.addProductImage(req.params.id, req.body);
+    // Emit real-time event
+    req.app.get('io').to('productRoom').emit('productImageAdded', { productId: req.params.id, image });
     res.status(201).json({
       success: true,
       data: image,
@@ -106,6 +114,8 @@ const addProductImage = async (req, res) => {
 const deleteProductImage = async (req, res) => {
   try {
     await productService.deleteProductImage(req.params.id, req.params.imageId);
+    // Emit real-time event
+    req.app.get('io').to('productRoom').emit('productImageDeleted', { productId: req.params.id, imageId: req.params.imageId });
     res.status(200).json({
       success: true,
       message: "Product image deleted successfully",
