@@ -4,21 +4,21 @@ const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware
 const statisticController = require('../controllers/statisticController');
 
 // View Customer Statistics (Admin/Manager only)
-router.get('/customers', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewCustomerStats);
+router.get('/customers', authenticateJWT, authorizeRole(['admin']), statisticController.viewCustomerStats);
 
 // View Revenue Statistics (Admin/Manager only)
-router.get('/revenue', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueStats);
+router.get('/revenue', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueStats);
 
 // View Order Statistics (Admin/Manager only)
-router.get('/orders', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewOrderStats);
+router.get('/orders', authenticateJWT, authorizeRole(['admin']), statisticController.viewOrderStats);
 
 // View Revenue by Week (Admin/Manager only)
-router.get('/revenue/week', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByWeek);
+router.get('/revenue/week', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByWeek);
 
 // View Revenue by Month (Admin/Manager only)
-router.get('/revenue/month', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByMonth);
+router.get('/revenue/month', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByMonth);
 
 // View Revenue by Year (Admin/Manager only)
-router.get('/revenue/year', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByYear);
+router.get('/revenue/year', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByYear);
 
 module.exports = router;

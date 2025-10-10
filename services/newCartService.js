@@ -43,8 +43,14 @@ class NewCartService {
         existingCartItem.updatedAt = Date.now();
         const updatedCartItem = await existingCartItem.save();
         await updatedCartItem.populate([
-          { path: 'accountId', select: '-password' },
-          { path: 'variantId' }
+          { 
+            path: 'variantId',
+            populate: [
+              { path: 'productId' },
+              { path: 'productColorId' },
+              { path: 'productSizeId' }
+            ]
+          }
         ]);
         return updatedCartItem;
       }
@@ -64,8 +70,14 @@ class NewCartService {
       const savedCartItem = await newCartItem.save();
       // Populate after save
       await savedCartItem.populate([
-        { path: 'accountId', select: '-password' },
-        { path: 'variantId' }
+        { 
+          path: 'variantId',
+          populate: [
+            { path: 'productId' },
+            { path: 'productColorId' },
+            { path: 'productSizeId' }
+          ]
+        }
       ]);
       return savedCartItem;
     } catch (error) {
@@ -82,8 +94,14 @@ class NewCartService {
       }
       const cartItems = await NewCart.find({ accountId })
         .populate([
-          { path: 'accountId', select: '-password' },
-          { path: 'variantId' }
+          { 
+            path: 'variantId',
+            populate: [
+              { path: 'productId' },
+              { path: 'productColorId' },
+              { path: 'productSizeId' }
+            ]
+          }
         ]);
       return cartItems;
     } catch (error) {
@@ -96,8 +114,14 @@ class NewCartService {
     try {
       const cartItem = await NewCart.findById(cartId)
         .populate([
-          { path: 'accountId', select: '-password' },
-          { path: 'variantId' }
+          { 
+            path: 'variantId',
+            populate: [
+              { path: 'productId' },
+              { path: 'productColorId' },
+              { path: 'productSizeId' }
+            ]
+          }
         ]);
       if (!cartItem) {
         throw new Error('Cart item not found');
@@ -145,8 +169,14 @@ class NewCartService {
         { productQuantity, selected, updatedAt: Date.now() },
         { new: true, runValidators: true }
       ).populate([
-        { path: 'accountId', select: '-password' },
-        { path: 'variantId' }
+        { 
+          path: 'variantId',
+          populate: [
+            { path: 'productId' },
+            { path: 'productColorId' },
+            { path: 'productSizeId' }
+          ]
+        }
       ]);
       return updatedCartItem;
     } catch (error) {

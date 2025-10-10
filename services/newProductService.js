@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const newProductImage = require('../models/newProductImage');
 const newProduct = require('../models/newProduct');
 const newProductVariant = require('../models/newProductVariant');
 const OrderDetails = require('../models/OrderDetails');
@@ -7,35 +8,59 @@ const Orders = require('../models/Orders');
 // Create a new product with validation
 const createProduct = async (productData) => {
   try {
-    // Validate required fields
-    const { productName, categoryId, description, productStatus } = productData;
+    const { productName, categoryId, description, productStatus, productImageIds } = productData;
     if (!productName || !categoryId || !description) {
       throw new Error('Product name, category ID, and description are required');
     }
+    if (!productImageIds || !Array.isArray(productImageIds) || productImageIds.length === 0) {
+      throw new Error('At least one product image is required');
+    }
 
-    // Validate categoryId is a valid ObjectId
+    // Validate exactly one image has isMain: true
+    const mainImageCount = productImageIds.filter(img => img.isMain).length;
+    if (mainImageCount !== 1) {
+      throw new Error('Exactly one product image must have isMain set to true');
+    }
+
     if (!mongoose.Types.ObjectId.isValid(categoryId)) {
       throw new Error('Invalid category ID');
     }
-
-    // Validate productStatus if provided
     if (productStatus && !['active', 'inactive', 'pending'].includes(productStatus)) {
       throw new Error('Product status must be either "active", "inactive", or "pending"');
     }
-
-    // Check for duplicate product name
     const existingProduct = await newProduct.findOne({ productName });
     if (existingProduct) {
       throw new Error('Product with this name already exists');
     }
 
-    // Set default status to pending if not provided
+    let savedImageIds = [];
+    for (const imageData of productImageIds) {
+      if (!imageData.imageUrl) {
+        throw new Error('Image URL is required for each product image');
+      }
+      const image = new newProductImage({
+        imageUrl: imageData.imageUrl,
+        isMain: imageData.isMain || false,
+      });
+      const savedImage = await image.save();
+      savedImageIds.push(savedImage._id);
+    }
+
     const product = new newProduct({
       ...productData,
+      productImageIds: savedImageIds,
       productStatus: productStatus || 'pending'
     });
-    await product.save();
-    return product;
+    const savedProduct = await product.save();
+
+    if (savedImageIds.length > 0) {
+      await newProductImage.updateMany(
+        { _id: { $in: savedImageIds } },
+        { productId: savedProduct._id }
+      );
+    }
+
+    return await newProduct.findById(savedProduct._id).populate('categoryId').populate('productImageIds');
   } catch (error) {
     throw new Error(`Failed to create product: ${error.message}`);
   }
@@ -59,9 +84,12 @@ const getAllProducts = async (filters = {}, userRole = 'customer') => {
     // Admin and manager can see all products
     if (userRole === 'customer' || !userRole) {
       query.productStatus = { $nin: ['pending', 'discontinued'] };
+      if (userRole === 'customer') {
+        query.productStatus = { $ne: 'pending' };
+      }
     }
 
-    return await newProduct.find(query).populate('categoryId');
+    return await newProduct.find(query).populate('categoryId').populate('productImageIds');
   } catch (error) {
     throw new Error(`Failed to fetch products: ${error.message}`);
   }
@@ -74,12 +102,11 @@ const getProductById = async (productId, userRole = 'customer') => {
       throw new Error('Invalid product ID');
     }
 
-    const product = await newProduct.findById(productId).populate('categoryId');
+    const product = await newProduct.findById(productId).populate('categoryId').populate('productImageIds');
     if (!product) {
       throw new Error('Product not found');
     }
 
-    // Restrict visibility for customers if product is pending
     if (product.productStatus === 'pending' && userRole === 'customer') {
       throw new Error('Access denied: product is pending approval');
     }
@@ -90,7 +117,6 @@ const getProductById = async (productId, userRole = 'customer') => {
   }
 };
 
-
 // Update a product with validation
 const updateProduct = async (productId, updateData) => {
   try {
@@ -98,8 +124,7 @@ const updateProduct = async (productId, updateData) => {
       throw new Error('Invalid product ID');
     }
 
-    // Validate update data
-    const { productName, categoryId, productStatus } = updateData;
+    const { productName, categoryId, productStatus, productImageIds } = updateData;
     if (productName && productName.trim() === '') {
       throw new Error('Product name cannot be empty');
     }
@@ -109,8 +134,10 @@ const updateProduct = async (productId, updateData) => {
     if (productStatus && !['active', 'inactive'].includes(productStatus)) {
       throw new Error('Product status must be either "active" or "inactive"');
     }
+    if (productImageIds && (!Array.isArray(productImageIds) || productImageIds.length === 0)) {
+      throw new Error('At least one product image is required');
+    }
 
-    // Check if product is discontinued
     const existingProduct = await newProduct.findById(productId);
     if (!existingProduct) {
       throw new Error('Product not found');
@@ -119,7 +146,6 @@ const updateProduct = async (productId, updateData) => {
       throw new Error('Cannot update a discontinued product');
     }
 
-    // Check for duplicate product name
     if (productName) {
       const duplicateProduct = await newProduct.findOne({
         productName,
@@ -130,7 +156,6 @@ const updateProduct = async (productId, updateData) => {
       }
     }
 
-    // Check if product has variants to determine if status can be changed from pending
     if (productStatus && productStatus !== 'pending') {
       const variantCount = await newProductVariant.countDocuments({ productId });
       if (variantCount === 0) {
@@ -138,11 +163,43 @@ const updateProduct = async (productId, updateData) => {
       }
     }
 
+    let updatedImageIds = existingProduct.productImageIds;
+    if (productImageIds && Array.isArray(productImageIds)) {
+      // Validate exactly one image has isMain: true
+      const mainImageCount = productImageIds.filter(img => img.isMain).length;
+      if (mainImageCount !== 1) {
+        throw new Error('Exactly one product image must have isMain set to true');
+      }
+
+      updatedImageIds = [];
+      for (const imageData of productImageIds) {
+        if (!imageData.imageUrl) {
+          throw new Error('Image URL is required for each product image');
+        }
+        if (imageData._id && mongoose.Types.ObjectId.isValid(imageData._id)) {
+          await newProductImage.findByIdAndUpdate(
+            imageData._id,
+            { imageUrl: imageData.imageUrl, isMain: imageData.isMain || false },
+            { new: true }
+          );
+          updatedImageIds.push(imageData._id);
+        } else {
+          const image = new newProductImage({
+            productId,
+            imageUrl: imageData.imageUrl,
+            isMain: imageData.isMain || false,
+          });
+          const savedImage = await image.save();
+          updatedImageIds.push(savedImage._id);
+        }
+      }
+    }
+
     const product = await newProduct.findByIdAndUpdate(
       productId,
-      { ...updateData, updatedAt: Date.now() },
+      { ...updateData, productImageIds: updatedImageIds, updatedAt: Date.now() },
       { new: true, runValidators: true }
-    );
+    ).populate('productImageIds');
 
     if (!product) {
       throw new Error('Product not found');
@@ -201,10 +258,101 @@ const deleteProduct = async (productId) => {
   }
 };
 
+// Add a new product image
+const addProductImage = async (productId, imageData) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      throw new Error('Invalid product ID');
+    }
+    if (!imageData.imageUrl) {
+      throw new Error('Image URL is required');
+    }
+
+    const product = await newProduct.findById(productId).populate('productImageIds');
+    if (!product) {
+      throw new Error('Product not found');
+    }
+    if (product.productStatus === 'discontinued') {
+      throw new Error('Cannot add images to a discontinued product');
+    }
+
+    // If new image is isMain: true, set existing isMain to false
+    if (imageData.isMain) {
+      await newProductImage.updateMany(
+        { productId, isMain: true },
+        { isMain: false }
+      );
+    } else {
+      // If new image is not isMain, ensure at least one existing image is isMain
+      const mainImageCount = product.productImageIds.filter(img => img.isMain).length;
+      if (mainImageCount === 0) {
+        throw new Error('An existing image must have isMain set to true if the new image is not main');
+      }
+    }
+
+    const image = new newProductImage({
+      productId,
+      imageUrl: imageData.imageUrl,
+      isMain: imageData.isMain || false,
+    });
+    const savedImage = await image.save();
+
+    product.productImageIds.push(savedImage._id);
+    await product.save();
+
+    return savedImage;
+  } catch (error) {
+    throw new Error(`Failed to add product image: ${error.message}`);
+  }
+};
+
+// Delete a product image
+const deleteProductImage = async (productId, imageId) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(productId) || !mongoose.Types.ObjectId.isValid(imageId)) {
+      throw new Error('Invalid product or image ID');
+    }
+
+    const product = await newProduct.findById(productId).populate('productImageIds');
+    if (!product) {
+      throw new Error('Product not found');
+    }
+    if (product.productStatus === 'discontinued') {
+      throw new Error('Cannot delete images from a discontinued product');
+    }
+    if (product.productImageIds.length <= 1) {
+      throw new Error('Cannot delete the last image; product must have at least one image');
+    }
+
+    const image = await newProductImage.findById(imageId);
+    if (!image) {
+      throw new Error('Image not found');
+    }
+
+    // If deleting the main image, set another image as isMain
+    if (image.isMain) {
+      const otherImages = product.productImageIds.filter(img => img._id.toString() !== imageId);
+      if (otherImages.length > 0) {
+        await newProductImage.findByIdAndUpdate(otherImages[0]._id, { isMain: true });
+      }
+    }
+
+    await newProductImage.findByIdAndDelete(imageId);
+    product.productImageIds = product.productImageIds.filter(id => id.toString() !== imageId);
+    await product.save();
+
+    return { message: 'Product image deleted successfully' };
+  } catch (error) {
+    throw new Error(`Failed to delete product image: ${error.message}`);
+  }
+};
+
 module.exports = {
   createProduct,
   getAllProducts,
   getProductById,
   updateProduct,
-  deleteProduct
-};
+  deleteProduct,
+  addProductImage,
+  deleteProductImage
+}
