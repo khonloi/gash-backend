@@ -7,7 +7,7 @@ const path = require('path');
 
 const app = express();
 
-//  CORS — phải đặt ngay sau app được tạo và trước các middleware khác
+// CORS — phải đặt ngay sau app được tạo và trước các middleware khác
 app.use(cors({
   origin: [
     'http://localhost:5173', // Vite
@@ -59,7 +59,6 @@ app.use('/imports', importBillRoutes);
 app.use('/specifications', productSpecRoutes);
 app.use('/statistics', statisticsRoutes);
 app.use('/upload', uploadRoutes);
-
 app.use('/vouchers', voucherRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/conversations', messageRoutes);
