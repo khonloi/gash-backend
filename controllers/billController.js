@@ -78,6 +78,7 @@ exports.exportBill = async (req, res) => {
                 orderStatus: order.order_status,
                 totalPrice: order.totalPrice,
                 paymentMethod: order.payment_method,
+                paymentStatus: order.pay_status,
                 shippingAddress: order.shipping_address
             },
 
