@@ -132,37 +132,13 @@ exports.getOrderById = async (req, res) => {
         } : null
       })) : [],
 
-      // Feedback information
-      feedbacks: order.feedback_ids ? order.feedback_ids.map(feedback => ({
-        _id: feedback._id,
-        variant: {
-          _id: feedback.variant_id._id,
-          product: {
-            _id: feedback.variant_id.pro_id._id,
-            name: feedback.variant_id.pro_id.pro_name,
-            image: feedback.variant_id.pro_id.imageURL
-          }
-        },
-        unitPrice: feedback.UnitPrice,
-        quantity: feedback.Quantity,
-        totalPrice: feedback.UnitPrice * feedback.Quantity,
-        feedback: feedback.feedback ? {
-          rating: feedback.feedback.rating,
-          content: feedback.feedback.content,
-          created_at: feedback.feedback.created_at,
-          updated_at: feedback.feedback.updated_at,
-          is_deleted: feedback.feedback.is_deleted,
-          has_rating: feedback.feedback.rating !== null && feedback.feedback.rating !== undefined,
-          has_content: feedback.feedback.content && feedback.feedback.content.trim() !== ''
-        } : null
-      })) : [],
 
       // Summary
       summary: {
         totalItems: order.orderDetails ? order.orderDetails.length : 0,
         totalQuantity: order.orderDetails ? order.orderDetails.reduce((sum, detail) => sum + detail.Quantity, 0) : 0,
         hasVoucher: !!order.voucher_id,
-        hasFeedback: order.feedback_ids && order.feedback_ids.length > 0
+        hasFeedback: false
       }
     };
 
@@ -590,10 +566,10 @@ exports.addFeedbackProduct = async (req, res) => {
     const { rating, content } = req.body;
 
     // Validate input
-    if (!rating && !content) {
+    if (!rating) {
       return res.status(400).json({
         success: false,
-        message: 'Either rating or content (or both) is required',
+        message: 'Rating is required',
       });
     }
 
@@ -680,12 +656,6 @@ exports.addFeedbackProduct = async (req, res) => {
     // Verify từ database
     const verifyOrderDetail = await OrderDetails.findById(orderDetail._id);
 
-    // Lưu feedback ID vào order nếu chưa có
-    const orderWithFeedback = await Orders.findById(orderId);
-    if (orderWithFeedback && !orderWithFeedback.feedback_ids.includes(savedOrderDetail._id)) {
-      orderWithFeedback.feedback_ids.push(savedOrderDetail._id);
-      await orderWithFeedback.save();
-    }
 
     res.status(200).json({
       success: true,
@@ -698,8 +668,7 @@ exports.addFeedbackProduct = async (req, res) => {
         feedback: savedOrderDetail.feedback
       },
       order: {
-        _id: orderWithFeedback._id,
-        feedback_ids: orderWithFeedback.feedback_ids
+        _id: order._id
       }
     });
   } catch (error) {
@@ -723,7 +692,7 @@ exports.getOrderFeedbacks = async (req, res) => {
       });
     }
 
-    // Lấy order với feedback_ids
+    // Lấy order
     const order = await orderService.getOrderByIdService(orderId, req.user);
     if (!order) {
       return res.status(404).json({
@@ -732,9 +701,9 @@ exports.getOrderFeedbacks = async (req, res) => {
       });
     }
 
-    // Lấy tất cả feedback từ feedback_ids và lọc ra những feedback chưa bị xóa
+    // Lấy tất cả feedback từ orderDetails và lọc ra những feedback chưa bị xóa
     const feedbacks = await OrderDetails.find({
-      _id: { $in: order.feedback_ids || [] }
+      order_id: orderId
     }).populate('variant_id', 'pro_id color_id size_id')
       .populate({
         path: 'variant_id.pro_id',
@@ -744,8 +713,10 @@ exports.getOrderFeedbacks = async (req, res) => {
 
     // Lọc ra những feedback chưa bị xóa
     const activeFeedbacks = feedbacks.filter(feedback =>
-      !feedback.feedback ||
-      feedback.feedback.is_deleted !== true
+      feedback.feedback &&
+      feedback.feedback.is_deleted !== true &&
+      ((feedback.feedback.rating && feedback.feedback.rating !== null) ||
+        (feedback.feedback.content && feedback.feedback.content.trim() !== ''))
     );
 
     res.status(200).json({
@@ -753,8 +724,7 @@ exports.getOrderFeedbacks = async (req, res) => {
       message: 'Order feedbacks retrieved successfully',
       order: {
         _id: order._id,
-        order_status: order.order_status,
-        feedback_ids: order.feedback_ids
+        order_status: order.order_status
       },
       feedbacks: activeFeedbacks.map(feedback => ({
         _id: feedback._id,
@@ -833,7 +803,6 @@ exports.getUserFeedbackByProduct = async (req, res) => {
         },
         order: {
           _id: order._id,
-          feedback_ids: [],
         },
       });
     }
@@ -864,7 +833,6 @@ exports.getUserFeedbackByProduct = async (req, res) => {
       },
       order: {
         _id: order._id,
-        feedback_ids: feedback ? [orderDetail._id] : [],
       },
     });
 
@@ -1088,14 +1056,6 @@ exports.deleteFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Xóa feedback ID khỏi order nếu có
-    const orderWithFeedback = await Orders.findById(orderId);
-    if (orderWithFeedback && orderWithFeedback.feedback_ids.includes(savedOrderDetail._id)) {
-      orderWithFeedback.feedback_ids = orderWithFeedback.feedback_ids.filter(
-        id => id.toString() !== savedOrderDetail._id.toString()
-      );
-      await orderWithFeedback.save();
-    }
 
     res.status(200).json({
       success: true,
