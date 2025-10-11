@@ -77,9 +77,10 @@ exports.exportBill = async (req, res) => {
                 orderDate: order.orderDate,
                 orderStatus: order.order_status,
                 totalPrice: order.totalPrice,
+                finalPrice: order.finalPrice,
                 paymentMethod: order.payment_method,
                 paymentStatus: order.pay_status,
-                shippingAddress: order.shipping_address
+                shippingAddress: order.addressReceive
             },
 
             // Thông tin khách hàng
@@ -127,8 +128,8 @@ exports.exportBill = async (req, res) => {
             // Tổng kết
             summary: {
                 subtotal: orderDetails.reduce((sum, detail) => sum + (detail.UnitPrice * detail.Quantity), 0),
-                discount: order.discount || 0,
-                totalAmount: order.totalPrice
+                discount: order.discountAmount || 0,
+                totalAmount: order.finalPrice
             }
         };
 
