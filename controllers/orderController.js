@@ -589,9 +589,9 @@ exports.addFeedbackProduct = async (req, res) => {
     }
 
     // Validate content
-    if (content !== undefined) {
-      if (typeof content !== 'string' || content.trim().length === 0) {
-        return res.status(400).json({ success: false, message: 'Content cannot be empty' });
+    if (content !== undefined && content !== null) {
+      if (typeof content !== 'string') {
+        return res.status(400).json({ success: false, message: 'Content must be a string' });
       }
       if (content.length > 500) {
         return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
@@ -632,7 +632,7 @@ exports.addFeedbackProduct = async (req, res) => {
       updateData['feedback.rating'] = rating;
     }
     if (content !== undefined) {
-      updateData['feedback.content'] = content.trim();
+      updateData['feedback.content'] = content === null ? null : content.trim();
     }
     // Reset is_deleted và set timestamps khi tạo feedback mới
     updateData['feedback.is_deleted'] = false;
@@ -875,9 +875,9 @@ exports.editFeedbackProduct = async (req, res) => {
     }
 
     // Validate content
-    if (content !== undefined) {
-      if (typeof content !== 'string' || content.trim().length === 0) {
-        return res.status(400).json({ success: false, message: 'Content cannot be empty' });
+    if (content !== undefined && content !== null) {
+      if (typeof content !== 'string') {
+        return res.status(400).json({ success: false, message: 'Content must be a string' });
       }
       if (content.length > 500) {
         return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
@@ -938,7 +938,7 @@ exports.editFeedbackProduct = async (req, res) => {
       updateData['feedback.rating'] = rating;
     }
     if (content !== undefined) {
-      updateData['feedback.content'] = content.trim();
+      updateData['feedback.content'] = content === null ? null : content.trim();
     }
     // Cập nhật updated_at khi edit
     updateData['feedback.updated_at'] = new Date();
