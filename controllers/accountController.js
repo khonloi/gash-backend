@@ -77,11 +77,30 @@ exports.softDeleteAccount = async (req, res) => {
   }
 };
 
+exports.disableAccount = async (req, res) => {
+  try {
+    const result = await accountService.disableAccount(req.params.id, req.user);
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    res.status(500).json({ message: 'Error disabling account', error: error.message });
+  }
+};
+
 exports.deleteAccount = async (req, res) => {
   try {
     const result = await accountService.deleteAccount(req.params.id, req.user);
     res.status(result.status).json(result.response);
   } catch (error) {
     res.status(500).json({ message: 'Error deleting account', error: error.message });
+  }
+};
+
+// Edit Staff Information Controller
+exports.editStaffInformation = async (req, res) => {
+  try {
+    const result = await accountService.editStaffInformation(req.params.id, req.body, req.user);
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    res.status(500).json({ message: 'Error editing staff information', error: error.message });
   }
 };

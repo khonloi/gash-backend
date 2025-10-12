@@ -18,16 +18,22 @@ router.get('/:id', authenticateJWT, accountController.getAccountById);
 // Update an account (Admin or self)
 router.put('/:id', authenticateJWT, accountController.updateAccount);
 
-// Update profile information (Admin or self)
+// Cập nhật thông tin profile (Admin hoặc chính chủ)
 router.put('/change-profile/:id', authenticateJWT, accountController.updateProfile);
 
-// Change password (Admin or self)
+// Đổi mật khẩu (Admin hoặc chính chủ)
 router.put('/change-password/:id', authenticateJWT, accountController.updatePassword);
 
 // Soft delete an account (Admin or self)
 router.delete('/soft/:id', authenticateJWT, accountController.softDeleteAccount);
 
+// Disable an account (Admin only)
+router.put('/disable/:id', authenticateJWT, authorizeRole(['admin']), accountController.disableAccount);
+
 // Delete an account permanently (Admin or self)
 router.delete('/:id', authenticateJWT, accountController.deleteAccount);
+
+// Edit Staff Information (Admin only, for staff accounts)
+router.put('/edit-staff/:id', authenticateJWT, authorizeRole(['admin']), accountController.editStaffInformation);
 
 module.exports = router;
