@@ -41,6 +41,14 @@ const accountSchema = new mongoose.Schema({
     type: String, 
     default: 'http://localhost:4000/default-pfp.jpg' 
   },
+  gender: { 
+    type: String, 
+    enum: ['Male', 'Female', 'Other'], 
+    trim: true 
+  },
+  dob: { 
+    type: Date 
+  },
   role: { 
     type: String, 
     enum: ['user', 'manager', 'admin'], 
