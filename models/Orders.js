@@ -86,6 +86,13 @@ const OrdersSchema = new mongoose.Schema(
         ref: 'OrderDetails',
       },
     ],
+
+    feedback_ids: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'OrderDetails',
+      },
+    ],
   },
   { timestamps: true }
 );

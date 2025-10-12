@@ -48,9 +48,9 @@ router.put('/:orderId/edit-feedback/:variantId', authenticateJWT, editFeedbackPr
 // api delete feedback for variant of order
 router.delete('/:orderId/delete-feedback/:variantId', authenticateJWT, deleteFeedbackProduct);
 // api get feedback by order id for user of order
-// router.get('/get-feedback-by-order/:id/feedbacks', authenticateJWT, getOrderFeedbacks);
+router.get('/get-feedback-by-order/:id/feedbacks', authenticateJWT, getOrderFeedbacks);
 // api get feedback by order id and variant id for user of order
-// router.get('/get-user-feedback/:orderId/:variantId', authenticateJWT, getUserFeedbackByProduct);
+router.get('/get-user-feedback/:orderId/:variantId', authenticateJWT, getUserFeedbackByProduct);
 // api get all feedback for product (many variants of product)
 router.get('/get-all-feedback/:variantId', optionalAuth, getAllFeedbackOfProduct);
 

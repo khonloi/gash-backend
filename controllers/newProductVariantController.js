@@ -3,8 +3,6 @@ const productVariantService = require('../services/newProductVariantService');
 const createProductVariant = async (req, res) => {
   try {
     const variant = await productVariantService.createProductVariant(req.body);
-    // Emit real-time event
-    req.app.get('io').to('variantRoom').emit('variantCreated', variant);
     res.status(201).json({
       success: true,
       data: variant,
@@ -54,8 +52,6 @@ const getProductVariantById = async (req, res) => {
 const updateProductVariant = async (req, res) => {
   try {
     const variant = await productVariantService.updateProductVariant(req.params.id, req.body);
-    // Emit real-time event
-    req.app.get('io').to('variantRoom').emit('variantUpdated', variant);
     res.status(200).json({
       success: true,
       data: variant,
@@ -72,8 +68,6 @@ const updateProductVariant = async (req, res) => {
 const deleteProductVariant = async (req, res) => {
   try {
     await productVariantService.deleteProductVariant(req.params.id);
-    // Emit real-time event
-    req.app.get('io').to('variantRoom').emit('variantDeleted', req.params.id);
     res.status(200).json({
       success: true,
       message: 'Product variant discontinued successfully'

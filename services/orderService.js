@@ -217,6 +217,28 @@ async function getOrderByIdService(id, user) {
           }
         ]
       }
+    })
+    .populate({
+      path: 'feedback_ids',
+      select: 'variant_id feedback UnitPrice Quantity',
+      populate: {
+        path: 'variant_id',
+        select: 'pro_id color_id size_id',
+        populate: [
+          {
+            path: 'pro_id',
+            select: 'pro_name imageURL'
+          },
+          {
+            path: 'color_id',
+            select: 'color_name'
+          },
+          {
+            path: 'size_id',
+            select: 'size_name'
+          }
+        ]
+      }
     });
 
   if (!order) {

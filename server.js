@@ -5,7 +5,6 @@ require('dotenv').config();
 
 const app = require('./app');
 const chatSocket = require('./sockets/chat');
-const productSocket = require('./sockets/productSocket');
 
 // Tạo HTTP server
 const server = http.createServer(app);
@@ -31,8 +30,6 @@ mongoose.connect(process.env.MONGO_URI)
 
 // Socket chat
 chatSocket(io);
-// Socket product
-productSocket(io);
 
 // Start server
 const PORT = process.env.PORT || 5000;
