@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const newProductVariant = require("../models/newProductVariant");
+const newProduct = require("../models/newProduct");
 const OrderDetails = require("../models/OrderDetails");
 const Orders = require("../models/Orders");
 
@@ -59,6 +60,14 @@ const createProductVariant = async (variantData) => {
 
     const variant = new newProductVariant(variantData);
     await variant.save();
+    
+    // Add variant ID to product's productVariantIds array
+    await newProduct.findByIdAndUpdate(
+      productId,
+      { $addToSet: { productVariantIds: variant._id } },
+      { new: true }
+    );
+    
     return variant;
   } catch (error) {
     throw new Error(`Failed to create product variant: ${error.message}`);
@@ -241,6 +250,14 @@ const deleteProductVariant = async (variantId) => {
     if (!variant) {
       throw new Error("Product variant not found");
     }
+    
+    // Remove variant ID from product's productVariantIds array
+    await newProduct.findByIdAndUpdate(
+      variant.productId,
+      { $pull: { productVariantIds: variant._id } },
+      { new: true }
+    );
+    
     return { message: "Product variant discontinued successfully" };
   } catch (error) {
     throw new Error(`Failed to delete product variant: ${error.message}`);

@@ -17,6 +17,12 @@ const newProductSchema = new Schema({
       ref: "newProductImages",
     },
   ],
+  productVariantIds: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "newProductVariants",
+    },
+  ],
   description: {
     type: String,
     required: true,
