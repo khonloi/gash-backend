@@ -2,7 +2,7 @@ const Accounts = require('../models/Accounts');
 const mongoose = require('mongoose');
 
 exports.createAccount = async (data) => {
-  const { username, name, email, phone, address, password, image, role } = data;
+  const { username, name, email, phone, address, password, image, gender, dob, role } = data;
   const existingAccount = await Accounts.findOne({ $or: [{ username }, { email }] });
   if (existingAccount) {
     return { status: 400, response: { message: 'Username or email already exists' } };
@@ -15,6 +15,8 @@ exports.createAccount = async (data) => {
     address,
     password,
     image: image || 'http://localhost:4000/default-pfp.jpg',
+    gender,
+    dob,
     role: role || 'user',
     acc_status: 'active'
   });
@@ -31,6 +33,8 @@ exports.createAccount = async (data) => {
         phone: savedAccount.phone,
         address: savedAccount.address,
         image: savedAccount.image,
+        gender: savedAccount.gender,
+        dob: savedAccount.dob,
         role: savedAccount.role,
         acc_status: savedAccount.acc_status
       }
@@ -270,9 +274,25 @@ exports.softDeleteAccount = async (id, user) => {
   }
   account.is_deleted = true;
   account.role = 'user';
-  account.acc_status = 'inactive';
+  account.acc_status = 'deleted';
   await account.save();
   return { status: 200, response: { message: 'Account soft deleted successfully' } };
+};
+
+exports.disableAccount = async (id, user) => {
+  if (user.role !== 'admin') {
+    return { status: 403, response: { message: 'Access denied: Admin role required' } };
+  }
+  const account = await Accounts.findById(id);
+  if (!account) {
+    return { status: 404, response: { message: 'Account not found' } };
+  }
+  if (account.acc_status === 'inactive') {
+    return { status: 403, response: { message: 'Account is already disabled' } };
+  }
+  account.acc_status = 'inactive';
+  await account.save();
+  return { status: 200, response: { message: 'Account disabled successfully' } };
 };
 
 exports.deleteAccount = async (id, user) => {
@@ -283,9 +303,63 @@ exports.deleteAccount = async (id, user) => {
   if (!account) {
     return { status: 404, response: { message: 'Account not found' } };
   }
-  if (account.acc_status === 'inactive' && account.username === 'deleted') {
+  if (account.acc_status === 'deleted' && account.is_deleted === true) {
     return { status: 403, response: { message: 'Cannot hard delete a soft-deleted account' } };
   }
   await Accounts.findByIdAndDelete(id);
   return { status: 200, response: { message: 'Account permanently deleted successfully' } };
+};
+
+// Edit Staff Information - Admin only, for staff accounts (manager/admin roles)
+exports.editStaffInformation = async (id, data, user) => {
+  if (user.role !== 'admin') {
+    return { status: 403, response: { message: 'Access denied: Admin role required' } };
+  }
+  
+  const account = await Accounts.findById(id);
+  if (!account) {
+    return { status: 404, response: { message: 'Account not found' } };
+  }
+  
+  // Check if account is a staff member (manager or admin)
+  if (account.role !== 'manager' && account.role !== 'admin') {
+    return { status: 403, response: { message: 'Can only edit staff information for manager/admin accounts' } };
+  }
+  
+  if (account.is_deleted === true) {
+    return { status: 403, response: { message: 'Cannot edit information of a deleted account' } };
+  }
+  
+  const { username, email, password, ...updateData } = data;
+  
+  // Check for duplicate username/email
+  if (username || email) {
+    const existingAccount = await Accounts.findOne({
+      $or: [{ username }, { email }],
+      _id: { $ne: id }
+    });
+    if (existingAccount) {
+      return { status: 400, response: { message: 'Username or email already exists' } };
+    }
+  }
+  
+  // Update fields
+  if (username) account.username = username;
+  if (email) account.email = email;
+  Object.keys(updateData).forEach(key => {
+    if (updateData[key] !== undefined) {
+      account[key] = updateData[key];
+    }
+  });
+  
+  await account.save();
+  
+  const { password: _, ...accountObj } = account.toObject();
+  return { 
+    status: 200, 
+    response: { 
+      message: 'Staff information updated successfully', 
+      account: accountObj 
+    } 
+  };
 };
