@@ -53,6 +53,8 @@ exports.getAllAccounts = async () => {
         email: '[deleted]',
         phone: '[deleted]',
         address: '[deleted]',
+        gender: '[deleted]',
+        dob: '[deleted]',
         image: '[deleted]',
         google_id: '[deleted]'
       };
@@ -124,6 +126,8 @@ exports.searchAccountsService = async (queryParams) => {
         email: '[deleted]',
         phone: '[deleted]',
         address: '[deleted]',
+        gender: '[deleted]',
+        dob: '[deleted]',
         image: '[deleted]',
         google_id: '[deleted]'
       };
@@ -148,6 +152,8 @@ exports.getAccountById = async (id, user) => {
       email: '[deleted]',
       phone: '[deleted]',
       address: '[deleted]',
+      gender: '[deleted]',
+      dob: '[deleted]',
       image: '[deleted]',
       google_id: '[deleted]'
     };
