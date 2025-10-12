@@ -136,6 +136,41 @@ const getAllProducts = async (filters = {}, userRole = "customer") => {
   }
 };
 
+// Search products by name and stock status
+const searchProducts = async (searchParams = {}, userRole = "customer") => {
+  try {
+    const { name, status } = searchParams;
+    const query = {};
+
+    if (name) {
+      query.productName = { $regex: name, $options: 'i' }; // Case-insensitive partial match
+    }
+    if (status) {
+      if (!["active", "inactive", "pending", "discontinued"].includes(status)) {
+        throw new Error(
+          'Product status must be either "active", "inactive", "pending", or "discontinued"'
+        );
+      }
+      query.productStatus = status;
+    }
+
+    if (userRole === "customer") {
+      query.productStatus = { $ne: "pending" };
+    }
+
+    return await newProduct
+      .find(query)
+      .populate("categoryId")
+      .populate("productImageIds")
+      .populate({
+        path: "productVariantIds",
+        populate: [{ path: "productColorId" }, { path: "productSizeId" }],
+      });
+  } catch (error) {
+    throw new Error(`Failed to search products: ${error.message}`);
+  }
+};
+
 // Get a single product by ID
 const getProductById = async (productId, userRole = "customer") => {
   try {
@@ -432,6 +467,7 @@ const deleteProductImage = async (productId, imageId) => {
 module.exports = {
   createProduct,
   getAllProducts,
+  searchProducts,
   getProductById,
   updateProduct,
   deleteProduct,
