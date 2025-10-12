@@ -7,18 +7,20 @@ const path = require('path');
 
 const app = express();
 
-//  CORS — phải đặt ngay sau app được tạo và trước các middleware khác
-app.use(cors({
-  origin: [
-    'http://localhost:5173', // Vite
-    'http://localhost:3000', // CRA hoặc client khác
-    'http://localhost:3001'  // nếu chạy song song
-  ],
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  credentials: true,
-}));
+// ===== CORS =====
+app.use(
+  cors({
+    origin: [
+      'http://localhost:5173', // Vite
+      'http://localhost:3000', // CRA hoặc client khác
+      'http://localhost:3001', // nếu chạy song song
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
+  })
+);
 
-// Middleware
+// ===== Middleware =====
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -45,7 +47,7 @@ const conversationRoutes = require('./routes/conversationRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const billRoutes = require('./routes/billRoutes');
 
-// Mount routes
+// ===== Mount routes =====
 app.use('/auth', authRoutes);
 app.use('/accounts', accountsRoutes);
 app.use('/products', productsRoutes);
@@ -76,6 +78,10 @@ app.use('/new-variants', newProductVariantRoutes);
 const newCartRoutes = require('./routes/newCartRoutes');
 app.use('/new-carts', newCartRoutes);
 
+// ===== Notification Routes =====
+const notificationRoutes = require('./routes/notificationRoutes');
+app.use('/notifications', notificationRoutes);
+
 // ===== 404 handler =====
 app.use((req, res, next) => {
   res.status(404).json({ success: false, message: 'Not Found' });
@@ -84,7 +90,9 @@ app.use((req, res, next) => {
 // ===== Error handler =====
 app.use((err, req, res, next) => {
   console.error('🔥 Error:', err.message);
-  res.status(err.status || 500).json({ success: false, message: err.message });
+  res
+    .status(err.status || 500)
+    .json({ success: false, message: err.message });
 });
 
 module.exports = app;
