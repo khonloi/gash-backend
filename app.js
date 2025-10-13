@@ -11,9 +11,9 @@ const app = express();
 app.use(
   cors({
     origin: [
-      'http://localhost:5173', // Vite
-      'http://localhost:3000', // CRA hoặc client khác
-      'http://localhost:3001', // nếu chạy song song
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:3001',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,

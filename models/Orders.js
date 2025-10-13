@@ -25,6 +25,10 @@ const OrdersSchema = new mongoose.Schema(
       required: [true, 'Address to receive is required'],
     },
 
+    name: {
+      type: String,
+      required: [true, 'Name number is required'],
+    },
 
     phone: {
       type: String,

@@ -85,16 +85,6 @@ exports.updateOrderDetail = async (req, res) => {
       return res.status(400).json({ message: 'Quantity must be at least 1' });
     }
 
-    // Validate feedback structure if provided
-    // if (feedback) {
-    //   if (feedback.rating && (feedback.rating < 1 || feedback.rating > 5)) {
-    //     return res.status(400).json({ message: 'Rating must be between 1 and 5' });
-    //   }
-    //   if (feedback.content && feedback.content.length > 500) {
-    //     return res.status(400).json({ message: 'Feedback content cannot exceed 500 characters' });
-    //   }
-    // }
-
     const result = await orderDetailService.updateOrderDetail(req.params.id, req.body, req.user);
     res.status(result.status).json(result.response);
   } catch (error) {
@@ -113,7 +103,7 @@ exports.deleteOrderDetail = async (req, res) => {
 
 exports.getOrderDetailsByProduct = async (req, res) => {
   try {
-    const result = await orderDetailService.getOrderDetailsByProduct(req.params.pro_id);
+    const result = await orderDetailService.getOrderDetailsByProduct(req.params.productId);
     res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ message: 'Error retrieving product feedback', error: error.message });

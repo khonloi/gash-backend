@@ -8,7 +8,7 @@ exports.createOrder = async (req, res) => {
     const { acc_id, addressReceive, phone, totalPrice, order_status, pay_status, payment_method, refund_status, feedback_order } = req.body;
 
     // Validate required fields and enums
-    if (!acc_id || !addressReceive || !phone || !totalPrice || !payment_method) {
+    if (!acc_id || !name || !addressReceive || !phone || !totalPrice || !payment_method) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
     if (!['COD', 'VNPAY'].includes(payment_method)) {
@@ -102,22 +102,22 @@ exports.getOrderById = async (req, res) => {
       // Order details with product information
       orderDetails: order.orderDetails ? order.orderDetails.map(detail => ({
         _id: detail._id,
-        variant: {
+        variant: detail.variant_id ? {
           _id: detail.variant_id._id,
-          product: {
-            _id: detail.variant_id.pro_id._id,
-            name: detail.variant_id.pro_id.pro_name,
-            image: detail.variant_id.pro_id.imageURL
-          },
-          color: detail.variant_id.color_id ? {
-            _id: detail.variant_id.color_id._id,
-            name: detail.variant_id.color_id.color_name
+          product: detail.variant_id.productId ? {
+            _id: detail.variant_id.productId._id,
+            name: detail.variant_id.productId.productName
           } : null,
-          size: detail.variant_id.size_id ? {
-            _id: detail.variant_id.size_id._id,
-            name: detail.variant_id.size_id.size_name
-          } : null
-        },
+          color: detail.variant_id.productColorId ? {
+            _id: detail.variant_id.productColorId._id,
+            name: detail.variant_id.productColorId.color_name
+          } : null,
+          size: detail.variant_id.productSizeId ? {
+            _id: detail.variant_id.productSizeId._id,
+            name: detail.variant_id.productSizeId.size_name
+          } : null,
+          image: detail.variant_id.variantImage || null
+        } : null,
         unitPrice: detail.UnitPrice,
         quantity: detail.Quantity,
         totalPrice: detail.UnitPrice * detail.Quantity,
@@ -302,19 +302,23 @@ const mongoose = require("mongoose");
 const Accounts = require("../models/Accounts");
 const Orders = require("../models/Orders");
 const OrderDetails = require("../models/OrderDetails");
-const ProductVariants = require("../models/ProductVariants");
+const newProductVariants = require("../models/newProductVariant");
+const newProducts = require("../models/newProduct");
+const newProductImages = require("../models/newProductImage");
+const ProductColors = require("../models/ProductColors");
+const ProductSizes = require("../models/ProductSizes");
 const Voucher = require("../models/Voucher");
-const Carts = require('../models/Carts');
+const NewCart = require('../models/newCartModel');
 const { applyVoucher } = require('./voucherController');
 
 exports.checkout = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { addressReceive, phone, totalPrice, payment_method, voucherCode, items } = req.body;
+    const { name, addressReceive, phone, totalPrice, payment_method, voucherCode, items } = req.body;
 
-    // validate input
-    if (!addressReceive || !phone || !totalPrice || !payment_method || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    // validate input - name is the recipient's name (who will receive the order)
+    if (!name || !addressReceive || !phone || !totalPrice || !payment_method || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Missing required fields: name, addressReceive, phone, totalPrice, payment_method, items' });
     }
     if (!['COD', 'VNPAY'].includes(payment_method)) {
       return res.status(400).json({ success: false, message: 'Invalid payment method' });
@@ -345,6 +349,7 @@ exports.checkout = async (req, res) => {
     // tạo order
     const newOrder = new Orders({
       acc_id: userId,
+      name,
       addressReceive,
       phone,
       totalPrice,
@@ -384,9 +389,17 @@ exports.checkout = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
       }
 
-      const variant = await ProductVariants.findById(variant_id);
+      const variant = await newProductVariants.findById(variant_id);
       if (!variant) {
         return res.status(404).json({ success: false, message: `Product variant not found: ${variant_id}` });
+      }
+
+      // Kiểm tra số lượng tồn kho
+      if (variant.stockQuantity < Quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for variant ${variant_id}. Available: ${variant.stockQuantity}, Requested: ${Quantity}`
+        });
       }
 
       const orderDetail = new OrderDetails({
@@ -408,13 +421,23 @@ exports.checkout = async (req, res) => {
     savedOrder.orderDetails = orderDetailsIds;
     await savedOrder.save();
 
+    // Trừ số lượng sản phẩm khỏi kho
+    for (const item of items) {
+      const { variant_id, Quantity } = item;
+      const variant = await newProductVariants.findById(variant_id);
+      if (variant) {
+        variant.stockQuantity -= Quantity;
+        await variant.save();
+      }
+    }
+
     // XÓA CÁC SẢN PHẨM ĐÃ MUA KHỎI CART (chỉ xóa đúng sản phẩm đã mua của user)
     const objectUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
     const objectVariantIds = boughtVariantIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
 
-    await Carts.deleteMany({
-      acc_id: objectUserId,
-      variant_id: { $in: objectVariantIds }
+    await NewCart.deleteMany({
+      accountId: objectUserId,
+      variantId: { $in: objectVariantIds }
     });
 
     return res.status(201).json({
@@ -466,7 +489,8 @@ exports.checkout = async (req, res) => {
           totalQuantity: orderDetailsToSave.reduce((sum, detail) => sum + detail.Quantity, 0),
           originalPrice: savedOrder.totalPrice,
           discountAmount: savedOrder.discountAmount,
-          finalPrice: savedOrder.finalPrice
+          finalPrice: savedOrder.finalPrice,
+          stockDeducted: orderDetailsToSave.length
         }
       },
     });
@@ -539,6 +563,20 @@ exports.cancelOrder = async (req, res) => {
       }
     }
 
+    // Hoàn lại số lượng sản phẩm vào kho
+    if (order.orderDetails && order.orderDetails.length > 0) {
+      for (const orderDetail of order.orderDetails) {
+        if (orderDetail.variant_id) {
+          const variant = await newProductVariants.findById(orderDetail.variant_id);
+          if (variant) {
+            // Cộng lại số lượng đã mua vào stock
+            variant.stockQuantity += orderDetail.Quantity;
+            await variant.save();
+          }
+        }
+      }
+    }
+
     // Cập nhật trạng thái sang cancelled
     const updatedOrder = await orderService.updateOrderService(
       orderId,
@@ -549,7 +587,8 @@ exports.cancelOrder = async (req, res) => {
     res.status(200).json({
       message: 'Order cancelled successfully',
       order: updatedOrder,
-      voucherRefunded: order.voucher_id ? true : false
+      voucherRefunded: order.voucher_id ? true : false,
+      stockRestored: order.orderDetails ? order.orderDetails.length : 0
     });
   } catch (error) {
     res
@@ -557,7 +596,6 @@ exports.cancelOrder = async (req, res) => {
       .json({ message: error.message || 'Error cancelling order' });
   }
 };
-
 
 
 exports.addFeedbackProduct = async (req, res) => {
@@ -679,171 +717,7 @@ exports.addFeedbackProduct = async (req, res) => {
   }
 };
 
-// hàm lấy feedback của user cho một sản phẩm cụ thể trong một order cụ thể
-exports.getOrderFeedbacks = async (req, res) => {
-  try {
-    const orderId = req.params.id;
 
-    // Validate order ID
-    if (!mongoose.isValidObjectId(orderId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid order ID'
-      });
-    }
-
-    // Lấy order
-    const order = await orderService.getOrderByIdService(orderId, req.user);
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-
-    // Lấy tất cả feedback từ orderDetails và lọc ra những feedback chưa bị xóa
-    const feedbacks = await OrderDetails.find({
-      order_id: orderId
-    }).populate('variant_id', 'pro_id color_id size_id')
-      .populate({
-        path: 'variant_id.pro_id',
-        model: 'Products',
-        select: 'pro_name'
-      });
-
-    // Lọc ra những feedback chưa bị xóa
-    const activeFeedbacks = feedbacks.filter(feedback =>
-      feedback.feedback &&
-      feedback.feedback.is_deleted !== true &&
-      ((feedback.feedback.rating && feedback.feedback.rating !== null) ||
-        (feedback.feedback.content && feedback.feedback.content.trim() !== ''))
-    );
-
-    res.status(200).json({
-      success: true,
-      message: 'Order feedbacks retrieved successfully',
-      order: {
-        _id: order._id,
-        order_status: order.order_status
-      },
-      feedbacks: activeFeedbacks.map(feedback => ({
-        _id: feedback._id,
-        variant_id: feedback.variant_id,
-        feedback: feedback.feedback,
-        UnitPrice: feedback.UnitPrice,
-        Quantity: feedback.Quantity
-      }))
-    });
-
-  } catch (error) {
-    console.error('Get order feedbacks error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error retrieving order feedbacks'
-    });
-  }
-};
-
-// Hàm lấy feedback của user cho một sản phẩm cụ thể trong một order cụ thể
-exports.getUserFeedbackByProduct = async (req, res) => {
-  try {
-    const { orderId, variantId } = req.params;
-    const userId = req.user.id;
-
-    // Validate IDs
-    if (!mongoose.isValidObjectId(orderId) || !mongoose.isValidObjectId(variantId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid order ID or variant ID'
-      });
-    }
-
-    // Kiểm tra order tồn tại và thuộc về user hiện tại
-    const order = await orderService.getOrderByIdService(orderId, req.user);
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found or access denied'
-      });
-    }
-
-    // Tìm order detail cụ thể cho variant này trong order này
-    const orderDetail = await OrderDetails.findOne({
-      order_id: orderId,
-      variant_id: variantId
-    })
-      .populate({
-        path: 'variant_id',
-        select: 'pro_id color_id size_id',
-        populate: {
-          path: 'pro_id',
-          model: 'Products',
-          select: 'pro_name'
-        }
-      });
-
-    if (!orderDetail) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found in this order'
-      });
-    }
-
-    // Nếu feedback đã bị xóa, coi như không có feedback
-    if (orderDetail.feedback && orderDetail.feedback.is_deleted === true) {
-      return res.status(200).json({
-        success: true,
-        message: 'No feedback found for this product',
-        feedback: null,
-        orderDetail: {
-          _id: orderDetail._id,
-          order_id: orderDetail.order_id,
-          variant_id: orderDetail.variant_id._id,
-          feedback: null,
-        },
-        order: {
-          _id: order._id,
-        },
-      });
-    }
-
-    // Kiểm tra xem có feedback không
-    const feedback = orderDetail.feedback && (
-      (orderDetail.feedback.rating && orderDetail.feedback.rating !== null) ||
-      (orderDetail.feedback.content && orderDetail.feedback.content.trim() !== '')
-    )
-      ? {
-        rating: orderDetail.feedback.rating,
-        content: orderDetail.feedback.content,
-      }
-      : null;
-
-    // Trả về đúng định dạng yêu cầu
-    res.status(200).json({
-      success: true,
-      message: feedback
-        ? 'Product feedback retrieved successfully'
-        : 'No feedback found for this product',
-      feedback,
-      orderDetail: {
-        _id: orderDetail._id,
-        order_id: orderDetail.order_id,
-        variant_id: orderDetail.variant_id._id,
-        feedback,
-      },
-      order: {
-        _id: order._id,
-      },
-    });
-
-  } catch (error) {
-    console.error('Get user feedback by product error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error retrieving user feedback'
-    });
-  }
-};
 
 // Hàm sửa feedback của user cho một sản phẩm cụ thể trong một order cụ thể
 exports.editFeedbackProduct = async (req, res) => {
@@ -1092,45 +966,36 @@ exports.deleteFeedbackProduct = async (req, res) => {
 // Hàm lấy tất cả feedback của một sản phẩm (tất cả variants của product) để hiển thị trên trang product
 exports.getAllFeedbackOfProduct = async (req, res) => {
   try {
-    const { variantId } = req.params;
-    const { page = 1, limit = 10 } = req.query;
+    const { productId } = req.params;
     const currentUserId = req.user ? req.user.id : null; // Lấy user hiện tại nếu có
 
-    // Validate variant ID
-    if (!mongoose.isValidObjectId(variantId)) {
+    // Validate product ID
+    if (!productId) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid variant ID'
+        message: 'Product ID is required'
       });
     }
 
-    // Validate pagination
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    if (pageNum < 1 || limitNum < 1 || limitNum > 50) {
+    if (!mongoose.isValidObjectId(productId)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid pagination parameters'
+        message: 'Invalid product ID format'
       });
     }
 
-    // Kiểm tra variant có tồn tại không và lấy thông tin product
-    const ProductVariants = require('../models/ProductVariants');
-    const variant = await ProductVariants.findById(variantId)
-      .populate('pro_id', 'pro_name')
-      .populate('color_id', 'color_name')
-      .populate('size_id', 'size_name');
-
-    if (!variant) {
+    // Kiểm tra product có tồn tại không
+    const product = await newProducts.findById(productId);
+    if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Product variant not found'
+        message: 'Product not found'
       });
     }
 
-    // Lấy tất cả variants của cùng một product
-    const allVariantsOfProduct = await ProductVariants.find({
-      pro_id: variant.pro_id._id
+    // Lấy tất cả variants của product này
+    const allVariantsOfProduct = await newProductVariants.find({
+      productId: productId
     }).select('_id');
 
     const variantIds = allVariantsOfProduct.map(v => v._id);
@@ -1164,14 +1029,14 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       })
       .populate({
         path: 'variant_id',
-        select: 'color_id size_id',
+        select: 'productColorId productSizeId variantImage',
         populate: [
           {
-            path: 'color_id',
+            path: 'productColorId',
             select: 'color_name'
           },
           {
-            path: 'size_id',
+            path: 'productSizeId',
             select: 'size_name'
           }
         ]
@@ -1180,35 +1045,29 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
 
     // Custom sorting: feedback của user hiện tại lên đầu, sau đó theo thời gian
     const sortedFeedbacks = allFeedbacks.sort((a, b) => {
-      // Nếu có user hiện tại
+      // Nếu có user hiện tại đăng nhập
       if (currentUserId) {
         const aIsCurrentUser = a.order_id.acc_id._id.toString() === currentUserId;
         const bIsCurrentUser = b.order_id.acc_id._id.toString() === currentUserId;
 
-        // Nếu a là user hiện tại và b không phải -> a lên đầu
-        if (aIsCurrentUser && !bIsCurrentUser) return -1;
-        // Nếu b là user hiện tại và a không phải -> b lên đầu
-        if (bIsCurrentUser && !aIsCurrentUser) return 1;
+        // Ưu tiên 1: Feedback của user hiện tại lên đầu tiên
+        if (aIsCurrentUser && !bIsCurrentUser) return -1;  // a lên đầu
+        if (bIsCurrentUser && !aIsCurrentUser) return 1;   // b lên đầu
 
-        // Nếu cả hai đều là user hiện tại -> sắp xếp theo thời gian (mới nhất trước)
-        if (aIsCurrentUser && bIsCurrentUser) {
-          return new Date(b.order_id.orderDate) - new Date(a.order_id.orderDate);
-        }
-
-        // Nếu cả hai đều không phải user hiện tại -> sắp xếp theo thời gian (mới nhất trước)
-        return new Date(b.order_id.orderDate) - new Date(a.order_id.orderDate);
+        // Ưu tiên 2: Sắp xếp theo thời gian (mới nhất trước)
+        const aDate = new Date(a.order_id.orderDate);
+        const bDate = new Date(b.order_id.orderDate);
+        return bDate - aDate; // Mới nhất trước
       }
 
-      // Nếu không có user hiện tại -> sắp xếp theo thời gian (mới nhất trước)
-      return new Date(b.order_id.orderDate) - new Date(a.order_id.orderDate);
+      // Nếu không có user đăng nhập -> chỉ sắp xếp theo thời gian
+      const aDate = new Date(a.order_id.orderDate);
+      const bDate = new Date(b.order_id.orderDate);
+      return bDate - aDate; // Mới nhất trước
     });
 
     // Lấy tổng số feedback
     const totalFeedbacks = sortedFeedbacks.length;
-
-    // Pagination
-    const skip = (pageNum - 1) * limitNum;
-    const paginatedFeedbacks = sortedFeedbacks.slice(skip, skip + limitNum);
 
     // Tính toán thống kê với rating
     const feedbacksWithRating = allFeedbacks.filter(f => f.feedback.rating && f.feedback.rating !== null);
@@ -1235,7 +1094,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     };
 
     // Format response
-    const formattedFeedbacks = paginatedFeedbacks.map(feedback => ({
+    const formattedFeedbacks = sortedFeedbacks.map(feedback => ({
       _id: feedback._id,
       order_id: feedback.order_id._id,
       order_date: feedback.order_id.orderDate,
@@ -1249,11 +1108,12 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
         phone: feedback.order_id.acc_id.phone,
         is_current_user: currentUserId ? feedback.order_id.acc_id._id.toString() === currentUserId : false
       },
-      variant: {
+      variant: feedback.variant_id ? {
         variant_id: feedback.variant_id._id,
-        color: feedback.variant_id.color_id.color_name,
-        size: feedback.variant_id.size_id.size_name
-      },
+        color: feedback.variant_id.productColorId ? feedback.variant_id.productColorId.color_name : null,
+        size: feedback.variant_id.productSizeId ? feedback.variant_id.productSizeId.size_name : null,
+        image: feedback.variant_id.variantImage || null
+      } : null,
       feedback: {
         rating: feedback.feedback.rating,
         content: feedback.feedback.content,
@@ -1271,8 +1131,8 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       success: true,
       message: 'Product feedbacks retrieved successfully',
       product: {
-        product_id: variant.pro_id._id,
-        product_name: variant.pro_id.pro_name,
+        product_id: product._id,
+        product_name: product.productName,
         total_variants: allVariantsOfProduct.length
       },
       statistics: {
@@ -1281,14 +1141,6 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
         average_rating: Math.round(averageRating * 10) / 10,
         rating_distribution: ratingCounts,
         rating_percentage: ratingPercentage
-      },
-      pagination: {
-        current_page: pageNum,
-        total_pages: Math.ceil(totalFeedbacks / limitNum),
-        total_items: totalFeedbacks,
-        items_per_page: limitNum,
-        has_next: pageNum < Math.ceil(totalFeedbacks / limitNum),
-        has_prev: pageNum > 1
       },
       feedbacks: formattedFeedbacks
     });
