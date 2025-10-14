@@ -1,8 +1,8 @@
 const Orders = require('../models/Orders');
 const OrderDetails = require('../models/OrderDetails');
 const Accounts = require('../models/Accounts');
-const ProductVariants = require('../models/ProductVariants');
-const Products = require('../models/Products');
+const newProductVariants = require('../models/newProductVariant');
+const newProducts = require('../models/newProduct');
 const ProductColors = require('../models/ProductColors');
 const ProductSizes = require('../models/ProductSizes');
 const mongoose = require('mongoose');
@@ -52,18 +52,18 @@ exports.exportBill = async (req, res) => {
         const orderDetails = await OrderDetails.find({ order_id: orderId })
             .populate({
                 path: 'variant_id',
-                select: 'pro_id color_id size_id',
+                select: 'productId productColorId productSizeId variantImage',
                 populate: [
                     {
-                        path: 'pro_id',
-                        select: 'pro_name imageURL price'
+                        path: 'productId',
+                        select: 'productName'
                     },
                     {
-                        path: 'color_id',
+                        path: 'productColorId',
                         select: 'color_name'
                     },
                     {
-                        path: 'size_id',
+                        path: 'productSizeId',
                         select: 'size_name'
                     }
                 ]
@@ -85,17 +85,18 @@ exports.exportBill = async (req, res) => {
 
             // Thông tin khách hàng
             customer: {
-                name: order.acc_id.name || order.acc_id.username,
+                name: order.name, // Recipient's name from order
                 email: order.acc_id.email,
-                phone: order.acc_id.phone,
-                address: order.acc_id.address
+                phone: order.phone, // Phone from order (delivery contact)
+                address: order.addressReceive // Delivery address from order
             },
 
             // Chi tiết sản phẩm
             items: orderDetails.map(detail => ({
-                productName: detail.variant_id.pro_id.pro_name,
-                color: detail.variant_id.color_id?.color_name || 'N/A',
-                size: detail.variant_id.size_id?.size_name || 'N/A',
+                productName: detail.variant_id?.productId?.productName || 'N/A',
+                color: detail.variant_id?.productColorId?.color_name || 'N/A',
+                size: detail.variant_id?.productSizeId?.size_name || 'N/A',
+                image: detail.variant_id?.variantImage || null,
                 unitPrice: detail.UnitPrice,
                 quantity: detail.Quantity,
                 totalPrice: detail.UnitPrice * detail.Quantity

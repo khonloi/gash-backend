@@ -11,11 +11,8 @@ const {
   createVnpayPaymentUrl,
   vnpayReturn,
   vnpayIpn,
-  getOrderByIdForUser,
   cancelOrder,
   addFeedbackProduct,
-  getOrderFeedbacks,
-  getUserFeedbackByProduct,
   editFeedbackProduct,
   deleteFeedbackProduct,
   getAllFeedbackOfProduct
@@ -36,22 +33,15 @@ router.delete('/:id', authenticateJWT, deleteOrder);
 
 // api checkout
 router.post('/checkout', authenticateJWT, orderController.checkout);
-// api get order by id for user
-// router.get('/get-order/:id', authenticateJWT, getOrderByIdForUser);
 // api cancel order
 router.patch('/:id/cancel', authenticateJWT, cancelOrder);
-
 //api add feedback for variant of order
 router.patch('/:orderId/add-feedback/:variantId', authenticateJWT, addFeedbackProduct);
 // api edit feedback for variant of order
 router.put('/:orderId/edit-feedback/:variantId', authenticateJWT, editFeedbackProduct);
 // api delete feedback for variant of order
 router.delete('/:orderId/delete-feedback/:variantId', authenticateJWT, deleteFeedbackProduct);
-// api get feedback by order id for user of order
-// router.get('/get-feedback-by-order/:id/feedbacks', authenticateJWT, getOrderFeedbacks);
-// api get feedback by order id and variant id for user of order
-// router.get('/get-user-feedback/:orderId/:variantId', authenticateJWT, getUserFeedbackByProduct);
 // api get all feedback for product (many variants of product)
-router.get('/get-all-feedback/:variantId', optionalAuth, getAllFeedbackOfProduct);
+router.get('/get-all-feedback/:productId', optionalAuth, getAllFeedbackOfProduct);
 
 module.exports = router;

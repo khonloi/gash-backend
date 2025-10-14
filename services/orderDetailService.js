@@ -2,16 +2,16 @@
 const mongoose = require('mongoose');
 const OrderDetails = require('../models/OrderDetails');
 const Orders = require('../models/Orders');
-const ProductVariants = require('../models/ProductVariants');
+const newProductVariants = require('../models/newProductVariant');
 const Accounts = require('../models/Accounts');
 
 exports.searchOrderDetails = async (queryParams, user) => {
   const {
     order_id,
     variant_id,
-    pro_id,
-    color_id,
-    size_id,
+    productId,
+    productColorId,
+    productSizeId,
     username,
     startDate,
     endDate,
@@ -46,12 +46,12 @@ exports.searchOrderDetails = async (queryParams, user) => {
     query.variant_id = variant_id;
   }
 
-  if (pro_id || color_id || size_id) {
+  if (productId || productColorId || productSizeId) {
     const variantQuery = {};
-    if (pro_id) variantQuery.pro_id = pro_id;
-    if (color_id) variantQuery.color_id = color_id;
-    if (size_id) variantQuery.size_id = size_id;
-    const variants = await ProductVariants.find(variantQuery).select('_id');
+    if (productId) variantQuery.productId = productId;
+    if (productColorId) variantQuery.productColorId = productColorId;
+    if (productSizeId) variantQuery.productSizeId = productSizeId;
+    const variants = await newProductVariants.find(variantQuery).select('_id');
     const variantIds = variants.map(v => v._id);
     query.variant_id = { $in: variantIds };
   }
@@ -100,15 +100,15 @@ exports.searchOrderDetails = async (queryParams, user) => {
     })
     .populate({
       path: 'variant_id',
-      select: 'pro_id color_id size_id',
+      select: 'productId productColorId productSizeId',
       populate: [
         {
-          path: 'pro_id',
-          select: 'pro_name imageURL',
+          path: 'productId',
+          select: 'productName imageURL',
           options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
         },
-        { path: 'color_id', select: 'color_name' },
-        { path: 'size_id', select: 'size_name' },
+        { path: 'productColorId', select: 'color_name' },
+        { path: 'productSizeId', select: 'size_name' },
       ],
     });
 };
@@ -206,10 +206,10 @@ exports.getAllOrderDetails = async (user, order_id) => {
       name: detail.order_id.acc_id.name
     },
     variant: {
-      name: detail.variant_id.pro_id.pro_name,
-      color: detail.variant_id.color_id?.color_name || 'N/A',
-      size: detail.variant_id.size_id?.size_name || 'N/A',
-      image: detail.variant_id.pro_id.imageURL
+      name: detail.variant_id.productId?.productName || 'N/A',
+      color: detail.variant_id.productColorId?.color_name || 'N/A',
+      size: detail.variant_id.productSizeId?.size_name || 'N/A',
+      image: detail.variant_id.productId?.imageURL || 'N/A'
     },
     quantity: detail.Quantity,
     unitPrice: detail.UnitPrice,
@@ -238,15 +238,15 @@ exports.getOrderDetailById = async (id) => {
     })
     .populate({
       path: 'variant_id',
-      select: 'pro_id color_id size_id',
+      select: 'productId productColorId productSizeId',
       populate: [
         {
-          path: 'pro_id',
-          select: 'pro_name imageURL',
+          path: 'productId',
+          select: 'productName imageURL',
           options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
         },
-        { path: 'color_id', select: 'color_name' },
-        { path: 'size_id', select: 'size_name' },
+        { path: 'productColorId', select: 'color_name' },
+        { path: 'productSizeId', select: 'size_name' },
       ],
     });
 };
@@ -323,15 +323,15 @@ exports.updateOrderDetail = async (id, data, user) => {
     })
     .populate({
       path: 'variant_id',
-      select: 'pro_id color_id size_id',
+      select: 'productId productColorId productSizeId',
       populate: [
         {
-          path: 'pro_id',
-          select: 'pro_name imageURL',
+          path: 'productId',
+          select: 'productName imageURL',
           options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
         },
-        { path: 'color_id', select: 'color_name' },
-        { path: 'size_id', select: 'size_name' },
+        { path: 'productColorId', select: 'color_name' },
+        { path: 'productSizeId', select: 'size_name' },
       ],
     });
   return { status: 200, response: { message: 'Order detail updated successfully', orderDetail: updatedOrderDetail } };
@@ -355,13 +355,13 @@ exports.deleteOrderDetail = async (id, user) => {
   return { status: 200, response: { message: 'Order detail deleted successfully' } };
 };
 
-exports.getOrderDetailsByProduct = async (pro_id) => {
-  if (!mongoose.isValidObjectId(pro_id)) {
+exports.getOrderDetailsByProduct = async (productId) => {
+  if (!mongoose.isValidObjectId(productId)) {
     const err = new Error("Invalid product ID");
     err.status = 400;
     throw err;
   }
-  const variants = await ProductVariants.find({ pro_id }).select('_id');
+  const variants = await newProductVariants.find({ productId }).select('_id');
   const variantIds = variants.map(variant => variant._id);
   return await OrderDetails.find({
     variant_id: { $in: variantIds },
@@ -374,15 +374,15 @@ exports.getOrderDetailsByProduct = async (pro_id) => {
     })
     .populate({
       path: 'variant_id',
-      select: 'pro_id color_id size_id',
+      select: 'productId productColorId productSizeId',
       populate: [
         {
-          path: 'pro_id',
-          select: 'pro_name imageURL',
+          path: 'productId',
+          select: 'productName imageURL',
           options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
         },
-        { path: 'color_id', select: 'color_name' },
-        { path: 'size_id', select: 'size_name' },
+        { path: 'productColorId', select: 'color_name' },
+        { path: 'productSizeId', select: 'size_name' },
       ],
     });
 };

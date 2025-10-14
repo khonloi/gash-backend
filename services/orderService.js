@@ -8,6 +8,7 @@ const ProductVariants = require("../models/ProductVariants");
 async function createOrderService(orderData, user) {
   const {
     acc_id,
+    name,
     addressReceive,
     phone,
     totalPrice,
@@ -19,7 +20,7 @@ async function createOrderService(orderData, user) {
   } = orderData;
 
   // Validate required fields and enums
-  if (!acc_id || !addressReceive || !phone || !totalPrice || !payment_method) {
+  if (!acc_id || !name || !addressReceive || !phone || !totalPrice || !payment_method) {
     const err = new Error("Missing required fields");
     err.status = 400;
     throw err;
@@ -62,6 +63,7 @@ async function createOrderService(orderData, user) {
   }
   const order = new Orders({
     acc_id,
+    name,
     addressReceive,
     phone,
     totalPrice,
@@ -201,18 +203,18 @@ async function getOrderByIdService(id, user) {
       select: 'variant_id UnitPrice Quantity feedback',
       populate: {
         path: 'variant_id',
-        select: 'pro_id color_id size_id',
+        select: 'productId productColorId productSizeId variantImage',
         populate: [
           {
-            path: 'pro_id',
-            select: 'pro_name imageURL'
+            path: 'productId',
+            select: 'productName'
           },
           {
-            path: 'color_id',
+            path: 'productColorId',
             select: 'color_name'
           },
           {
-            path: 'size_id',
+            path: 'productSizeId',
             select: 'size_name'
           }
         ]
