@@ -285,13 +285,7 @@ const updateVoucher = async (req, res) => {
 
         // 1.6 Start date
         if (startDate !== undefined) {
-            const now = new Date();
-            if (new Date(startDate) < now.setHours(0, 0, 0, 0)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Start date cannot be in the past.',
-                });
-            }
+            // Allow updating start date without past validation for existing vouchers
             voucher.startDate = startDate;
         }
 

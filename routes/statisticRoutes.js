@@ -13,12 +13,12 @@ router.get('/revenue', authenticateJWT, authorizeRole(['admin']), statisticContr
 router.get('/orders', authenticateJWT, authorizeRole(['admin']), statisticController.viewOrderStats);
 
 // View Revenue by Week (Admin/Manager only)
-router.get('/revenue/week', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByWeek);
+router.get('/revenue/revenue-by-week', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByWeek);
 
 // View Revenue by Month (Admin/Manager only)
-router.get('/revenue/month', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByMonth);
+router.get('/revenue/revenue-by-month', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByMonth);
 
 // View Revenue by Year (Admin/Manager only)
-router.get('/revenue/year', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByYear);
+router.get('/revenue/revenue-by-year', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByYear);
 
 module.exports = router;
