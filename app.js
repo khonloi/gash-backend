@@ -75,6 +75,10 @@ const newProductVariantRoutes = require('./routes/newProductVariantRoutes');
 app.use('/new-products', newProductRoutes);
 app.use('/new-variants', newProductVariantRoutes);
 
+// ===== New Stat Routes =====
+const newStatisticsRoutes = require('./routes/statRoutes');
+app.use('/new-statistics', newStatisticsRoutes);
+
 // ===== New Cart Routes =====
 const newCartRoutes = require('./routes/newCartRoutes');
 app.use('/new-carts', newCartRoutes);
