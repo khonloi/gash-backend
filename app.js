@@ -12,6 +12,7 @@ app.use(
   cors({
     origin: [
       'http://localhost:5173',
+      'http://localhost:5174',
       'http://localhost:3000',
       'http://localhost:3001',
     ],
@@ -31,16 +32,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ===== Routes =====
 const authRoutes = require('./routes/authRoutes');
 const accountsRoutes = require('./routes/accountRoutes');
-const productsRoutes = require('./routes/productRoutes');
 const categoriesRoutes = require('./routes/categoryRoutes');
 const ordersRoutes = require('./routes/orderRoutes');
 const orderDetailsRoutes = require('./routes/orderDetailRoutes');
-const cartsRoutes = require('./routes/cartRoutes');
 const favoritesRoutes = require('./routes/favoriteRoutes');
-const importBillRoutes = require('./routes/importBillRoutes');
 const productSpecRoutes = require('./routes/specRoutes');
 const statisticsRoutes = require('./routes/statisticRoutes');
-const productVarRoutes = require('./routes/variantRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const voucherRoutes = require('./routes/voucherRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
@@ -51,14 +48,10 @@ const feedbackRoutes = require('./routes/feedbackRoutes');
 // ===== Mount routes =====
 app.use('/auth', authRoutes);
 app.use('/accounts', accountsRoutes);
-app.use('/products', productsRoutes);
 app.use('/categories', categoriesRoutes);
 app.use('/orders', ordersRoutes);
 app.use('/order-details', orderDetailsRoutes);
-app.use('/carts', cartsRoutes);
-app.use('/variants', productVarRoutes);
 app.use('/favorites', favoritesRoutes);
-app.use('/imports', importBillRoutes);
 app.use('/specifications', productSpecRoutes);
 app.use('/statistics', statisticsRoutes);
 app.use('/upload', uploadRoutes);
