@@ -220,8 +220,8 @@ const updateProduct = async (productId, updateData) => {
     if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
       throw new Error("Invalid category ID");
     }
-    if (productStatus && !["active", "inactive"].includes(productStatus)) {
-      throw new Error('Product status must be either "active" or "inactive"');
+    if (productStatus && !["active", "pending", "inactive"].includes(productStatus)) {
+      throw new Error('Product status must be either "active", "inactive" or "pending"');
     }
     if (
       productImageIds &&
