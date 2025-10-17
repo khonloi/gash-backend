@@ -5,12 +5,12 @@ const {
   authorizeRole,
 } = require("../middleware/authMiddleware");
 const {
-  createProductImage,
-  getAllProductImages,
-  getProductImagesByProductId,
-  getProductImageById,
-  updateProductImage,
-  deleteProductImage,
+  // createProductImage,
+  // getAllProductImages,
+  // getProductImagesByProductId,
+  // getProductImageById,
+  // updateProductImage,
+  // deleteProductImage,
   createProductColor,
   getAllProductColors,
   getProductColorById,
@@ -25,28 +25,28 @@ const {
 } = require("../controllers/specController");
 
 // --- Product Images Routes ---
-router.post("/image", authenticateJWT, authorizeRole(["admin", "manager"]), createProductImage);
-router.get("/image", getAllProductImages);
-router.get("/image/product/:pro_id", getProductImagesByProductId);
-router.get("/image/:id", getProductImageById);
-router.put("/image/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductImage);
-router.delete("/image/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductImage);
+// router.post("/create-image", authenticateJWT, authorizeRole(["admin", "manager"]), createProductImage);
+// router.get("/get-all-images", getAllProductImages);
+// router.get("/get-images-by-product/:pro_id", getProductImagesByProductId);
+// router.get("/get-image-detail/:id", getProductImageById);
+// router.put("/update-image/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductImage);
+// router.delete("/delete-image/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductImage);
 
 // --- Product Colors Routes ---
-router.post("/color", authenticateJWT, authorizeRole(["admin", "manager"]), createProductColor);
-router.get("/color", getAllProductColors);
-router.get("/color/:id", getProductColorById);
-router.put("/color/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductColor);
-router.delete("/color/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductColor);
+router.post("/create-color", authenticateJWT, authorizeRole(["admin", "manager"]), createProductColor);
+router.get("/get-all-colors", getAllProductColors);
+router.get("/get-color-detail/:id", getProductColorById);
+router.put("/update-color/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductColor);
+router.delete("/delete-color/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductColor);
 
 // --- Product Sizes Routes ---
-router.post("/size", authenticateJWT, authorizeRole(["admin", "manager"]), createProductSize);
-router.get("/size", getAllProductSizes);
-router.get("/size/:id", getProductSizeById);
-router.put("/size/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductSize);
-router.delete("/size/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductSize);
+router.post("/create-size", authenticateJWT, authorizeRole(["admin", "manager"]), createProductSize);
+router.get("/get-all-sizes", getAllProductSizes);
+router.get("/get-size-detail/:id", getProductSizeById);
+router.put("/update-size/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductSize);
+router.delete("/delete-size/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductSize);
 
 // --- Search Specifications Routes ---
-router.get("/search", searchSpecifications);
+router.get("/search-specifications", searchSpecifications);
 
 module.exports = router;
