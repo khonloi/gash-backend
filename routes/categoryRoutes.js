@@ -9,10 +9,10 @@ const {
   deleteCategory
 } = require('../controllers/categoryController');
 
-router.post('/', authenticateJWT, authorizeRole(['admin', 'manager']), createCategory);
-router.get('/', getAllCategories);
-router.get('/:id', getCategoryById);
-router.put('/:id', authenticateJWT, authorizeRole(['admin', 'manager']), updateCategory);
-router.delete('/:id', authenticateJWT, authorizeRole(['admin', 'manager']), deleteCategory);
+router.post('/create-category', authenticateJWT, authorizeRole(['admin', 'manager']), createCategory);
+router.get('/get-all-categories', getAllCategories);
+router.get('/get-category-detail/:id', getCategoryById);
+router.put('/update-category/:id', authenticateJWT, authorizeRole(['admin', 'manager']), updateCategory);
+router.delete('/delete-category/:id', authenticateJWT, authorizeRole(['admin', 'manager']), deleteCategory);
 
 module.exports = router;
