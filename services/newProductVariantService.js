@@ -62,11 +62,19 @@ const createProductVariant = async (variantData) => {
     await variant.save();
     
     // Add variant ID to product's productVariantIds array
-    await newProduct.findByIdAndUpdate(
+    const updatedProduct = await newProduct.findByIdAndUpdate(
       productId,
-      { $addToSet: { productVariantIds: variant._id } },
+      { 
+        $addToSet: { productVariantIds: variant._id },
+        productStatus: "active", // Set product status to active since a variant is added
+        updatedAt: Date.now()
+      },
       { new: true }
     );
+    
+    if (!updatedProduct) {
+      throw new Error("Product not found");
+    }
     
     return variant;
   } catch (error) {
@@ -252,11 +260,27 @@ const deleteProductVariant = async (variantId) => {
     }
     
     // Remove variant ID from product's productVariantIds array
-    await newProduct.findByIdAndUpdate(
+    const updatedProduct = await newProduct.findByIdAndUpdate(
       variant.productId,
-      { $pull: { productVariantIds: variant._id } },
+      { 
+        $pull: { productVariantIds: variant._id },
+        updatedAt: Date.now()
+      },
       { new: true }
     );
+    
+    if (!updatedProduct) {
+      throw new Error("Product not found");
+    }
+
+    // Set product status to "pending" if no variants remain
+    if (updatedProduct.productVariantIds.length === 0) {
+      await newProduct.findByIdAndUpdate(
+        variant.productId,
+        { productStatus: "pending", updatedAt: Date.now() },
+        { new: true }
+      );
+    }
     
     return { message: "Product variant discontinued successfully" };
   } catch (error) {

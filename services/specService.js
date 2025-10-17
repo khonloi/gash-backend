@@ -1,7 +1,7 @@
 const ProductImages = require("../models/ProductImages");
 const ProductSizes = require("../models/ProductSizes");
 const ProductColors = require("../models/ProductColors");
-const Products = require("../models/Products");
+// const Products = require("../models/Products");
 const mongoose = require("mongoose");
 
 // --- Product Images ---

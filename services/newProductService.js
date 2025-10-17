@@ -77,11 +77,14 @@ const createProduct = async (productData) => {
       }
     }
 
+    // Set product status to "pending" if no variants, otherwise allow provided status or default to "pending"
+    const finalProductStatus = validatedVariantIds.length > 0 ? (productStatus || "active") : "pending";
+
     const product = new newProduct({
       ...productData,
       productImageIds: savedImageIds,
       productVariantIds: validatedVariantIds,
-      productStatus: productStatus || "pending",
+      productStatus: finalProductStatus,
     });
     const savedProduct = await product.save();
 
@@ -220,8 +223,8 @@ const updateProduct = async (productId, updateData) => {
     if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
       throw new Error("Invalid category ID");
     }
-    if (productStatus && !["active", "inactive"].includes(productStatus)) {
-      throw new Error('Product status must be either "active" or "inactive"');
+    if (productStatus && !["active", "pending", "inactive"].includes(productStatus)) {
+      throw new Error('Product status must be either "active", "inactive" or "pending"');
     }
     if (
       productImageIds &&
@@ -245,17 +248,6 @@ const updateProduct = async (productId, updateData) => {
       });
       if (duplicateProduct) {
         throw new Error("Product with this name already exists");
-      }
-    }
-
-    if (productStatus && productStatus !== "pending") {
-      const variantCount = await newProductVariant.countDocuments({
-        productId,
-      });
-      if (variantCount === 0) {
-        throw new Error(
-          "Cannot set status to active/inactive without variants"
-        );
       }
     }
 
@@ -309,6 +301,14 @@ const updateProduct = async (productId, updateData) => {
       }
     }
 
+    // Set product status based on variants
+    let finalProductStatus = productStatus || existingProduct.productStatus;
+    if (updatedVariantIds.length === 0) {
+      finalProductStatus = "pending";
+    } else if (updatedVariantIds.length > 0 && finalProductStatus === "pending") {
+      finalProductStatus = "active";
+    }
+
     const product = await newProduct
       .findByIdAndUpdate(
         productId,
@@ -316,6 +316,7 @@ const updateProduct = async (productId, updateData) => {
           ...updateData,
           productImageIds: updatedImageIds,
           productVariantIds: updatedVariantIds,
+          productStatus: finalProductStatus,
           updatedAt: Date.now(),
         },
         { new: true, runValidators: true }
