@@ -434,9 +434,19 @@ async function deleteOrderService(id, user) {
   return { message: "Order deleted successfully" };
 }
 
+async function getAllOrdersForAdminService() {
+  // Lấy tất cả đơn hàng với thông tin cơ bản
+  const orders = await Orders.find()
+    .populate("acc_id", "username name email phone")
+    .sort({ orderDate: -1 }); // Sắp xếp theo ngày tạo mới nhất
+
+  return orders;
+}
+
 module.exports = {
   createOrderService,
   getAllOrdersService,
+  getAllOrdersForAdminService,
   searchOrdersService,
   getOrderByIdService,
   updateOrderService,

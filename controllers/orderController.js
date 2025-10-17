@@ -155,9 +155,21 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
-exports.updateOrder = async (req, res) => {
+
+exports.updateOrderByAdmin = async (req, res) => {
   try {
-    const { order_status, pay_status, refund_status, feedback_order } = req.body;
+    // Chỉ admin và staff mới có thể cập nhật đơn hàng
+    if (req.user.role !== 'admin' && req.user.role !== 'staff') {
+      return res.status(403).json({ message: 'Access denied: Admin/Staff role required' });
+    }
+
+    // Validate orderId
+    const { orderId } = req.params;
+    if (!orderId || !orderId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid order ID format' });
+    }
+
+    const { order_status, pay_status, refund_status } = req.body;
 
     // Validate enums
     if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
@@ -170,7 +182,13 @@ exports.updateOrder = async (req, res) => {
       return res.status(400).json({ message: 'Invalid refund status' });
     }
 
-    const updatedOrder = await orderService.updateOrderService(req.params.id, req.body, req.user);
+    // Chỉ cho phép cập nhật các trường cơ bản, không bao gồm feedback
+    const allowedFields = { order_status, pay_status, refund_status };
+    const filteredData = Object.fromEntries(
+      Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
+    );
+
+    const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
     const io = req.app.get('io');
     if (io && updatedOrder && updatedOrder.acc_id) {
       const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
@@ -179,11 +197,15 @@ exports.updateOrder = async (req, res) => {
       io.emit('orderUpdated', { userId, order: updatedOrder });
     }
     res.status(200).json({
-      message: 'Order updated successfully',
-      order: updatedOrder
+      success: true,
+      message: 'Order updated successfully by admin',
+      data: updatedOrder
     });
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error updating order' });
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Error updating order'
+    });
   }
 };
 
@@ -1150,6 +1172,27 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Error retrieving product feedbacks'
+    });
+  }
+};
+
+exports.getAllOrderForAdmin = async (req, res) => {
+  try {
+    // Chỉ admin và manager mới có thể truy cập
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+      return res.status(403).json({ message: 'Access denied: Admin/Manager role required' });
+    }
+
+    const orders = await orderService.getAllOrdersForAdminService();
+    res.status(200).json({
+      success: true,
+      data: orders,
+      message: 'All orders retrieved successfully for admin'
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Error retrieving all orders for admin'
     });
   }
 };
