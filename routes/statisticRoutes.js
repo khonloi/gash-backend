@@ -4,13 +4,13 @@ const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware
 const statisticController = require('../controllers/statisticController');
 
 // View Customer Statistics (Admin/Manager only)
-router.get('/customers', authenticateJWT, authorizeRole(['admin']), statisticController.viewCustomerStats);
+// router.get('/customers', authenticateJWT, authorizeRole(['admin']), statisticController.viewCustomerStats);
 
 // View Revenue Statistics (Admin/Manager only)
-router.get('/revenue', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueStats);
+// router.get('/revenue', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueStats);
 
 // View Order Statistics (Admin/Manager only)
-router.get('/orders', authenticateJWT, authorizeRole(['admin']), statisticController.viewOrderStats);
+// router.get('/orders', authenticateJWT, authorizeRole(['admin']), statisticController.viewOrderStats);
 
 // View Revenue by Week (Admin/Manager only)
 router.get('/revenue/revenue-by-week', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByWeek);
