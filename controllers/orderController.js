@@ -3,49 +3,6 @@ const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
 
 
-exports.createOrder = async (req, res) => {
-  try {
-    const { acc_id, addressReceive, phone, totalPrice, order_status, pay_status, payment_method, refund_status, feedback_order } = req.body;
-
-    // Validate required fields and enums
-    if (!acc_id || !name || !addressReceive || !phone || !totalPrice || !payment_method) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-    if (!['COD', 'VNPAY'].includes(payment_method)) {
-      return res.status(400).json({ message: 'Invalid payment method' });
-    }
-    if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
-      return res.status(400).json({ message: 'Invalid order status' });
-    }
-    if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
-      return res.status(400).json({ message: 'Invalid pay status' });
-    }
-    if (refund_status && !['not_applicable', 'pending_refund', 'refunded'].includes(refund_status)) {
-      return res.status(400).json({ message: 'Invalid refund status' });
-    }
-
-    const savedOrder = await orderService.createOrderService(req.body, req.user);
-    const io = req.app.get('io');
-    if (io && savedOrder && savedOrder.acc_id) {
-      io.emit('orderUpdated', { userId: savedOrder.acc_id.toString(), order: savedOrder });
-    }
-    res.status(201).json({
-      message: 'Order created successfully',
-      order: savedOrder
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error creating order' });
-  }
-};
-
-exports.getAllOrders = async (req, res) => {
-  try {
-    const orders = await orderService.getAllOrdersService(req.user);
-    res.status(200).json(orders);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error retrieving orders' });
-  }
-};
 
 exports.searchOrders = async (req, res) => {
   try {
@@ -65,6 +22,7 @@ exports.getOrderById = async (req, res) => {
       _id: order._id,
       orderDate: order.orderDate,
       addressReceive: order.addressReceive,
+      name: order.name,
       phone: order.phone,
       totalPrice: order.totalPrice,
       discountAmount: order.discountAmount,
@@ -169,7 +127,7 @@ exports.updateOrderByAdmin = async (req, res) => {
       return res.status(400).json({ message: 'Invalid order ID format' });
     }
 
-    const { order_status, pay_status, refund_status } = req.body;
+    const { order_status, pay_status, refund_status, refund_proof } = req.body;
 
     // Validate enums
     if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
@@ -183,7 +141,7 @@ exports.updateOrderByAdmin = async (req, res) => {
     }
 
     // Chỉ cho phép cập nhật các trường cơ bản, không bao gồm feedback
-    const allowedFields = { order_status, pay_status, refund_status };
+    const allowedFields = { order_status, pay_status, refund_status, refund_proof };
     const filteredData = Object.fromEntries(
       Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
     );
