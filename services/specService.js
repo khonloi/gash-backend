@@ -1,77 +1,6 @@
-const ProductImages = require("../models/ProductImages");
 const ProductSizes = require("../models/ProductSizes");
 const ProductColors = require("../models/ProductColors");
-// const Products = require("../models/Products");
 const mongoose = require("mongoose");
-
-// --- Product Images ---
-async function createProductImageService({ pro_id, imageURL }) {
-  if (!mongoose.isValidObjectId(pro_id)) {
-    const err = new Error("Invalid product ID"); err.status = 400; throw err;
-  }
-  const product = await Products.findById(pro_id);
-  if (!product) {
-    const err = new Error("Product not found"); err.status = 404; throw err;
-  }
-  const image = new ProductImages({ pro_id, imageURL: imageURL || "https://i.redd.it/iq6c1c3yqc861.jpg" });
-  return await image.save();
-}
-async function getAllProductImagesService() {
-  return await ProductImages.find().populate("pro_id", "pro_name");
-}
-async function getProductImagesByProductIdService(pro_id) {
-  if (!mongoose.isValidObjectId(pro_id)) {
-    const err = new Error("Invalid product ID"); err.status = 400; throw err;
-  }
-  const images = await ProductImages.find({ pro_id }).populate("pro_id", "pro_name");
-  if (!images || images.length === 0) {
-    const err = new Error("No images found for this product"); err.status = 404; throw err;
-  }
-  return images;
-}
-async function getProductImageByIdService(id) {
-  if (!mongoose.isValidObjectId(id)) {
-    const err = new Error("Invalid image ID"); err.status = 400; throw err;
-  }
-  const image = await ProductImages.findById(id).populate("pro_id", "pro_name");
-  if (!image) {
-    const err = new Error("Product image not found"); err.status = 404; throw err;
-  }
-  return image;
-}
-async function updateProductImageService(id, { pro_id, imageURL }) {
-  if (!mongoose.isValidObjectId(id)) {
-    const err = new Error("Invalid image ID"); err.status = 400; throw err;
-  }
-  if (pro_id) {
-    if (!mongoose.isValidObjectId(pro_id)) {
-      const err = new Error("Invalid product ID"); err.status = 400; throw err;
-    }
-    const product = await Products.findById(pro_id);
-    if (!product) {
-      const err = new Error("Product not found"); err.status = 404; throw err;
-    }
-  }
-  const image = await ProductImages.findByIdAndUpdate(
-    id,
-    { ...(pro_id && { pro_id }), ...(imageURL && { imageURL }) },
-    { new: true, runValidators: true }
-  ).populate("pro_id", "pro_name");
-  if (!image) {
-    const err = new Error("Product image not found"); err.status = 404; throw err;
-  }
-  return image;
-}
-async function deleteProductImageService(id) {
-  if (!mongoose.isValidObjectId(id)) {
-    const err = new Error("Invalid image ID"); err.status = 400; throw err;
-  }
-  const image = await ProductImages.findByIdAndDelete(id);
-  if (!image) {
-    const err = new Error("Product image not found"); err.status = 404; throw err;
-  }
-  return { message: "Product image deleted successfully" };
-}
 
 // --- Product Colors ---
 async function createProductColorService({ color_name }) {
@@ -244,12 +173,6 @@ async function searchSpecificationsService({ q, type }) {
 }
 
 module.exports = {
-  createProductImageService,
-  getAllProductImagesService,
-  getProductImagesByProductIdService,
-  getProductImageByIdService,
-  updateProductImageService,
-  deleteProductImageService,
   createProductColorService,
   getAllProductColorsService,
   getProductColorByIdService,

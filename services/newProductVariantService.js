@@ -58,7 +58,12 @@ const createProductVariant = async (variantData) => {
       );
     }
 
-    const variant = new newProductVariant(variantData);
+    // Set variantStatus based on stockQuantity
+    const variantStatus = stockQuantity > 0 ? "active" : "inactive";
+    const variant = new newProductVariant({
+      ...variantData,
+      variantStatus
+    });
     await variant.save();
     
     // Add variant ID to product's productVariantIds array
@@ -66,7 +71,7 @@ const createProductVariant = async (variantData) => {
       productId,
       { 
         $addToSet: { productVariantIds: variant._id },
-        productStatus: "active", // Set product status to active since a variant is added
+        productStatus: "active",
         updatedAt: Date.now()
       },
       { new: true }
@@ -153,7 +158,6 @@ const updateProductVariant = async (variantId, updateData) => {
       productSizeId,
       variantPrice,
       stockQuantity,
-      variantStatus,
     } = updateData;
     if (productId && !mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error("Invalid product ID");
@@ -171,27 +175,10 @@ const updateProductVariant = async (variantId, updateData) => {
       throw new Error("Stock quantity cannot be negative");
     }
 
-    if (
-      variantStatus &&
-      !["active", "inactive", "pending"].includes(variantStatus)
-    ) {
-      throw new Error(
-        'Variant status must be either "active", "inactive" or "pending"'
-      );
-    }
-
     // Check for existing variant
     const existingVariant = await newProductVariant.findById(variantId);
     if (!existingVariant) {
       throw new Error("Product variant not found");
-    }
-
-    // Prevent activating variant with 0 stock
-    if (
-      variantStatus === "active" &&
-      (stockQuantity === 0 || existingVariant.stockQuantity === 0)
-    ) {
-      throw new Error("Cannot activate a variant with zero stock");
     }
 
     // Prevent updates to discontinued variants
@@ -214,9 +201,15 @@ const updateProductVariant = async (variantId, updateData) => {
       }
     }
 
+    // Set variantStatus based on stockQuantity
+    let updatedData = { ...updateData, updatedAt: Date.now() };
+    if (stockQuantity !== undefined) {
+      updatedData.variantStatus = stockQuantity > 0 ? "active" : "inactive";
+    }
+
     const variant = await newProductVariant.findByIdAndUpdate(
       variantId,
-      { ...updateData, updatedAt: Date.now() },
+      updatedData,
       { new: true, runValidators: true }
     );
 

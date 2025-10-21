@@ -3,7 +3,6 @@ const Orders = require("../models/Orders");
 const Accounts = require("../models/Accounts");
 const mongoose = require("mongoose");
 const OrderDetails = require("../models/OrderDetails");
-const ProductVariants = require("../models/ProductVariants");
 
 async function createOrderService(orderData, user) {
   const {
