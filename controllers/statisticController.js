@@ -52,7 +52,7 @@ exports.viewRevenueByWeek = async (req, res) => {
 
 exports.viewRevenueByMonth = async (req, res) => {
   try {
-    const numMonths = parseInt(req.query.months) || 12; // Default 12 months, có thể truyền ?months=6
+    const numMonths = parseInt(req.query.months) || 24; // Default 24 months (2 years), có thể truyền ?months=6
 
     // Validate numMonths
     if (numMonths < 1 || numMonths > 24) {

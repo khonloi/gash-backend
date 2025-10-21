@@ -7,6 +7,19 @@ const formatVND = (amount) => {
   return `${amount.toLocaleString('vi-VN')}`;
 };
 
+// Helper to map month number (1-12) to full English month names
+// Returns labels like "January", "February", ...
+const getMonthName = (monthNumber) => {
+  const index = parseInt(monthNumber, 10) - 1;
+  const labels = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  if (index >= 0 && index < labels.length) return labels[index];
+  return '';
+};
+
+
 exports.getCustomerStats = async () => {
   const totalCustomers = await Accounts.countDocuments();
   const activeCustomers = await Accounts.countDocuments({ acc_status: 'active' });
@@ -170,16 +183,29 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
   };
 };
 
-exports.getRevenueByMonth = async (numMonths = 12) => {
+exports.getRevenueByMonth = async (numMonths = 24) => {
   const now = new Date();
+  const currentYear = now.getFullYear();
+  const previousYear = currentYear - 1;
   const allMonthsData = [];
 
-  // Iterate from the oldest month to the current month
-  for (let i = numMonths - 1; i >= 0; i--) {
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+  // Get data from January of previous year to current month
+  const startYear = previousYear;
+  const startMonth = 0; // January
+  const endYear = currentYear;
+  const endMonth = now.getMonth(); // Current month
+
+  // Calculate total months to process
+  const totalMonths = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
+
+  for (let i = 0; i < totalMonths; i++) {
+    const targetYear = startYear + Math.floor((startMonth + i) / 12);
+    const targetMonth = (startMonth + i) % 12;
+
+    const currentMonthStart = new Date(targetYear, targetMonth, 1);
     currentMonthStart.setHours(0, 0, 0, 0);
 
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const currentMonthEnd = new Date(targetYear, targetMonth + 1, 0);
     currentMonthEnd.setHours(23, 59, 59, 999);
 
     const monthRevenue = await Orders.aggregate([
@@ -201,7 +227,7 @@ exports.getRevenueByMonth = async (numMonths = 12) => {
     const totalRevenue = monthRevenue.length > 0 ? monthRevenue[0].totalRevenue : 0;
 
     allMonthsData.push({
-      monthIndex: numMonths - i,
+      monthIndex: i + 1,
       startDate: currentMonthStart,
       endDate: currentMonthEnd,
       totalRevenue: totalRevenue,
@@ -224,11 +250,12 @@ exports.getRevenueByMonth = async (numMonths = 12) => {
       }
     }
 
-    const monthName = month.startDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const monthNumber = (month.startDate.getMonth() + 1).toString().padStart(2, '0');
+    const year = month.startDate.getFullYear();
 
     return {
-      month: `Month ${month.monthIndex}`,
-      timeRange: monthName,
+      month: getMonthName(monthNumber),
+      year: year,
       totalRevenue: month.totalRevenue,
       comparedToPreviousMonth: comparison
     };
@@ -248,12 +275,13 @@ exports.getRevenueByMonth = async (numMonths = 12) => {
     changeVsLastMonth = '+100%';
   }
 
+  // Find best month in the period
   const bestMonth = formattedMonths.reduce((max, month) =>
     month.totalRevenue > max.totalRevenue ? month : max,
-    { totalRevenue: 0, month: 'Month 1', timeRange: 'Jan 2024' }
+    { totalRevenue: 0, month: 'January', year: new Date().getFullYear() }
   );
   const bestMonthDisplay = bestMonth.totalRevenue > 0
-    ? `${bestMonth.month} (${bestMonth.timeRange}) - ${bestMonth.totalRevenue.toLocaleString('vi-VN')}`
+    ? `${bestMonth.month} ${bestMonth.year} - ${bestMonth.totalRevenue.toLocaleString('vi-VN')}`
     : 'No data';
 
   return {
@@ -331,8 +359,7 @@ exports.getRevenueByYear = async (numYears = 3) => {
     const yearName = year.startDate.getFullYear().toString();
 
     return {
-      year: `Year ${year.yearIndex}`,
-      timeRange: yearName,
+      year: yearName,
       totalRevenue: year.totalRevenue,
       comparedToPreviousYear: comparison
     };
@@ -354,10 +381,10 @@ exports.getRevenueByYear = async (numYears = 3) => {
 
   const bestYear = formattedYears.reduce((max, year) =>
     year.totalRevenue > max.totalRevenue ? year : max,
-    { totalRevenue: 0, year: 'Year 1', timeRange: '2022' }
+    { totalRevenue: 0, year: new Date().getFullYear().toString() }
   );
   const bestYearDisplay = bestYear.totalRevenue > 0
-    ? `${bestYear.year} (${bestYear.timeRange}) - ${bestYear.totalRevenue.toLocaleString('vi-VN')}`
+    ? `${bestYear.year} - ${bestYear.totalRevenue.toLocaleString('vi-VN')}`
     : 'No data';
 
   return {
