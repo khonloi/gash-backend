@@ -4,84 +4,7 @@ const Accounts = require("../models/Accounts");
 const mongoose = require("mongoose");
 const OrderDetails = require("../models/OrderDetails");
 
-async function createOrderService(orderData, user) {
-  const {
-    acc_id,
-    name,
-    addressReceive,
-    phone,
-    totalPrice,
-    order_status,
-    pay_status,
-    payment_method,
-    refund_status,
-    feedback_order,
-  } = orderData;
 
-  // Validate required fields and enums
-  if (!acc_id || !name || !addressReceive || !phone || !totalPrice || !payment_method) {
-    const err = new Error("Missing required fields");
-    err.status = 400;
-    throw err;
-  }
-  if (!['COD', 'VNPAY'].includes(payment_method)) {
-    const err = new Error("Invalid payment method");
-    err.status = 400;
-    throw err;
-  }
-  if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
-    const err = new Error("Invalid order status");
-    err.status = 400;
-    throw err;
-  }
-  if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
-    const err = new Error("Invalid pay status");
-    err.status = 400;
-    throw err;
-  }
-  if (refund_status && !['not_applicable', 'pending_refund', 'refunded'].includes(refund_status)) {
-    const err = new Error("Invalid refund status");
-    err.status = 400;
-    throw err;
-  }
-
-  if (
-    user.role !== "admin" &&
-    user.role !== "manager" &&
-    user.id !== acc_id.toString()
-  ) {
-    const err = new Error("Access denied: Can only create order for own account");
-    err.status = 403;
-    throw err;
-  }
-  const account = await Accounts.findById(acc_id);
-  if (!account) {
-    const err = new Error("Account not found");
-    err.status = 404;
-    throw err;
-  }
-  const order = new Orders({
-    acc_id,
-    name,
-    addressReceive,
-    phone,
-    totalPrice,
-    order_status: order_status || "pending",
-    pay_status: pay_status || "unpaid",
-    payment_method,
-    refund_status: refund_status || "not_applicable",
-    feedback_order: feedback_order || "",
-  });
-  return await order.save();
-}
-
-async function getAllOrdersService(user) {
-  if (user.role === "admin" || user.role === "manager") {
-    return await Orders.find().populate("acc_id", "username name");
-  } else {
-    return await Orders.find({ acc_id: user.id }).populate("acc_id", "username name");
-  }
-}
 
 async function searchOrdersService(queryParams, user) {
   const {
@@ -433,9 +356,17 @@ async function deleteOrderService(id, user) {
   return { message: "Order deleted successfully" };
 }
 
+async function getAllOrdersForAdminService() {
+  // Lấy tất cả đơn hàng với thông tin cơ bản
+  const orders = await Orders.find()
+    .populate("acc_id", "username name email phone")
+    .sort({ orderDate: -1 }); // Sắp xếp theo ngày tạo mới nhất
+
+  return orders;
+}
+
 module.exports = {
-  createOrderService,
-  getAllOrdersService,
+  getAllOrdersForAdminService,
   searchOrdersService,
   getOrderByIdService,
   updateOrderService,

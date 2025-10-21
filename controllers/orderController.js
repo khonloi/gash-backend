@@ -3,49 +3,6 @@ const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
 
 
-exports.createOrder = async (req, res) => {
-  try {
-    const { acc_id, addressReceive, phone, totalPrice, order_status, pay_status, payment_method, refund_status, feedback_order } = req.body;
-
-    // Validate required fields and enums
-    if (!acc_id || !name || !addressReceive || !phone || !totalPrice || !payment_method) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-    if (!['COD', 'VNPAY'].includes(payment_method)) {
-      return res.status(400).json({ message: 'Invalid payment method' });
-    }
-    if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
-      return res.status(400).json({ message: 'Invalid order status' });
-    }
-    if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
-      return res.status(400).json({ message: 'Invalid pay status' });
-    }
-    if (refund_status && !['not_applicable', 'pending_refund', 'refunded'].includes(refund_status)) {
-      return res.status(400).json({ message: 'Invalid refund status' });
-    }
-
-    const savedOrder = await orderService.createOrderService(req.body, req.user);
-    const io = req.app.get('io');
-    if (io && savedOrder && savedOrder.acc_id) {
-      io.emit('orderUpdated', { userId: savedOrder.acc_id.toString(), order: savedOrder });
-    }
-    res.status(201).json({
-      message: 'Order created successfully',
-      order: savedOrder
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error creating order' });
-  }
-};
-
-exports.getAllOrders = async (req, res) => {
-  try {
-    const orders = await orderService.getAllOrdersService(req.user);
-    res.status(200).json(orders);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error retrieving orders' });
-  }
-};
 
 exports.searchOrders = async (req, res) => {
   try {
@@ -65,6 +22,7 @@ exports.getOrderById = async (req, res) => {
       _id: order._id,
       orderDate: order.orderDate,
       addressReceive: order.addressReceive,
+      name: order.name,
       phone: order.phone,
       totalPrice: order.totalPrice,
       discountAmount: order.discountAmount,
@@ -155,9 +113,21 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
-exports.updateOrder = async (req, res) => {
+
+exports.updateOrderByAdmin = async (req, res) => {
   try {
-    const { order_status, pay_status, refund_status, feedback_order } = req.body;
+    // Chỉ admin và staff mới có thể cập nhật đơn hàng
+    if (req.user.role !== 'admin' && req.user.role !== 'staff') {
+      return res.status(403).json({ message: 'Access denied: Admin/Staff role required' });
+    }
+
+    // Validate orderId
+    const { orderId } = req.params;
+    if (!orderId || !orderId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid order ID format' });
+    }
+
+    const { order_status, pay_status, refund_status, refund_proof } = req.body;
 
     // Validate enums
     if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
@@ -170,7 +140,13 @@ exports.updateOrder = async (req, res) => {
       return res.status(400).json({ message: 'Invalid refund status' });
     }
 
-    const updatedOrder = await orderService.updateOrderService(req.params.id, req.body, req.user);
+    // Chỉ cho phép cập nhật các trường cơ bản, không bao gồm feedback
+    const allowedFields = { order_status, pay_status, refund_status, refund_proof };
+    const filteredData = Object.fromEntries(
+      Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
+    );
+
+    const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
     const io = req.app.get('io');
     if (io && updatedOrder && updatedOrder.acc_id) {
       const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
@@ -179,11 +155,15 @@ exports.updateOrder = async (req, res) => {
       io.emit('orderUpdated', { userId, order: updatedOrder });
     }
     res.status(200).json({
-      message: 'Order updated successfully',
-      order: updatedOrder
+      success: true,
+      message: 'Order updated successfully by admin',
+      data: updatedOrder
     });
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error updating order' });
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Error updating order'
+    });
   }
 };
 
@@ -1150,6 +1130,27 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Error retrieving product feedbacks'
+    });
+  }
+};
+
+exports.getAllOrderForAdmin = async (req, res) => {
+  try {
+    // Chỉ admin và manager mới có thể truy cập
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+      return res.status(403).json({ message: 'Access denied: Admin/Manager role required' });
+    }
+
+    const orders = await orderService.getAllOrdersForAdminService();
+    res.status(200).json({
+      success: true,
+      data: orders,
+      message: 'All orders retrieved successfully for admin'
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Error retrieving all orders for admin'
     });
   }
 };
