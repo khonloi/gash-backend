@@ -73,43 +73,65 @@ exports.getOrderStats = async () => {
 
 exports.getRevenueByWeek = async (numWeeks = 4) => {
   const now = new Date();
-  const allWeeksData = [];
 
-  // Iterate from the oldest week to the current week
+  // Calculate date range for all weeks
+  const oldestWeekStart = new Date(now);
+  oldestWeekStart.setDate(now.getDate() - (now.getDay() + (7 * (numWeeks - 1))));
+  oldestWeekStart.setHours(0, 0, 0, 0);
+
+  const currentWeekEnd = new Date(now);
+  currentWeekEnd.setDate(now.getDate() - now.getDay() + 6);
+  currentWeekEnd.setHours(23, 59, 59, 999);
+
+  // ✅ Query ALL data once with daily grouping
+  const dailyRevenue = await Orders.aggregate([
+    {
+      $match: {
+        pay_status: 'paid',
+        orderDate: { $gte: oldestWeekStart, $lte: currentWeekEnd }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          $dateToString: { format: '%Y-%m-%d', date: '$orderDate' }
+        },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    }
+  ]);
+
+  // Create revenue map for fast lookup
+  const revenueMap = new Map();
+  dailyRevenue.forEach(item => {
+    revenueMap.set(item._id, item.totalRevenue);
+  });
+
+  // Build weeks data from the map
+  const allWeeksData = [];
   for (let i = numWeeks - 1; i >= 0; i--) {
     const currentWeekStart = new Date(now);
-    // Calculate the Sunday of the target week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
     currentWeekStart.setDate(now.getDate() - (now.getDay() + (7 * i)));
     currentWeekStart.setHours(0, 0, 0, 0);
 
-    const currentWeekEnd = new Date(currentWeekStart);
-    currentWeekEnd.setDate(currentWeekStart.getDate() + 6); // Go to Saturday
-    currentWeekEnd.setHours(23, 59, 59, 999);
+    const weekEnd = new Date(currentWeekStart);
+    weekEnd.setDate(currentWeekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
 
-    const weekRevenue = await Orders.aggregate([
-      {
-        $match: {
-          pay_status: 'paid',
-          orderDate: { $gte: currentWeekStart, $lte: currentWeekEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null, // Group all documents for the week
-          totalRevenue: { $sum: '$totalPrice' },
-          orderCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const totalRevenue = weekRevenue.length > 0 ? weekRevenue[0].totalRevenue : 0;
+    // Sum revenue for all days in this week
+    let totalRevenue = 0;
+    for (let d = 0; d < 7; d++) {
+      const dayDate = new Date(currentWeekStart);
+      dayDate.setDate(currentWeekStart.getDate() + d);
+      const dateKey = dayDate.toISOString().split('T')[0];
+      totalRevenue += revenueMap.get(dateKey) || 0;
+    }
 
     allWeeksData.push({
-      weekIndex: numWeeks - i, // 1 for the oldest, N for the current
+      weekIndex: numWeeks - i,
       startDate: currentWeekStart,
-      endDate: currentWeekEnd,
-      totalRevenue: totalRevenue,
-      orderCount: weekRevenue.length > 0 ? weekRevenue[0].orderCount : 0
+      endDate: weekEnd,
+      totalRevenue: totalRevenue
     });
   }
 
@@ -156,6 +178,49 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
     changeVsLastWeek = '+100%';
   }
 
+  // Calculate period metrics
+  const averageWeeklyRevenue = allWeeksData.length > 0
+    ? allWeeksData.reduce((total, week) => total + week.totalRevenue, 0) / allWeeksData.length
+    : 0;
+
+  // Calculate comparison with 4 weeks average (trend)
+  let trend = 'stable';
+  let trendDescription = 'Stable';
+  let changePercentage = '0%';
+
+  if (allWeeksData.length >= 4) {
+    const last4Weeks = allWeeksData.slice(-5, -1); // Last 4 weeks (excluding current week)
+    const average4Weeks = last4Weeks.reduce((total, week) => total + week.totalRevenue, 0) / 4;
+    if (average4Weeks > 0) {
+      const change = ((totalRevenueThisWeek - average4Weeks) / average4Weeks) * 100;
+      changePercentage = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+
+      // Determine trend based on change percentage
+      if (change > 20) {
+        trend = 'increasing';
+        trendDescription = 'Strong Growth';
+      } else if (change > 10) {
+        trend = 'increasing';
+        trendDescription = 'Moderate Growth';
+      } else if (change < -20) {
+        trend = 'decreasing';
+        trendDescription = 'Strong Decline';
+      } else if (change < -10) {
+        trend = 'decreasing';
+        trendDescription = 'Moderate Decline';
+      } else {
+        trend = 'stable';
+        trendDescription = 'Stable';
+      }
+    } else if (totalRevenueThisWeek > 0) {
+      changeVs4WeeksAverage = '+100%';
+      changePercentage = '+100%';
+      trend = 'increasing';
+      trendDescription = 'Strong Growth';
+    }
+  }
+
+
   // Best Week (in period)
   const bestWeek = formattedWeeks.reduce((max, week) =>
     week.totalRevenue > max.totalRevenue ? week : max,
@@ -170,10 +235,27 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
     message: 'Weekly revenue statistics retrieved successfully',
     data: {
       summary: {
-        totalRevenueThisWeek: totalRevenueThisWeek,
-        totalRevenueThisWeekFormatted: formatVND(totalRevenueThisWeek),
+        // Doanh thu tuần này
+        currentWeekRevenue: totalRevenueThisWeek,
+        currentWeekRevenueFormatted: formatVND(totalRevenueThisWeek) + ' VND',
+
+        // % so với tuần trước
         changeVsLastWeek: changeVsLastWeek,
-        bestWeekInPeriod: bestWeekDisplay
+
+        // Xu hướng doanh thu (so với trung bình 4 tuần trước)
+        trend: {
+          status: trend,
+          description: trendDescription,
+          changePercentage: changePercentage,
+          comparedTo: '4-week average'
+        },
+
+        // Doanh thu trung bình 1 tuần
+        averageWeeklyRevenue: Math.round(averageWeeklyRevenue),
+        averageWeeklyRevenueFormatted: formatVND(Math.round(averageWeeklyRevenue)) + ' VND',
+
+        // Tuần có doanh thu cao nhất
+        bestWeek: bestWeekDisplay + ' VND',
       },
       weeklyData: formattedWeeks.map(week => ({
         ...week,
@@ -187,7 +269,6 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
   const now = new Date();
   const currentYear = now.getFullYear();
   const previousYear = currentYear - 1;
-  const allMonthsData = [];
 
   // Get data from January of previous year to current month
   const startYear = previousYear;
@@ -198,40 +279,52 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
   // Calculate total months to process
   const totalMonths = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
 
+  // Calculate date range
+  const startDate = new Date(startYear, startMonth, 1);
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(endYear, endMonth + 1, 0);
+  endDate.setHours(23, 59, 59, 999);
+
+  // ✅ Query ALL data once with monthly grouping
+  const monthlyRevenue = await Orders.aggregate([
+    {
+      $match: {
+        pay_status: 'paid',
+        orderDate: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$orderDate' },
+          month: { $month: '$orderDate' }
+        },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    }
+  ]);
+
+  // Create revenue map for fast lookup
+  const revenueMap = new Map();
+  monthlyRevenue.forEach(item => {
+    const key = `${item._id.year}-${item._id.month}`;
+    revenueMap.set(key, item.totalRevenue);
+  });
+
+  // Build months data from the map
+  const allMonthsData = [];
   for (let i = 0; i < totalMonths; i++) {
     const targetYear = startYear + Math.floor((startMonth + i) / 12);
-    const targetMonth = (startMonth + i) % 12;
+    const targetMonth = (startMonth + i) % 12 + 1; // 1-12
 
-    const currentMonthStart = new Date(targetYear, targetMonth, 1);
-    currentMonthStart.setHours(0, 0, 0, 0);
-
-    const currentMonthEnd = new Date(targetYear, targetMonth + 1, 0);
-    currentMonthEnd.setHours(23, 59, 59, 999);
-
-    const monthRevenue = await Orders.aggregate([
-      {
-        $match: {
-          pay_status: 'paid',
-          orderDate: { $gte: currentMonthStart, $lte: currentMonthEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$totalPrice' },
-          orderCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const totalRevenue = monthRevenue.length > 0 ? monthRevenue[0].totalRevenue : 0;
+    const key = `${targetYear}-${targetMonth}`;
+    const totalRevenue = revenueMap.get(key) || 0;
 
     allMonthsData.push({
-      monthIndex: i + 1,
-      startDate: currentMonthStart,
-      endDate: currentMonthEnd,
-      totalRevenue: totalRevenue,
-      orderCount: monthRevenue.length > 0 ? monthRevenue[0].orderCount : 0
+      month: targetMonth,
+      year: targetYear,
+      totalRevenue: totalRevenue
     });
   }
 
@@ -250,12 +343,11 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
       }
     }
 
-    const monthNumber = (month.startDate.getMonth() + 1).toString().padStart(2, '0');
-    const year = month.startDate.getFullYear();
+    const monthNumber = month.month.toString().padStart(2, '0');
 
     return {
       month: getMonthName(monthNumber),
-      year: year,
+      year: month.year,
       totalRevenue: month.totalRevenue,
       comparedToPreviousMonth: comparison
     };
@@ -281,22 +373,322 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
     { totalRevenue: 0, month: 'January', year: new Date().getFullYear() }
   );
   const bestMonthDisplay = bestMonth.totalRevenue > 0
-    ? `${bestMonth.month} ${bestMonth.year} - ${bestMonth.totalRevenue.toLocaleString('vi-VN')}`
+    ? `${bestMonth.month} ${bestMonth.year} - ${bestMonth.totalRevenue.toLocaleString('vi-VN')} VND`
     : 'No data';
+
+  // Calculate period metrics
+  const averageMonthlyRevenue = allMonthsData.length > 0
+    ? allMonthsData.reduce((total, month) => total + month.totalRevenue, 0) / allMonthsData.length
+    : 0;
+
+  // Calculate comparison with 3 months average (trend)
+  let trend = 'stable';
+  let trendDescription = 'Stable';
+  let changePercentage = '0%';
+
+  if (allMonthsData.length >= 3) {
+    const last3Months = allMonthsData.slice(-4, -1); // Last 3 months (excluding current month)
+    const average3Months = last3Months.reduce((total, month) => total + month.totalRevenue, 0) / 3;
+    if (average3Months > 0) {
+      const change = ((totalRevenueThisMonth - average3Months) / average3Months) * 100;
+      changePercentage = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+
+      // Determine trend based on change percentage
+      if (change > 20) {
+        trend = 'increasing';
+        trendDescription = 'Strong Growth';
+      } else if (change > 10) {
+        trend = 'increasing';
+        trendDescription = 'Moderate Growth';
+      } else if (change < -20) {
+        trend = 'decreasing';
+        trendDescription = 'Strong Decline';
+      } else if (change < -10) {
+        trend = 'decreasing';
+        trendDescription = 'Moderate Decline';
+      } else {
+        trend = 'stable';
+        trendDescription = 'Stable';
+      }
+    } else if (totalRevenueThisMonth > 0) {
+      changePercentage = '+100%';
+      trend = 'increasing';
+      trendDescription = 'Strong Growth';
+    }
+  }
+
+  // Calculate year-over-year comparison
+  let changeVsSamePeriodLastYear = '-';
+  if (allMonthsData.length >= 12) {
+    const currentYearRevenue = allMonthsData.slice(-12).reduce((total, month) => total + month.totalRevenue, 0);
+    const lastYearRevenue = allMonthsData.slice(-24, -12).reduce((total, month) => total + month.totalRevenue, 0);
+    if (lastYearRevenue > 0) {
+      const change = ((currentYearRevenue - lastYearRevenue) / lastYearRevenue) * 100;
+      changeVsSamePeriodLastYear = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+    } else if (currentYearRevenue > 0) {
+      changeVsSamePeriodLastYear = '+100%';
+    }
+  }
 
   return {
     success: true,
     message: 'Monthly revenue statistics retrieved successfully',
     data: {
       summary: {
-        totalRevenueThisMonth: totalRevenueThisMonth,
-        totalRevenueThisMonthFormatted: formatVND(totalRevenueThisMonth),
+        // Doanh thu tháng này
+        currentMonthRevenue: totalRevenueThisMonth,
+        currentMonthRevenueFormatted: formatVND(totalRevenueThisMonth) + ' VND',
+
+        // % so với tháng trước
         changeVsLastMonth: changeVsLastMonth,
-        bestMonthInPeriod: bestMonthDisplay
+
+        // Xu hướng doanh thu (so với trung bình 3 tháng trước)
+        trend: {
+          status: trend,
+          description: trendDescription,
+          changePercentage: changePercentage,
+          comparedTo: '3-month average'
+        },
+
+        // % so với cùng kỳ năm trước
+        changeVsSamePeriodLastYear: changeVsSamePeriodLastYear,
+
+        // Doanh thu trung bình 1 tháng
+        averageMonthlyRevenue: Math.round(averageMonthlyRevenue),
+        averageMonthlyRevenueFormatted: formatVND(Math.round(averageMonthlyRevenue)) + ' VND',
+
+        // Tháng có doanh thu cao nhất
+        bestMonth: bestMonthDisplay
       },
       monthlyData: formattedMonths.map(month => ({
         ...month,
-        totalRevenueFormatted: formatVND(month.totalRevenue)
+        totalRevenueFormatted: formatVND(month.totalRevenue) + ' VND'
+      }))
+    }
+  };
+};
+
+exports.getRevenueByDay = async (startDate, endDate) => {
+  // If no dates provided, default to current month
+  if (!startDate || !endDate) {
+    const now = new Date();
+    // Start: First day of current month at 00:00:00
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    startDate.setHours(0, 0, 0, 0);
+    // End: Last day of current month at 23:59:59
+    endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    endDate.setHours(23, 59, 59, 999);
+  }
+
+  // Convert to Date objects if strings
+  if (typeof startDate === 'string') startDate = new Date(startDate);
+  if (typeof endDate === 'string') endDate = new Date(endDate);
+
+  // Set time boundaries
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(23, 59, 59, 999);
+
+  // Calculate number of days
+  const timeDiff = endDate.getTime() - startDate.getTime();
+  const daysDiff = Math.floor(timeDiff / (1000 * 3600 * 24)) + 1;
+
+  // ✅ Query ALL data once with daily grouping
+  const dailyRevenue = await Orders.aggregate([
+    {
+      $match: {
+        pay_status: 'paid',
+        orderDate: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          $dateToString: { format: '%Y-%m-%d', date: '$orderDate' }
+        },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    }
+  ]);
+
+  // Create revenue map for fast lookup
+  const revenueMap = new Map();
+  dailyRevenue.forEach(item => {
+    revenueMap.set(item._id, item.totalRevenue);
+  });
+
+  // Build days data from the map
+  const allDaysData = [];
+  for (let i = 0; i < daysDiff; i++) {
+    const currentDay = new Date(startDate.getTime() + (i * 24 * 60 * 60 * 1000));
+    const dateKey = currentDay.toISOString().split('T')[0];
+    const totalRevenue = revenueMap.get(dateKey) || 0;
+
+    allDaysData.push({
+      date: currentDay,
+      totalRevenue: totalRevenue
+    });
+  }
+
+  // Calculate comparison to previous day and format the output
+  const formattedDays = allDaysData.map((day, index) => {
+    let comparison = '-';
+    if (index > 0) {
+      const previousDayRevenue = allDaysData[index - 1].totalRevenue;
+      if (previousDayRevenue > 0) {
+        const change = ((day.totalRevenue - previousDayRevenue) / previousDayRevenue) * 100;
+        comparison = `${change >= 0 ? '+' : ''}${change.toFixed(0)}%`;
+      } else if (day.totalRevenue > 0) {
+        comparison = '+100%';
+      } else {
+        comparison = '-';
+      }
+    }
+
+    const dayName = day.date.toLocaleDateString('en-US', { weekday: 'short' });
+    const dayNumber = day.date.getDate().toString().padStart(2, '0');
+    const month = (day.date.getMonth() + 1).toString().padStart(2, '0');
+    const year = day.date.getFullYear();
+
+    // Format fullDate correctly without timezone issues
+    const fullDate = `${year}-${month}-${dayNumber}`;
+
+    return {
+      day: dayName,
+      date: `${dayNumber}/${month}/${year}`,
+      fullDate: fullDate,
+      totalRevenue: day.totalRevenue,
+      comparedToPreviousDay: comparison
+    };
+  });
+
+  // Calculate summary statistics
+  const currentDay = formattedDays[formattedDays.length - 1];
+  const previousDay = formattedDays[formattedDays.length - 2];
+
+  const totalRevenueToday = currentDay ? currentDay.totalRevenue : 0;
+
+  let changeVsLastDay = '-';
+  if (previousDay && previousDay.totalRevenue > 0) {
+    const change = ((currentDay.totalRevenue - previousDay.totalRevenue) / previousDay.totalRevenue) * 100;
+    changeVsLastDay = `${change >= 0 ? '+' : ''}${change.toFixed(0)}%`;
+  } else if (currentDay && currentDay.totalRevenue > 0) {
+    changeVsLastDay = '+100%';
+  }
+
+  // Calculate period metrics
+  const averageDailyRevenue = allDaysData.length > 0
+    ? allDaysData.reduce((total, day) => total + day.totalRevenue, 0) / allDaysData.length
+    : 0;
+  const activeDays = allDaysData.filter(day => day.totalRevenue > 0).length;
+  const activityRate = allDaysData.length > 0 ? ((activeDays / allDaysData.length) * 100).toFixed(1) + '%' : '0%';
+
+  // Calculate comparison with same day last week
+  let changeVsSameDayLastWeek = '-';
+  if (allDaysData.length >= 7) {
+    const sameDayLastWeek = allDaysData[allDaysData.length - 8]; // 7 days ago (same day last week)
+    if (sameDayLastWeek && sameDayLastWeek.totalRevenue > 0) {
+      const change = ((totalRevenueToday - sameDayLastWeek.totalRevenue) / sameDayLastWeek.totalRevenue) * 100;
+      changeVsSameDayLastWeek = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+    } else if (totalRevenueToday > 0) {
+      changeVsSameDayLastWeek = '+100%';
+    }
+  }
+
+  // Calculate comparison with 7 days average (trend)
+  let trend = 'stable';
+  let trendDescription = 'Stable';
+  let changePercentage = '0%';
+
+  if (allDaysData.length >= 7) {
+    const last7Days = allDaysData.slice(-8, -1); // Last 7 days (excluding current day)
+    const average7Days = last7Days.reduce((total, day) => total + day.totalRevenue, 0) / 7;
+    if (average7Days > 0) {
+      const change = ((totalRevenueToday - average7Days) / average7Days) * 100;
+      changePercentage = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+
+      // Determine trend based on change percentage
+      if (change > 20) {
+        trend = 'increasing';
+        trendDescription = 'Strong Growth';
+      } else if (change > 10) {
+        trend = 'increasing';
+        trendDescription = 'Moderate Growth';
+      } else if (change < -20) {
+        trend = 'decreasing';
+        trendDescription = 'Strong Decline';
+      } else if (change < -10) {
+        trend = 'decreasing';
+        trendDescription = 'Moderate Decline';
+      } else {
+        trend = 'stable';
+        trendDescription = 'Stable';
+      }
+    } else if (totalRevenueToday > 0) {
+      changePercentage = '+100%';
+      trend = 'increasing';
+      trendDescription = 'Strong Growth';
+    }
+  }
+
+  // Find best day in the period
+  const bestDay = formattedDays.reduce((max, day) =>
+    day.totalRevenue > max.totalRevenue ? day : max,
+    { totalRevenue: 0, day: 'Mon', date: '01/01/2025', fullDate: '2025-01-01' }
+  );
+
+  // Format best day display with date and revenue
+  let bestDayDisplay = 'No data';
+  if (bestDay.totalRevenue > 0) {
+    const bestDayDate = new Date(bestDay.fullDate);
+    const dayNumber = bestDayDate.getDate().toString().padStart(2, '0');
+    const month = (bestDayDate.getMonth() + 1).toString().padStart(2, '0');
+    const year = bestDayDate.getFullYear();
+
+    bestDayDisplay = `${dayNumber}/${month}/${year} - ${bestDay.totalRevenue.toLocaleString('vi-VN')} VND`;
+  }
+
+  return {
+    success: true,
+    message: 'Daily revenue statistics retrieved successfully',
+    data: {
+      summary: {
+        // Current day metrics
+        totalRevenueToday: totalRevenueToday,
+        totalRevenueTodayFormatted: formatVND(totalRevenueToday) + ' VND',
+        changeVsLastDay: changeVsLastDay,
+        changeVsSameDayLastWeek: changeVsSameDayLastWeek,
+
+        // Xu hướng doanh thu (so với trung bình 7 ngày trước)
+        trend: {
+          status: trend,
+          description: trendDescription,
+          changePercentage: changePercentage,
+          comparedTo: '7-day average'
+        },
+
+        // Period overview metrics
+        averageDailyRevenue: Math.round(averageDailyRevenue),
+        averageDailyRevenueFormatted: formatVND(Math.round(averageDailyRevenue)) + ' VND',
+        activeDays: activeDays,
+        activityRate: activityRate,
+
+        // Best performance
+        bestDayInPeriod: bestDayDisplay,
+
+        // Date range
+        dateRange: {
+          startDate: allDaysData.length > 0 ?
+            `${allDaysData[0].date.getFullYear()}-${(allDaysData[0].date.getMonth() + 1).toString().padStart(2, '0')}-${allDaysData[0].date.getDate().toString().padStart(2, '0')}` :
+            startDate.toISOString().split('T')[0],
+          endDate: allDaysData.length > 0 ?
+            `${allDaysData[allDaysData.length - 1].date.getFullYear()}-${(allDaysData[allDaysData.length - 1].date.getMonth() + 1).toString().padStart(2, '0')}-${allDaysData[allDaysData.length - 1].date.getDate().toString().padStart(2, '0')}` :
+            endDate.toISOString().split('T')[0],
+          totalDays: allDaysData.length
+        }
+      },
+      dailyData: formattedDays.map(day => ({
+        ...day,
+        totalRevenueFormatted: formatVND(day.totalRevenue)
       }))
     }
   };
@@ -304,40 +696,46 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
 
 exports.getRevenueByYear = async (numYears = 3) => {
   const now = new Date();
-  const allYearsData = [];
 
-  // Iterate from the oldest year to the current year
-  for (let i = numYears - 1; i >= 0; i--) {
-    const currentYearStart = new Date(now.getFullYear() - i, 0, 1);
-    currentYearStart.setHours(0, 0, 0, 0);
+  // Calculate date range
+  const oldestYear = now.getFullYear() - (numYears - 1);
+  const startDate = new Date(oldestYear, 0, 1);
+  startDate.setHours(0, 0, 0, 0);
 
-    const currentYearEnd = new Date(now.getFullYear() - i, 11, 31);
-    currentYearEnd.setHours(23, 59, 59, 999);
+  const endDate = new Date(now.getFullYear(), 11, 31);
+  endDate.setHours(23, 59, 59, 999);
 
-    const yearRevenue = await Orders.aggregate([
-      {
-        $match: {
-          pay_status: 'paid',
-          orderDate: { $gte: currentYearStart, $lte: currentYearEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$totalPrice' },
-          orderCount: { $sum: 1 }
-        }
+  // ✅ Query ALL data once with yearly grouping
+  const yearlyRevenue = await Orders.aggregate([
+    {
+      $match: {
+        pay_status: 'paid',
+        orderDate: { $gte: startDate, $lte: endDate }
       }
-    ]);
+    },
+    {
+      $group: {
+        _id: { $year: '$orderDate' },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    }
+  ]);
 
-    const totalRevenue = yearRevenue.length > 0 ? yearRevenue[0].totalRevenue : 0;
+  // Create revenue map for fast lookup
+  const revenueMap = new Map();
+  yearlyRevenue.forEach(item => {
+    revenueMap.set(item._id, item.totalRevenue);
+  });
+
+  // Build years data from the map
+  const allYearsData = [];
+  for (let i = numYears - 1; i >= 0; i--) {
+    const year = now.getFullYear() - i;
+    const totalRevenue = revenueMap.get(year) || 0;
 
     allYearsData.push({
-      yearIndex: numYears - i,
-      startDate: currentYearStart,
-      endDate: currentYearEnd,
-      totalRevenue: totalRevenue,
-      orderCount: yearRevenue.length > 0 ? yearRevenue[0].orderCount : 0
+      year: year,
+      totalRevenue: totalRevenue
     });
   }
 
@@ -356,10 +754,8 @@ exports.getRevenueByYear = async (numYears = 3) => {
       }
     }
 
-    const yearName = year.startDate.getFullYear().toString();
-
     return {
-      year: yearName,
+      year: year.year.toString(),
       totalRevenue: year.totalRevenue,
       comparedToPreviousYear: comparison
     };
@@ -384,22 +780,80 @@ exports.getRevenueByYear = async (numYears = 3) => {
     { totalRevenue: 0, year: new Date().getFullYear().toString() }
   );
   const bestYearDisplay = bestYear.totalRevenue > 0
-    ? `${bestYear.year} - ${bestYear.totalRevenue.toLocaleString('vi-VN')}`
+    ? `${bestYear.year} - ${bestYear.totalRevenue.toLocaleString('vi-VN')} VND`
     : 'No data';
+
+  // Calculate average yearly revenue
+  const averageYearlyRevenue = allYearsData.length > 0
+    ? allYearsData.reduce((total, year) => total + year.totalRevenue, 0) / allYearsData.length
+    : 0;
+
+  // Calculate comparison with 2 years average (trend)
+  let trend = 'stable';
+  let trendDescription = 'Stable';
+  let changePercentage = '0%';
+
+  if (allYearsData.length >= 2) {
+    const last2Years = allYearsData.slice(-3, -1); // Last 2 years (excluding current year)
+    const average2Years = last2Years.reduce((total, year) => total + year.totalRevenue, 0) / 2;
+    if (average2Years > 0) {
+      const change = ((totalRevenueThisYear - average2Years) / average2Years) * 100;
+      changePercentage = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+
+      // Determine trend based on change percentage
+      if (change > 20) {
+        trend = 'increasing';
+        trendDescription = 'Strong Growth';
+      } else if (change > 10) {
+        trend = 'increasing';
+        trendDescription = 'Moderate Growth';
+      } else if (change < -20) {
+        trend = 'decreasing';
+        trendDescription = 'Strong Decline';
+      } else if (change < -10) {
+        trend = 'decreasing';
+        trendDescription = 'Moderate Decline';
+      } else {
+        trend = 'stable';
+        trendDescription = 'Stable';
+      }
+    } else if (totalRevenueThisYear > 0) {
+      changePercentage = '+100%';
+      trend = 'increasing';
+      trendDescription = 'Strong Growth';
+    }
+  }
 
   return {
     success: true,
     message: 'Yearly revenue statistics retrieved successfully',
     data: {
       summary: {
-        totalRevenueThisYear: totalRevenueThisYear,
-        totalRevenueThisYearFormatted: formatVND(totalRevenueThisYear),
+        // Doanh thu năm này
+        currentYearRevenue: totalRevenueThisYear,
+        currentYearRevenueFormatted: formatVND(totalRevenueThisYear) + ' VND',
+
+        // % so với năm trước
         changeVsLastYear: changeVsLastYear,
-        bestYearInPeriod: bestYearDisplay
+
+        // Xu hướng doanh thu (so với trung bình 2 năm trước)
+        trend: {
+          status: trend,
+          description: trendDescription,
+          changePercentage: changePercentage,
+          comparedTo: '2-year average'
+        },
+
+        // Doanh thu trung bình hàng năm
+        averageYearlyRevenue: Math.round(averageYearlyRevenue),
+        averageYearlyRevenueFormatted: formatVND(Math.round(averageYearlyRevenue)) + ' VND',
+
+        // Năm có doanh thu cao nhất
+        bestYear: bestYearDisplay
       },
       yearlyData: formattedYears.map(year => ({
         ...year,
-        totalRevenueFormatted: formatVND(year.totalRevenue)
+        totalRevenueFormatted: formatVND(year.totalRevenue) + ' VND'
       }))
     }
   };

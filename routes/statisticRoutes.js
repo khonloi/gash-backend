@@ -21,4 +21,7 @@ router.get('/revenue/revenue-by-month', authenticateJWT, authorizeRole(['admin']
 // View Revenue by Year (Admin/Manager only)
 router.get('/revenue/revenue-by-year', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByYear);
 
+// View Revenue by Day (Admin/Manager only)
+router.get('/revenue/revenue-by-day', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByDay);
+
 module.exports = router;
