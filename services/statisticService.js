@@ -492,12 +492,16 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   const timeDiff = endDate.getTime() - startDate.getTime();
   const daysDiff = Math.floor(timeDiff / (1000 * 3600 * 24)) + 1;
 
-  // ✅ Query ALL data once with daily grouping
+  // Calculate date 7 days before startDate to get data for comparison
+  const extendedStartDate = new Date(startDate.getTime() - (7 * 24 * 60 * 60 * 1000));
+  extendedStartDate.setHours(0, 0, 0, 0);
+
+  // ✅ Query ALL data once with daily grouping (including 7 days before for comparison)
   const dailyRevenue = await Orders.aggregate([
     {
       $match: {
         pay_status: 'paid',
-        orderDate: { $gte: startDate, $lte: endDate }
+        orderDate: { $gte: extendedStartDate, $lte: endDate }
       }
     },
     {
@@ -531,6 +535,7 @@ exports.getRevenueByDay = async (startDate, endDate) => {
 
   // Calculate comparison to previous day and format the output
   const formattedDays = allDaysData.map((day, index) => {
+    // Compare to previous day
     let comparison = '-';
     if (index > 0) {
       const previousDayRevenue = allDaysData[index - 1].totalRevenue;
@@ -542,6 +547,19 @@ exports.getRevenueByDay = async (startDate, endDate) => {
       } else {
         comparison = '-';
       }
+    }
+
+    // Compare to same day last week (7 days ago)
+    let comparisonVsSameDayLastWeek = '-';
+    const sameDayLastWeekDate = new Date(day.date.getTime() - (7 * 24 * 60 * 60 * 1000));
+    const sameDayLastWeekKey = sameDayLastWeekDate.toISOString().split('T')[0];
+    const sameDayLastWeekRevenue = revenueMap.get(sameDayLastWeekKey) || 0;
+
+    if (sameDayLastWeekRevenue > 0) {
+      const change = ((day.totalRevenue - sameDayLastWeekRevenue) / sameDayLastWeekRevenue) * 100;
+      comparisonVsSameDayLastWeek = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
+    } else if (day.totalRevenue > 0) {
+      comparisonVsSameDayLastWeek = '+100%';
     }
 
     const dayName = day.date.toLocaleDateString('en-US', { weekday: 'short' });
@@ -557,13 +575,31 @@ exports.getRevenueByDay = async (startDate, endDate) => {
       date: `${dayNumber}/${month}/${year}`,
       fullDate: fullDate,
       totalRevenue: day.totalRevenue,
-      comparedToPreviousDay: comparison
+      comparedToPreviousDay: comparison,
+      comparedToSameDayLastWeek: comparisonVsSameDayLastWeek
     };
   });
 
   // Calculate summary statistics
-  const currentDay = formattedDays[formattedDays.length - 1];
-  const previousDay = formattedDays[formattedDays.length - 2];
+  // Find the most recent day with data, or use the last day if none have data
+  let currentDay = formattedDays[formattedDays.length - 1];
+  let currentDayIndex = formattedDays.length - 1;
+  for (let i = formattedDays.length - 1; i >= 0; i--) {
+    if (formattedDays[i].totalRevenue > 0) {
+      currentDay = formattedDays[i];
+      currentDayIndex = i;
+      break;
+    }
+  }
+
+  // Find the previous day with data before currentDay
+  let previousDay = null;
+  for (let i = currentDayIndex - 1; i >= 0; i--) {
+    if (formattedDays[i].totalRevenue > 0) {
+      previousDay = formattedDays[i];
+      break;
+    }
+  }
 
   const totalRevenueToday = currentDay ? currentDay.totalRevenue : 0;
 
@@ -579,28 +615,18 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   const averageDailyRevenue = allDaysData.length > 0
     ? allDaysData.reduce((total, day) => total + day.totalRevenue, 0) / allDaysData.length
     : 0;
-  const activeDays = allDaysData.filter(day => day.totalRevenue > 0).length;
-  const activityRate = allDaysData.length > 0 ? ((activeDays / allDaysData.length) * 100).toFixed(1) + '%' : '0%';
 
-  // Calculate comparison with same day last week
-  let changeVsSameDayLastWeek = '-';
-  if (allDaysData.length >= 7) {
-    const sameDayLastWeek = allDaysData[allDaysData.length - 8]; // 7 days ago (same day last week)
-    if (sameDayLastWeek && sameDayLastWeek.totalRevenue > 0) {
-      const change = ((totalRevenueToday - sameDayLastWeek.totalRevenue) / sameDayLastWeek.totalRevenue) * 100;
-      changeVsSameDayLastWeek = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
-    } else if (totalRevenueToday > 0) {
-      changeVsSameDayLastWeek = '+100%';
-    }
-  }
+  // Get comparison with same day last week from the most recent day with data
+  const changeVsSameDayLastWeek = currentDay ? currentDay.comparedToSameDayLastWeek : '-';
 
   // Calculate comparison with 7 days average (trend)
   let trend = 'stable';
   let trendDescription = 'Stable';
   let changePercentage = '0%';
 
-  if (allDaysData.length >= 7) {
-    const last7Days = allDaysData.slice(-8, -1); // Last 7 days (excluding current day)
+  if (currentDayIndex >= 7) {
+    // Get 7 days before currentDay (not including currentDay)
+    const last7Days = allDaysData.slice(currentDayIndex - 7, currentDayIndex);
     const average7Days = last7Days.reduce((total, day) => total + day.totalRevenue, 0) / 7;
     if (average7Days > 0) {
       const change = ((totalRevenueToday - average7Days) / average7Days) * 100;
@@ -652,7 +678,9 @@ exports.getRevenueByDay = async (startDate, endDate) => {
     message: 'Daily revenue statistics retrieved successfully',
     data: {
       summary: {
-        // Current day metrics
+        // Current day metrics (most recent day with data)
+        currentDay: currentDay ? currentDay.date : '-',
+        currentDayFullDate: currentDay ? currentDay.fullDate : '-',
         totalRevenueToday: totalRevenueToday,
         totalRevenueTodayFormatted: formatVND(totalRevenueToday) + ' VND',
         changeVsLastDay: changeVsLastDay,
@@ -669,8 +697,6 @@ exports.getRevenueByDay = async (startDate, endDate) => {
         // Period overview metrics
         averageDailyRevenue: Math.round(averageDailyRevenue),
         averageDailyRevenueFormatted: formatVND(Math.round(averageDailyRevenue)) + ' VND',
-        activeDays: activeDays,
-        activityRate: activityRate,
 
         // Best performance
         bestDayInPeriod: bestDayDisplay,
