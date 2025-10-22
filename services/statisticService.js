@@ -696,7 +696,7 @@ exports.getRevenueByDay = async (startDate, endDate) => {
 
 exports.getRevenueByYear = async (numYears = 3) => {
   const now = new Date();
-  g
+
   // Calculate date range
   const oldestYear = now.getFullYear() - (numYears - 1);
   const startDate = new Date(oldestYear, 0, 1);
