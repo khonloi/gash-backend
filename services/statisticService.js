@@ -73,43 +73,65 @@ exports.getOrderStats = async () => {
 
 exports.getRevenueByWeek = async (numWeeks = 4) => {
   const now = new Date();
-  const allWeeksData = [];
 
-  // Iterate from the oldest week to the current week
+  // Calculate date range for all weeks
+  const oldestWeekStart = new Date(now);
+  oldestWeekStart.setDate(now.getDate() - (now.getDay() + (7 * (numWeeks - 1))));
+  oldestWeekStart.setHours(0, 0, 0, 0);
+
+  const currentWeekEnd = new Date(now);
+  currentWeekEnd.setDate(now.getDate() - now.getDay() + 6);
+  currentWeekEnd.setHours(23, 59, 59, 999);
+
+  // ✅ Query ALL data once with daily grouping
+  const dailyRevenue = await Orders.aggregate([
+    {
+      $match: {
+        pay_status: 'paid',
+        orderDate: { $gte: oldestWeekStart, $lte: currentWeekEnd }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          $dateToString: { format: '%Y-%m-%d', date: '$orderDate' }
+        },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    }
+  ]);
+
+  // Create revenue map for fast lookup
+  const revenueMap = new Map();
+  dailyRevenue.forEach(item => {
+    revenueMap.set(item._id, item.totalRevenue);
+  });
+
+  // Build weeks data from the map
+  const allWeeksData = [];
   for (let i = numWeeks - 1; i >= 0; i--) {
     const currentWeekStart = new Date(now);
-    // Calculate the Sunday of the target week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
     currentWeekStart.setDate(now.getDate() - (now.getDay() + (7 * i)));
     currentWeekStart.setHours(0, 0, 0, 0);
 
-    const currentWeekEnd = new Date(currentWeekStart);
-    currentWeekEnd.setDate(currentWeekStart.getDate() + 6); // Go to Saturday
-    currentWeekEnd.setHours(23, 59, 59, 999);
+    const weekEnd = new Date(currentWeekStart);
+    weekEnd.setDate(currentWeekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
 
-    const weekRevenue = await Orders.aggregate([
-      {
-        $match: {
-          pay_status: 'paid',
-          orderDate: { $gte: currentWeekStart, $lte: currentWeekEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null, // Group all documents for the week
-          totalRevenue: { $sum: '$totalPrice' },
-          orderCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const totalRevenue = weekRevenue.length > 0 ? weekRevenue[0].totalRevenue : 0;
+    // Sum revenue for all days in this week
+    let totalRevenue = 0;
+    for (let d = 0; d < 7; d++) {
+      const dayDate = new Date(currentWeekStart);
+      dayDate.setDate(currentWeekStart.getDate() + d);
+      const dateKey = dayDate.toISOString().split('T')[0];
+      totalRevenue += revenueMap.get(dateKey) || 0;
+    }
 
     allWeeksData.push({
-      weekIndex: numWeeks - i, // 1 for the oldest, N for the current
+      weekIndex: numWeeks - i,
       startDate: currentWeekStart,
-      endDate: currentWeekEnd,
-      totalRevenue: totalRevenue,
-      orderCount: weekRevenue.length > 0 ? weekRevenue[0].orderCount : 0
+      endDate: weekEnd,
+      totalRevenue: totalRevenue
     });
   }
 
@@ -157,11 +179,11 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
   }
 
   // Calculate period metrics
-  const totalRevenueInPeriod = allWeeksData.reduce((total, week) => total + week.totalRevenue, 0);
-  const averageWeeklyRevenue = allWeeksData.length > 0 ? totalRevenueInPeriod / allWeeksData.length : 0;
+  const averageWeeklyRevenue = allWeeksData.length > 0
+    ? allWeeksData.reduce((total, week) => total + week.totalRevenue, 0) / allWeeksData.length
+    : 0;
 
-  // Calculate comparison with 4 weeks average
-  let changeVs4WeeksAverage = '-';
+  // Calculate comparison with 4 weeks average (trend)
   let trend = 'stable';
   let trendDescription = 'Stable';
   let changePercentage = '0%';
@@ -171,8 +193,7 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
     const average4Weeks = last4Weeks.reduce((total, week) => total + week.totalRevenue, 0) / 4;
     if (average4Weeks > 0) {
       const change = ((totalRevenueThisWeek - average4Weeks) / average4Weeks) * 100;
-      changeVs4WeeksAverage = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
-      changePercentage = changeVs4WeeksAverage;
+      changePercentage = `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
 
       // Determine trend based on change percentage
       if (change > 20) {
@@ -248,7 +269,6 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
   const now = new Date();
   const currentYear = now.getFullYear();
   const previousYear = currentYear - 1;
-  const allMonthsData = [];
 
   // Get data from January of previous year to current month
   const startYear = previousYear;
@@ -259,40 +279,52 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
   // Calculate total months to process
   const totalMonths = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
 
+  // Calculate date range
+  const startDate = new Date(startYear, startMonth, 1);
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(endYear, endMonth + 1, 0);
+  endDate.setHours(23, 59, 59, 999);
+
+  // ✅ Query ALL data once with monthly grouping
+  const monthlyRevenue = await Orders.aggregate([
+    {
+      $match: {
+        pay_status: 'paid',
+        orderDate: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$orderDate' },
+          month: { $month: '$orderDate' }
+        },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    }
+  ]);
+
+  // Create revenue map for fast lookup
+  const revenueMap = new Map();
+  monthlyRevenue.forEach(item => {
+    const key = `${item._id.year}-${item._id.month}`;
+    revenueMap.set(key, item.totalRevenue);
+  });
+
+  // Build months data from the map
+  const allMonthsData = [];
   for (let i = 0; i < totalMonths; i++) {
     const targetYear = startYear + Math.floor((startMonth + i) / 12);
-    const targetMonth = (startMonth + i) % 12;
+    const targetMonth = (startMonth + i) % 12 + 1; // 1-12
 
-    const currentMonthStart = new Date(targetYear, targetMonth, 1);
-    currentMonthStart.setHours(0, 0, 0, 0);
-
-    const currentMonthEnd = new Date(targetYear, targetMonth + 1, 0);
-    currentMonthEnd.setHours(23, 59, 59, 999);
-
-    const monthRevenue = await Orders.aggregate([
-      {
-        $match: {
-          pay_status: 'paid',
-          orderDate: { $gte: currentMonthStart, $lte: currentMonthEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$totalPrice' },
-          orderCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const totalRevenue = monthRevenue.length > 0 ? monthRevenue[0].totalRevenue : 0;
+    const key = `${targetYear}-${targetMonth}`;
+    const totalRevenue = revenueMap.get(key) || 0;
 
     allMonthsData.push({
-      monthIndex: i + 1,
-      startDate: currentMonthStart,
-      endDate: currentMonthEnd,
-      totalRevenue: totalRevenue,
-      orderCount: monthRevenue.length > 0 ? monthRevenue[0].orderCount : 0
+      month: targetMonth,
+      year: targetYear,
+      totalRevenue: totalRevenue
     });
   }
 
@@ -311,12 +343,11 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
       }
     }
 
-    const monthNumber = (month.startDate.getMonth() + 1).toString().padStart(2, '0');
-    const year = month.startDate.getFullYear();
+    const monthNumber = month.month.toString().padStart(2, '0');
 
     return {
       month: getMonthName(monthNumber),
-      year: year,
+      year: month.year,
       totalRevenue: month.totalRevenue,
       comparedToPreviousMonth: comparison
     };
@@ -346,8 +377,9 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
     : 'No data';
 
   // Calculate period metrics
-  const totalRevenueInPeriod = allMonthsData.reduce((total, month) => total + month.totalRevenue, 0);
-  const averageMonthlyRevenue = allMonthsData.length > 0 ? totalRevenueInPeriod / allMonthsData.length : 0;
+  const averageMonthlyRevenue = allMonthsData.length > 0
+    ? allMonthsData.reduce((total, month) => total + month.totalRevenue, 0) / allMonthsData.length
+    : 0;
 
   // Calculate comparison with 3 months average (trend)
   let trend = 'stable';
@@ -437,8 +469,6 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
 };
 
 exports.getRevenueByDay = async (startDate, endDate) => {
-  const allDaysData = [];
-
   // If no dates provided, default to current month
   if (!startDate || !endDate) {
     const now = new Date();
@@ -462,39 +492,40 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   const timeDiff = endDate.getTime() - startDate.getTime();
   const daysDiff = Math.floor(timeDiff / (1000 * 3600 * 24)) + 1;
 
-  // Get revenue data for each day
+  // ✅ Query ALL data once with daily grouping
+  const dailyRevenue = await Orders.aggregate([
+    {
+      $match: {
+        pay_status: 'paid',
+        orderDate: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          $dateToString: { format: '%Y-%m-%d', date: '$orderDate' }
+        },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    }
+  ]);
+
+  // Create revenue map for fast lookup
+  const revenueMap = new Map();
+  dailyRevenue.forEach(item => {
+    revenueMap.set(item._id, item.totalRevenue);
+  });
+
+  // Build days data from the map
+  const allDaysData = [];
   for (let i = 0; i < daysDiff; i++) {
     const currentDay = new Date(startDate.getTime() + (i * 24 * 60 * 60 * 1000));
-
-    const dayStart = new Date(currentDay);
-    dayStart.setHours(0, 0, 0, 0);
-
-    const dayEnd = new Date(currentDay);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const dayRevenue = await Orders.aggregate([
-      {
-        $match: {
-          pay_status: 'paid',
-          orderDate: { $gte: dayStart, $lte: dayEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$totalPrice' },
-          orderCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const totalRevenue = dayRevenue.length > 0 ? dayRevenue[0].totalRevenue : 0;
+    const dateKey = currentDay.toISOString().split('T')[0];
+    const totalRevenue = revenueMap.get(dateKey) || 0;
 
     allDaysData.push({
-      dayIndex: i + 1,
       date: currentDay,
-      totalRevenue: totalRevenue,
-      orderCount: dayRevenue.length > 0 ? dayRevenue[0].orderCount : 0
+      totalRevenue: totalRevenue
     });
   }
 
@@ -665,40 +696,46 @@ exports.getRevenueByDay = async (startDate, endDate) => {
 
 exports.getRevenueByYear = async (numYears = 3) => {
   const now = new Date();
-  const allYearsData = [];
 
-  // Iterate from the oldest year to the current year
-  for (let i = numYears - 1; i >= 0; i--) {
-    const currentYearStart = new Date(now.getFullYear() - i, 0, 1);
-    currentYearStart.setHours(0, 0, 0, 0);
+  // Calculate date range
+  const oldestYear = now.getFullYear() - (numYears - 1);
+  const startDate = new Date(oldestYear, 0, 1);
+  startDate.setHours(0, 0, 0, 0);
 
-    const currentYearEnd = new Date(now.getFullYear() - i, 11, 31);
-    currentYearEnd.setHours(23, 59, 59, 999);
+  const endDate = new Date(now.getFullYear(), 11, 31);
+  endDate.setHours(23, 59, 59, 999);
 
-    const yearRevenue = await Orders.aggregate([
-      {
-        $match: {
-          pay_status: 'paid',
-          orderDate: { $gte: currentYearStart, $lte: currentYearEnd }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$totalPrice' },
-          orderCount: { $sum: 1 }
-        }
+  // ✅ Query ALL data once with yearly grouping
+  const yearlyRevenue = await Orders.aggregate([
+    {
+      $match: {
+        pay_status: 'paid',
+        orderDate: { $gte: startDate, $lte: endDate }
       }
-    ]);
+    },
+    {
+      $group: {
+        _id: { $year: '$orderDate' },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    }
+  ]);
 
-    const totalRevenue = yearRevenue.length > 0 ? yearRevenue[0].totalRevenue : 0;
+  // Create revenue map for fast lookup
+  const revenueMap = new Map();
+  yearlyRevenue.forEach(item => {
+    revenueMap.set(item._id, item.totalRevenue);
+  });
+
+  // Build years data from the map
+  const allYearsData = [];
+  for (let i = numYears - 1; i >= 0; i--) {
+    const year = now.getFullYear() - i;
+    const totalRevenue = revenueMap.get(year) || 0;
 
     allYearsData.push({
-      yearIndex: numYears - i,
-      startDate: currentYearStart,
-      endDate: currentYearEnd,
-      totalRevenue: totalRevenue,
-      orderCount: yearRevenue.length > 0 ? yearRevenue[0].orderCount : 0
+      year: year,
+      totalRevenue: totalRevenue
     });
   }
 
@@ -717,10 +754,8 @@ exports.getRevenueByYear = async (numYears = 3) => {
       }
     }
 
-    const yearName = year.startDate.getFullYear().toString();
-
     return {
-      year: yearName,
+      year: year.year.toString(),
       totalRevenue: year.totalRevenue,
       comparedToPreviousYear: comparison
     };
@@ -749,8 +784,9 @@ exports.getRevenueByYear = async (numYears = 3) => {
     : 'No data';
 
   // Calculate average yearly revenue
-  const totalRevenueInPeriod = allYearsData.reduce((total, year) => total + year.totalRevenue, 0);
-  const averageYearlyRevenue = allYearsData.length > 0 ? totalRevenueInPeriod / allYearsData.length : 0;
+  const averageYearlyRevenue = allYearsData.length > 0
+    ? allYearsData.reduce((total, year) => total + year.totalRevenue, 0) / allYearsData.length
+    : 0;
 
   // Calculate comparison with 2 years average (trend)
   let trend = 'stable';
