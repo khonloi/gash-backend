@@ -1,5 +1,6 @@
 const ProductSizes = require("../models/ProductSizes");
 const ProductColors = require("../models/ProductColors");
+const newProductImage = require("../models/newProductImage");
 const mongoose = require("mongoose");
 
 // --- Product Colors ---
@@ -53,7 +54,7 @@ async function deleteProductColorService(id) {
   }
   // Prevent delete if any variant is using this color
   const newProductVariant = require('../models/newProductVariant');
-  const inUseCount = await newProductVariant.countDocuments({ color_id: id });
+  const inUseCount = await newProductVariant.countDocuments({ productColorId: id });
   if (inUseCount > 0) {
     const err = new Error('Không thể xóa Color vì còn biến thể sản phẩm đang dùng Color này. Hãy cập nhật/xóa các biến thể liên quan trước.');
     err.status = 409;
@@ -117,7 +118,7 @@ async function deleteProductSizeService(id) {
   }
   // Prevent delete if any variant is using this size
   const newProductVariant = require('../models/newProductVariant');
-  const inUseCount = await newProductVariant.countDocuments({ size_id: id });
+  const inUseCount = await newProductVariant.countDocuments({ productSizeId: id });
   if (inUseCount > 0) {
     const err = new Error('Không thể xóa Size vì còn biến thể sản phẩm đang dùng Size này. Hãy cập nhật/xóa các biến thể liên quan trước.');
     err.status = 409;
@@ -146,12 +147,12 @@ async function searchSpecificationsService({ q, type }) {
       } else if (type === "size") {
         query.size_name = { $regex: trimmedQuery, $options: "i" };
       } else if (type === "image") {
-        query.imageURL = { $regex: trimmedQuery, $options: "i" };
+        query.imageUrl = { $regex: trimmedQuery, $options: "i" };
       } else {
         query.$or = [
           { color_name: { $regex: trimmedQuery, $options: "i" } },
           { size_name: { $regex: trimmedQuery, $options: "i" } },
-          { imageURL: { $regex: trimmedQuery, $options: "i" } }
+          { imageUrl: { $regex: trimmedQuery, $options: "i" } }
         ];
       }
     }
@@ -166,7 +167,7 @@ async function searchSpecificationsService({ q, type }) {
     results.push(...sizes.map(size => ({ ...size.toObject(), type: "size" })));
   }
   if (!type || type === "image") {
-    const images = await ProductImages.find(query).populate("pro_id", "pro_name");
+    const images = await newProductImage.find(query).populate("productId", "productName");
     results.push(...images.map(image => ({ ...image.toObject(), type: "image" })));
   }
   return results;
@@ -184,4 +185,4 @@ module.exports = {
   updateProductSizeService,
   deleteProductSizeService,
   searchSpecificationsService
-}; 
+};

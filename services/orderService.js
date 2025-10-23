@@ -1,10 +1,7 @@
-// orderService.js
 const Orders = require("../models/Orders");
 const Accounts = require("../models/Accounts");
 const mongoose = require("mongoose");
 const OrderDetails = require("../models/OrderDetails");
-
-
 
 async function searchOrdersService(queryParams, user) {
   const {
@@ -79,13 +76,13 @@ async function searchOrdersService(queryParams, user) {
       const matchingDetails = await OrderDetails.find().populate({
         path: "variant_id",
         populate: {
-          path: "pro_id",
-          model: "Products",
-          match: { pro_name: { $regex: trimmedQuery, $options: "i" } },
+          path: "productId",
+          model: "newProducts",
+          match: { productName: { $regex: trimmedQuery, $options: "i" } },
         },
       });
       orderIdsByProduct = matchingDetails
-        .filter((d) => d.variant_id && d.variant_id.pro_id)
+        .filter((d) => d.variant_id && d.variant_id.productId)
         .map((d) => d.order_id.toString());
       query.$or = [
         { order_status: { $regex: trimmedQuery, $options: "i" } },
@@ -170,9 +167,6 @@ async function updateOrderService(id, updateData, user) {
     throw err;
   }
 
-  /**
-   * 1. Chỉ admin/manager hoặc chính chủ acc_id được phép update order
-   */
   if (
     user.role !== "admin" &&
     user.role !== "manager" &&
@@ -183,9 +177,6 @@ async function updateOrderService(id, updateData, user) {
     throw err;
   }
 
-  /**
-   * 2. Không cho phép update thông tin tài khoản (acc_id, username)
-   */
   const { acc_id, username, ...rest } = updateData;
   if (acc_id || username) {
     const err = new Error("Updating account info is not allowed");
@@ -193,21 +184,9 @@ async function updateOrderService(id, updateData, user) {
     throw err;
   }
 
-  /**
-   * 3. Không cho phép update khi order đã hoàn tất (finalized)
-   *  - COD: delivered+paid hoặc cancelled+unpaid
-   *  - VNPAY: delivered+paid hoặc cancelled+refunded
-   */
   if (
-    (order.payment_method === "COD" &&
-      order.order_status === "delivered" &&
-      order.pay_status === "paid") ||
-    (order.payment_method === "COD" &&
-      order.order_status === "cancelled" &&
-      order.pay_status === "unpaid") ||
-    (order.payment_method === "VNPAY" &&
-      order.order_status === "delivered" &&
-      order.pay_status === "paid") ||
+    order.order_status === "delivered" ||
+    (order.order_status === "cancelled" && order.pay_status === "paid") ||
     (order.payment_method === "VNPAY" &&
       order.order_status === "cancelled" &&
       order.refund_status === "refunded")
@@ -217,9 +196,6 @@ async function updateOrderService(id, updateData, user) {
     throw err;
   }
 
-  /**
-   * 4. Validate allowed order_status transition
-   */
   const allowedTransitions = {
     pending: ["confirmed", "shipping", "delivered", "cancelled"],
     confirmed: ["shipping", "delivered"],
@@ -234,30 +210,20 @@ async function updateOrderService(id, updateData, user) {
     !allowedTransitions[currentStatus].includes(rest.order_status)
   ) {
     const err = new Error(
-      `Invalid status transition: ${currentStatus} → ${rest.order_status}. Allowed: ${allowedTransitions[currentStatus].join(", ") || "none"
-      }`
+      `Invalid status transition: ${currentStatus} → ${rest.order_status}. Allowed: ${allowedTransitions[currentStatus].join(", ") || "none"}`
     );
     err.status = 400;
     throw err;
   }
 
-  /**
-   * 5. Business rules + Auto handling pay_status & refund_status
-   */
   const newStatus = rest.order_status || order.order_status;
   let newPayStatus = rest.pay_status || order.pay_status;
   let newRefund = rest.refund_status || order.refund_status;
 
-  // 🚀 Auto: Khi delivered → luôn set pay_status = paid
   if (newStatus === "delivered") {
     newPayStatus = "paid";
   }
 
-  /**
-   * 6. COD rules
-   *  - pending/confirmed/shipping → không thể paid
-   *  - chỉ khi delivered mới được paid
-   */
   if (order.payment_method === "COD") {
     if (
       ["pending", "confirmed", "shipping"].includes(newStatus) &&
@@ -269,12 +235,6 @@ async function updateOrderService(id, updateData, user) {
     }
   }
 
-  /**
-   * 7. VNPAY rules
-   *  - Các trạng thái khác cancelled → luôn phải paid
-   *  - Nếu cancelled + paid → refund_status phải pending_refund hoặc refunded
-   *  - Nếu đang ở pending_refund → chỉ được update refund_status/proof
-   */
   if (order.payment_method === "VNPAY") {
     if (newStatus !== "cancelled" && newPayStatus !== "paid") {
       const err = new Error("VNPAY orders must remain paid unless cancelled");
@@ -313,15 +273,9 @@ async function updateOrderService(id, updateData, user) {
     }
   }
 
-  /**
-   * 8. Ghi đè lại pay_status & refund_status vào object update
-   */
   rest.pay_status = newPayStatus;
   rest.refund_status = newRefund;
 
-  /**
-   * 9. Thực hiện update vào DB
-   */
   const updatedOrder = await Orders.findByIdAndUpdate(
     id,
     { ...rest },
@@ -357,10 +311,9 @@ async function deleteOrderService(id, user) {
 }
 
 async function getAllOrdersForAdminService() {
-  // Lấy tất cả đơn hàng với thông tin cơ bản
   const orders = await Orders.find()
     .populate("acc_id", "username name email phone")
-    .sort({ orderDate: -1 }); // Sắp xếp theo ngày tạo mới nhất
+    .sort({ orderDate: -1 });
 
   return orders;
 }
