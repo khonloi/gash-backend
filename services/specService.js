@@ -52,8 +52,8 @@ async function deleteProductColorService(id) {
     const err = new Error("Invalid color ID"); err.status = 400; throw err;
   }
   // Prevent delete if any variant is using this color
-  const ProductVariants = require('../models/ProductVariants');
-  const inUseCount = await ProductVariants.countDocuments({ color_id: id });
+  const newProductVariant = require('../models/newProductVariant');
+  const inUseCount = await newProductVariant.countDocuments({ color_id: id });
   if (inUseCount > 0) {
     const err = new Error('Không thể xóa Color vì còn biến thể sản phẩm đang dùng Color này. Hãy cập nhật/xóa các biến thể liên quan trước.');
     err.status = 409;
@@ -116,8 +116,8 @@ async function deleteProductSizeService(id) {
     const err = new Error("Invalid size ID"); err.status = 400; throw err;
   }
   // Prevent delete if any variant is using this size
-  const ProductVariants = require('../models/ProductVariants');
-  const inUseCount = await ProductVariants.countDocuments({ size_id: id });
+  const newProductVariant = require('../models/newProductVariant');
+  const inUseCount = await newProductVariant.countDocuments({ size_id: id });
   if (inUseCount > 0) {
     const err = new Error('Không thể xóa Size vì còn biến thể sản phẩm đang dùng Size này. Hãy cập nhật/xóa các biến thể liên quan trước.');
     err.status = 409;

@@ -365,10 +365,52 @@ async function getAllOrdersForAdminService() {
   return orders;
 }
 
+async function getUserOrdersService(acc_id) {
+  if (!mongoose.isValidObjectId(acc_id)) {
+    const err = new Error("Invalid account ID");
+    err.status = 400;
+    throw err;
+  }
+  const orders = await Orders.find({ acc_id })
+    .populate({
+      path: 'acc_id',
+      select: 'username name email phone address image'
+    })
+    .populate({
+      path: 'voucher_id',
+      select: 'code voucher_name discountType discountValue discount_percentage discount_amount'
+    })
+    .populate({
+      path: 'orderDetails',
+      select: 'variant_id UnitPrice Quantity feedback',
+      populate: {
+        path: 'variant_id',
+        select: 'productId productColorId productSizeId variantImage',
+        populate: [
+          {
+            path: 'productId',
+            select: 'productName'
+          },
+          {
+            path: 'productColorId',
+            select: 'color_name'
+          },
+          {
+            path: 'productSizeId',
+            select: 'size_name'
+          }
+        ]
+      }
+    })
+    .sort({ orderDate: -1 });
+  return orders;
+}
+
 module.exports = {
   getAllOrdersForAdminService,
   searchOrdersService,
   getOrderByIdService,
   updateOrderService,
   deleteOrderService,
+  getUserOrdersService
 };

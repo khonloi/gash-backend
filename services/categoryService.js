@@ -70,9 +70,9 @@ async function deleteCategoryService(id, user) {
     throw err;
   }
   // Check if any product is using this category (handle both ObjectId and legacy string storage)
-  const Products = require('../models/Products');
+  const newProduct = require('../models/newProduct');
   const objectId = mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null;
-  const productCount = await Products.countDocuments({
+  const productCount = await newProduct.countDocuments({
     $or: [
       ...(objectId ? [{ cat_id: objectId }] : []),
       { cat_id: id }

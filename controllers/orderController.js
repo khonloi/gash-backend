@@ -1154,3 +1154,28 @@ exports.getAllOrderForAdmin = async (req, res) => {
     });
   }
 };
+
+exports.getUserOrders = async (req, res) => {
+  try {
+    const { acc_id } = req.params;
+    // Validate account ID
+    if (!mongoose.isValidObjectId(acc_id)) {
+      return res.status(400).json({ message: 'Invalid account ID' });
+    }
+    // Check authorization: only admin, manager, or the user themselves can access
+    if (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.id !== acc_id) {
+      return res.status(403).json({ message: 'Access denied: Can only view own orders' });
+    }
+    const orders = await orderService.getUserOrdersService(acc_id);
+    res.status(200).json({
+      success: true,
+      message: 'Orders retrieved successfully',
+      data: orders
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Error retrieving user orders'
+    });
+  }
+};
