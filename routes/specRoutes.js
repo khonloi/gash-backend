@@ -46,7 +46,4 @@ router.get("/get-size-detail/:id", getProductSizeById);
 router.put("/update-size/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductSize);
 router.delete("/delete-size/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductSize);
 
-// --- Search Specifications Routes ---
-router.get("/search-specifications", searchSpecifications);
-
 module.exports = router;

@@ -1,4 +1,3 @@
-// orderDetailService.js
 const mongoose = require('mongoose');
 const OrderDetails = require('../models/OrderDetails');
 const Orders = require('../models/Orders');
@@ -139,7 +138,7 @@ exports.createOrderDetail = async (data, user) => {
   if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id.toString() !== user.id) {
     return { status: 403, response: { message: 'Access denied: Can only create order detail for own order' } };
   }
-  const variant = await ProductVariants.findById(variant_id);
+  const variant = await newProductVariants.findById(variant_id);
   if (!variant) {
     return { status: 404, response: { message: 'Product variant not found' } };
   }
@@ -163,11 +162,10 @@ exports.createOrderDetail = async (data, user) => {
 exports.getAllOrderDetails = async (user, order_id) => {
   const query = {};
 
-  // Check quyền: admin/staff có thể xem tất cả, user chỉ xem được order của mình
   if (user.role !== 'admin' && user.role !== 'manager') {
     const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
-    const orderIds = userOrders.map(order => order._id);
-    query.order_id = { $in: orderIds };
+    const userOrderIds = userOrders.map(order => order._id);
+    query.order_id = { $in: userOrderIds };
   }
 
   if (order_id) {
@@ -179,61 +177,10 @@ exports.getAllOrderDetails = async (user, order_id) => {
     query.order_id = order_id;
   }
 
-  const orderDetails = await OrderDetails.find(query)
+  return await OrderDetails.find(query)
     .populate({
       path: 'order_id',
-      select: 'orderDate order_status totalPrice',
-      populate: { path: 'acc_id', select: 'username name' },
-    })
-    .populate({
-      path: 'variant_id',
-      select: 'pro_id color_id size_id',
-      populate: [
-        { path: 'pro_id', select: 'pro_name imageURL' },
-        { path: 'color_id', select: 'color_name' },
-        { path: 'size_id', select: 'size_name' },
-      ],
-    });
-
-  // Trả về data gọn hơn
-  return orderDetails.map(detail => ({
-    _id: detail._id,
-    orderId: detail.order_id._id,
-    orderDate: detail.order_id.orderDate,
-    orderStatus: detail.order_id.order_status,
-    customer: {
-      username: detail.order_id.acc_id.username,
-      name: detail.order_id.acc_id.name
-    },
-    variant: {
-      name: detail.variant_id.productId?.productName || 'N/A',
-      color: detail.variant_id.productColorId?.color_name || 'N/A',
-      size: detail.variant_id.productSizeId?.size_name || 'N/A',
-      image: detail.variant_id.productId?.imageURL || 'N/A'
-    },
-    quantity: detail.Quantity,
-    unitPrice: detail.UnitPrice,
-    totalPrice: detail.UnitPrice * detail.Quantity,
-    feedback: detail.feedback ? {
-      rating: detail.feedback.rating,
-      content: detail.feedback.content,
-      hasFeedback: true
-    } : {
-      hasFeedback: false
-    }
-  }));
-};
-
-exports.getOrderDetailById = async (id) => {
-  if (!mongoose.isValidObjectId(id)) {
-    const err = new Error("Invalid order detail ID");
-    err.status = 400;
-    throw err;
-  }
-  return await OrderDetails.findOne({ _id: id })
-    .populate({
-      path: 'order_id',
-      select: 'orderDate totalPrice acc_id feedback_order',
+      select: 'orderDate totalPrice feedback_order',
       populate: { path: 'acc_id', select: 'username image' },
     })
     .populate({
@@ -292,7 +239,7 @@ exports.updateOrderDetail = async (id, data, user) => {
     if (!mongoose.isValidObjectId(variant_id)) {
       return { status: 400, response: { message: 'Invalid variant ID' } };
     }
-    const variant = await ProductVariants.findById(variant_id);
+    const variant = await newProductVariants.findById(variant_id);
     if (!variant) {
       return { status: 404, response: { message: 'Product variant not found' } };
     }

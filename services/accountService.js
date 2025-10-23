@@ -30,7 +30,7 @@ exports.createAccount = async (data) => {
     phone,
     address,
     password,
-    image: image || "http://localhost:4000/default-pfp.jpg",
+    image: image,
     gender,
     dob,
     role: role || "user",

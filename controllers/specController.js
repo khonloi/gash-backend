@@ -1,55 +1,5 @@
 const specService = require('../services/specService');
 
-// --- Product Images ---
-exports.createProductImage = async (req, res) => {
-  try {
-    const savedImage = await specService.createProductImageService(req.body);
-    res.status(201).json({ message: 'Product image created successfully', image: savedImage });
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error creating product image' });
-  }
-};
-exports.getAllProductImages = async (req, res) => {
-  try {
-    const images = await specService.getAllProductImagesService();
-    res.status(200).json(images);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error retrieving product images' });
-  }
-};
-exports.getProductImagesByProductId = async (req, res) => {
-  try {
-    const images = await specService.getProductImagesByProductIdService(req.params.pro_id);
-    res.status(200).json(images);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error retrieving product images' });
-  }
-};
-exports.getProductImageById = async (req, res) => {
-  try {
-    const image = await specService.getProductImageByIdService(req.params.id);
-    res.status(200).json(image);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error retrieving product image' });
-  }
-};
-exports.updateProductImage = async (req, res) => {
-  try {
-    const image = await specService.updateProductImageService(req.params.id, req.body);
-    res.status(200).json({ message: 'Product image updated successfully', image });
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error updating product image' });
-  }
-};
-exports.deleteProductImage = async (req, res) => {
-  try {
-    const result = await specService.deleteProductImageService(req.params.id);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error deleting product image' });
-  }
-};
-
 // --- Product Colors ---
 exports.createProductColor = async (req, res) => {
   try {
@@ -133,13 +83,3 @@ exports.deleteProductSize = async (req, res) => {
     res.status(error.status || 500).json({ message: error.message || 'Error deleting product size' });
   }
 };
-
-// --- Search Specifications ---
-exports.searchSpecifications = async (req, res) => {
-  try {
-    const results = await specService.searchSpecificationsService(req.query);
-    res.status(200).json(results);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error searching specifications' });
-  }
-}; 

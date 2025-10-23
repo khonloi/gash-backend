@@ -23,7 +23,13 @@ async function addFavoriteService(pro_id, acc_id) {
 }
 
 async function getFavoritesService(acc_id) {
-  return await Favorites.find({ acc_id }).populate('pro_id');
+  return await Favorites.find({ acc_id }).populate({
+    path: 'pro_id',
+    populate: [
+      { path: 'productVariantIds', model: 'newProductVariants' },
+      { path: 'productImageIds', model: 'newProductImages' }
+    ]
+  });
 }
 
 async function deleteFavoriteService(favoriteId, acc_id) {
@@ -45,4 +51,4 @@ module.exports = {
   addFavoriteService,
   getFavoritesService,
   deleteFavoriteService
-}; 
+};
