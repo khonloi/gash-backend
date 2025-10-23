@@ -1024,27 +1024,24 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       .sort({ 'order_id.orderDate': -1 }); // Sắp xếp theo thời gian trước
 
     // Custom sorting: feedback của user hiện tại lên đầu, sau đó theo thời gian
-    const sortedFeedbacks = allFeedbacks.sort((a, b) => {
-      // Nếu có user hiện tại đăng nhập
-      if (currentUserId) {
-        const aIsCurrentUser = a.order_id.acc_id._id.toString() === currentUserId;
-        const bIsCurrentUser = b.order_id.acc_id._id.toString() === currentUserId;
+    const sortedFeedbacks = allFeedbacks
+      .filter(feedback => feedback.order_id?.acc_id?._id) // Skip entries with null/undefined order_id, acc_id, or _id
+      .sort((a, b) => {
+        // Nếu có user hiện tại đăng nhập
+        if (currentUserId) {
+          const aIsCurrentUser = a.order_id?.acc_id?._id?.toString() === currentUserId || false;
+          const bIsCurrentUser = b.order_id?.acc_id?._id?.toString() === currentUserId || false;
 
-        // Ưu tiên 1: Feedback của user hiện tại lên đầu tiên
-        if (aIsCurrentUser && !bIsCurrentUser) return -1;  // a lên đầu
-        if (bIsCurrentUser && !aIsCurrentUser) return 1;   // b lên đầu
+          // Ưu tiên 1: Feedback của user hiện tại lên đầu tiên
+          if (aIsCurrentUser && !bIsCurrentUser) return -1; // a lên đầu
+          if (bIsCurrentUser && !aIsCurrentUser) return 1; // b lên đầu
+        }
 
-        // Ưu tiên 2: Sắp xếp theo thời gian (mới nhất trước)
-        const aDate = new Date(a.order_id.orderDate);
-        const bDate = new Date(b.order_id.orderDate);
+        // Ưu tiên 2 (hoặc mặc định nếu không có user): Sắp xếp theo thời gian
+        const aDate = a.order_id?.orderDate ? new Date(a.order_id.orderDate) : new Date(0);
+        const bDate = b.order_id?.orderDate ? new Date(b.order_id.orderDate) : new Date(0);
         return bDate - aDate; // Mới nhất trước
-      }
-
-      // Nếu không có user đăng nhập -> chỉ sắp xếp theo thời gian
-      const aDate = new Date(a.order_id.orderDate);
-      const bDate = new Date(b.order_id.orderDate);
-      return bDate - aDate; // Mới nhất trước
-    });
+      });
 
     // Lấy tổng số feedback
     const totalFeedbacks = sortedFeedbacks.length;
