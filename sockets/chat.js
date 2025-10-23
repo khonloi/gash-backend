@@ -12,12 +12,13 @@ module.exports = (io) => {
       console.log(`📥 ${socket.id} joined room ${conversationId}`);
     });
 
-    // User bắt đầu chat hoặc load lại
+    // ======================
+    // 🟢 User bắt đầu chat
+    // ======================
     socket.on('start_chat', async ({ userId, messageText }) => {
       try {
         if (!userId) return socket.emit('error', 'Thiếu userId');
 
-        // Tìm cuộc trò chuyện đang mở
         let conversation = await Conversations.findOne({
           accountId: userId,
           status: { $ne: 'closed' },
@@ -27,7 +28,7 @@ module.exports = (io) => {
         if (!conversation) {
           conversation = await Conversations.create({
             accountId: userId,
-            status: 'open',
+            status: 'pending', // 👉 pending khi chưa có admin đọc
           });
           createdNew = true;
         }
@@ -35,24 +36,24 @@ module.exports = (io) => {
         const convoId = conversation._id.toString();
         socket.join(convoId);
 
-        // Lấy toàn bộ tin nhắn cũ
+        // Gửi lịch sử tin nhắn
         const history = await Messages.find({ conversationId: convoId }).sort({
           createdAt: 1,
         });
-
-        // Gửi lịch sử về user
         socket.emit('chat_history', {
           conversation: { ...conversation.toObject(), id: convoId },
           messages: history,
         });
 
-        // Nếu user gửi kèm message → tạo thêm tin nhắn mới
+        // Nếu user gửi kèm message → tạo tin nhắn mới
         if (messageText && messageText.trim() !== '') {
           const message = await Messages.create({
             conversationId: convoId,
             senderId: userId,
             messageText,
+            type: 'text',
           });
+
           io.to(convoId).emit('new_message', {
             ...message.toObject(),
             conversationId: convoId,
@@ -76,12 +77,14 @@ module.exports = (io) => {
       }
     });
 
-    // Staff nhận chat
+    // ======================
+    // 🟣 Staff nhận chat
+    // ======================
     socket.on('take_conversation', async ({ staffId, conversationId }) => {
       try {
         const convo = await Conversations.findOneAndUpdate(
-          { _id: conversationId, status: 'open' },
-          { staffId, status: 'pending' },
+          { _id: conversationId, status: { $in: ['pending', 'open'] } },
+          { staffId, status: 'active' }, // 👉 đổi về active cho rõ nghĩa
           { new: true }
         );
 
@@ -97,31 +100,68 @@ module.exports = (io) => {
       }
     });
 
-    // Gửi tin nhắn
-    socket.on('send_message', async ({ conversationId, senderId, messageText }) => {
+    // ======================
+    // 💬 Gửi tin nhắn (text / ảnh / sticker / emoji)
+    // ======================
+    socket.on(
+      'send_message',
+      async ({ conversationId, senderId, messageText, imageUrl, type }) => {
+        try {
+          if (!conversationId) return;
+
+          const msg = await Messages.create({
+            conversationId,
+            senderId,
+            messageText: messageText || '',
+            imageUrl: imageUrl || null,
+            type: type || 'text',
+            isRead: false,
+          });
+
+          io.to(conversationId.toString()).emit('new_message', {
+            ...msg.toObject(),
+            conversationId: conversationId.toString(),
+          });
+
+          // Cập nhật updatedAt của conversation để sort
+          await Conversations.findByIdAndUpdate(conversationId, {
+            updatedAt: new Date(),
+          });
+
+          console.log(`💬 Sent message [${type || 'text'}] to room ${conversationId}`);
+        } catch (err) {
+          console.error('❌ send_message error:', err);
+        }
+      }
+    );
+
+    // ======================
+    // 👁️ Mark as read
+    // ======================
+    socket.on('mark_read', async ({ conversationId, readerId }) => {
       try {
-        if (!conversationId || !messageText.trim()) return;
+        await Messages.updateMany(
+          { conversationId, isRead: false },
+          { isRead: true }
+        );
 
-        const msg = await Messages.create({
+        io.to(conversationId.toString()).emit('messages_read', {
           conversationId,
-          senderId,
-          messageText,
+          readerId,
         });
-
-        io.to(conversationId.toString()).emit('new_message', {
-          ...msg.toObject(),
-          conversationId: conversationId.toString(),
-        });
-        console.log(`💬 Sent message to room ${conversationId}`);
       } catch (err) {
-        console.error('❌ send_message error:', err);
+        console.error('❌ mark_read error:', err);
       }
     });
 
-    // Đóng chat
+    // ======================
+    // 🔴 Đóng chat
+    // ======================
     socket.on('close_conversation', async ({ conversationId }) => {
       try {
-        await Conversations.findByIdAndUpdate(conversationId, { status: 'closed' });
+        await Conversations.findByIdAndUpdate(conversationId, {
+          status: 'closed',
+        });
         io.to(conversationId.toString()).emit('conversation_closed', {
           conversationId: conversationId.toString(),
         });
