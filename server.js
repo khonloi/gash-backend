@@ -7,6 +7,9 @@ const app = require('./app');
 const chatSocket = require('./sockets/chat');
 const productSocket = require('./sockets/productSocket');
 
+// ===== LiveKit Service (SIMPLE) =====
+const livekitService = require('./services/livekitService');
+
 // Tạo HTTP server
 const server = http.createServer(app);
 
@@ -36,6 +39,37 @@ chatSocket(io);
 // Socket product
 productSocket(io);
 
+// ===== Initialize LiveKit Service (SIMPLE) =====
+console.log('🚀 LiveKit service ready');
+
+// ===== Graceful Shutdown (SIMPLE) =====
+const gracefulShutdown = (signal) => {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+
+  // Close server
+  server.close(() => {
+    console.log('✅ HTTP server closed');
+    process.exit(0);
+  });
+};
+
+// Error handlers
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('unhandledRejection');
+});
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 // Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 LiveKit livestream: READY`);
+});
