@@ -1,8 +1,5 @@
-// orderController.js
 const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
-
-
 
 exports.searchOrders = async (req, res) => {
   try {
@@ -32,6 +29,7 @@ exports.getOrderById = async (req, res) => {
       payment_method: order.payment_method,
       refund_status: order.refund_status,
       refund_proof: order.refund_proof,
+      cancelReason: order.cancelReason, // Added cancelReason to response
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
 
@@ -90,7 +88,6 @@ exports.getOrderById = async (req, res) => {
         } : null
       })) : [],
 
-
       // Summary
       summary: {
         totalItems: order.orderDetails ? order.orderDetails.length : 0,
@@ -113,7 +110,6 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
-
 exports.updateOrderByAdmin = async (req, res) => {
   try {
     // Chỉ admin và staff mới có thể cập nhật đơn hàng
@@ -127,7 +123,7 @@ exports.updateOrderByAdmin = async (req, res) => {
       return res.status(400).json({ message: 'Invalid order ID format' });
     }
 
-    const { order_status, pay_status, refund_status, refund_proof } = req.body;
+    const { order_status, pay_status, refund_status, refund_proof, cancelReason } = req.body;
 
     // Validate enums
     if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
@@ -139,9 +135,12 @@ exports.updateOrderByAdmin = async (req, res) => {
     if (refund_status && !['not_applicable', 'pending_refund', 'refunded'].includes(refund_status)) {
       return res.status(400).json({ message: 'Invalid refund status' });
     }
+    if (cancelReason && typeof cancelReason === 'string' && cancelReason.length > 500) {
+      return res.status(400).json({ message: 'Cancel reason cannot exceed 500 characters' });
+    }
 
     // Chỉ cho phép cập nhật các trường cơ bản, không bao gồm feedback
-    const allowedFields = { order_status, pay_status, refund_status, refund_proof };
+    const allowedFields = { order_status, pay_status, refund_status, refund_proof, cancelReason };
     const filteredData = Object.fromEntries(
       Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
     );
@@ -254,7 +253,6 @@ exports.vnpayReturn = async (req, res) => {
   }
 };
 
-
 exports.vnpayIpn = async (req, res) => {
   try {
     if (!req.query || Object.keys(req.query).length === 0) {
@@ -275,8 +273,6 @@ exports.vnpayIpn = async (req, res) => {
     });
   }
 };
-
-
 
 const mongoose = require("mongoose");
 const Accounts = require("../models/Accounts");
@@ -483,7 +479,6 @@ exports.checkout = async (req, res) => {
   }
 };
 
-
 exports.getOrderByIdForUser = async (req, res) => {
   try {
     const user = req.user;
@@ -506,17 +501,23 @@ exports.getOrderByIdForUser = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied: Can only view own order' });
     }
 
-
     return res.status(200).json({ success: true, order });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || 'Error retrieving order' });
   }
 };
 
-
 exports.cancelOrder = async (req, res) => {
   try {
     const orderId = req.params.id;
+    const { cancelReason } = req.body; // Added cancelReason from request body
+
+// Validate cancelReason
+    if (cancelReason && (typeof cancelReason !== 'string' || cancelReason.length > 500)) {
+      return res.status(400).json({
+        message: 'Invalid cancel reason. Must be a string up to 500 characters.'
+      });
+    }
 
     // Lấy thông tin order hiện tại với voucher
     const order = await orderService.getOrderByIdService(orderId, req.user);
@@ -531,9 +532,7 @@ exports.cancelOrder = async (req, res) => {
 
     // Xử lý voucher nếu order có sử dụng voucher
     if (order.voucher_id) {
-
       const voucher = await Voucher.findById(order.voucher_id);
-
       if (voucher) {
         // Giảm usedCount của voucher (hoàn lại số lần sử dụng)
         if (voucher.usedCount > 0) {
@@ -557,10 +556,10 @@ exports.cancelOrder = async (req, res) => {
       }
     }
 
-    // Cập nhật trạng thái sang cancelled
+    // Cập nhật trạng thái sang cancelled và lưu cancelReason
     const updatedOrder = await orderService.updateOrderService(
       orderId,
-      { order_status: 'cancelled' },
+      { order_status: 'cancelled', cancelReason }, // Include cancelReason in update
       req.user
     );
 
@@ -576,7 +575,6 @@ exports.cancelOrder = async (req, res) => {
       .json({ message: error.message || 'Error cancelling order' });
   }
 };
-
 
 exports.addFeedbackProduct = async (req, res) => {
   try {
@@ -621,7 +619,6 @@ exports.addFeedbackProduct = async (req, res) => {
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
-
 
     // Chỉ cho phép feedback khi đơn hàng đã giao
     if (order.order_status !== 'delivered') {
@@ -674,7 +671,6 @@ exports.addFeedbackProduct = async (req, res) => {
     // Verify từ database
     const verifyOrderDetail = await OrderDetails.findById(orderDetail._id);
 
-
     res.status(200).json({
       success: true,
       message: 'Product feedback added successfully',
@@ -697,9 +693,6 @@ exports.addFeedbackProduct = async (req, res) => {
   }
 };
 
-
-
-// Hàm sửa feedback của user cho một sản phẩm cụ thể trong một order cụ thể
 exports.editFeedbackProduct = async (req, res) => {
   try {
     const { orderId, variantId } = req.params;
@@ -831,7 +824,6 @@ exports.editFeedbackProduct = async (req, res) => {
   }
 };
 
-// Hàm xóa feedback của user cho một sản phẩm cụ thể trong một order cụ thể
 exports.deleteFeedbackProduct = async (req, res) => {
   try {
     const { orderId, variantId } = req.params;
@@ -910,7 +902,6 @@ exports.deleteFeedbackProduct = async (req, res) => {
       });
     }
 
-
     res.status(200).json({
       success: true,
       message: 'Product feedback deleted successfully',
@@ -943,7 +934,6 @@ exports.deleteFeedbackProduct = async (req, res) => {
   }
 };
 
-// Hàm lấy tất cả feedback của một sản phẩm (tất cả variants của product) để hiển thị trên trang product
 exports.getAllFeedbackOfProduct = async (req, res) => {
   try {
     const { productId } = req.params;
@@ -1088,7 +1078,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       variant: feedback.variant_id ? {
         variant_id: feedback.variant_id._id,
         color: feedback.variant_id.productColorId ? feedback.variant_id.productColorId.color_name : null,
-        size: feedback.variant_id.productSizeId ? feedback.variant_id.productSizeId.size_name : null,
+        size: feedback.variant_id.productSizeId ? determinantSizeId.size_name : null,
         image: feedback.variant_id.variantImage || null
       } : null,
       feedback: {
