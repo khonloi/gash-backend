@@ -23,11 +23,6 @@ const livestreamSchema = new mongoose.Schema({
     enum: ['live', 'ended', 'scheduled'],
     default: 'live'
   },
-  platform: {
-    type: String,
-    enum: ['livekit'],
-    default: 'livekit'
-  },
   roomName: {
     type: String,
     unique: true,
@@ -41,8 +36,19 @@ const livestreamSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  // Simple viewer count
+  // Current viewer count (stored in DB)
   currentViewers: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  // Peak and minimum viewer counts (stored in DB)
+  peakViewers: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  minViewers: {
     type: Number,
     default: 0,
     min: 0

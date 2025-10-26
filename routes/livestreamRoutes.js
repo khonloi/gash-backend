@@ -17,11 +17,20 @@ router.get('/test', (req, res) => {
 
 // ===== USER ROUTES (Cần authentication) =====
 
-// Get live streams
+// Get live streams (currently live only)
 router.get('/live', authenticateJWT, livekitController.getLiveStreams);
+
+// Get all livestreams (with pagination)
+router.get('/all', authenticateJWT, livekitController.getAllLive);
+
+// Get currently live streams only
+router.get('/now/live', authenticateJWT, livekitController.getLiveNow);
 
 // View livestream (join)
 router.post('/view', authenticateJWT, livekitController.joinLivestream);
+
+// Leave livestream
+router.post('/leave', authenticateJWT, livekitController.leaveLivestream);
 
 // ===== ADMIN ROUTES (Cần authentication + role) =====
 
@@ -36,5 +45,8 @@ router.get('/host', authenticateJWT, authorizeRole(['admin', 'manager']), liveki
 
 // Get host token
 router.post('/token', authenticateJWT, authorizeRole(['admin', 'manager']), livekitController.getHostToken);
+
+// Get specific livestream details (dynamic route, placed last)
+router.get('/:livestreamId', authenticateJWT, livekitController.getLive);
 
 module.exports = router;

@@ -17,7 +17,7 @@ const LIVEKIT_CONFIG = {
         enableTranscription: false
     },
 
-    // Token settings
+        // Token settings
     tokenSettings: {
         ttl: 3600, // 1 hour
         canPublish: true,
@@ -74,7 +74,7 @@ const createRoom = async (roomName, options = {}) => {
         };
     } catch (error) {
         console.error('Error creating room:', error);
-        return {
+            return {
             success: false,
             error: error.message,
             message: 'Failed to create room'

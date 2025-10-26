@@ -31,10 +31,12 @@ exports.startLivestream = async (req, res) => {
     }
 };
 
-// End livestream (Admin)
+// End livestream (Admin or Owner)
 exports.endLivestream = async (req, res) => {
     try {
         const { livestreamId } = req.body;
+        const userId = req.user.id;
+        const userRole = req.user.role;
 
         if (!livestreamId) {
             return res.status(400).json({
@@ -43,12 +45,14 @@ exports.endLivestream = async (req, res) => {
             });
         }
 
-        const result = await livekitService.endLivestream(livestreamId);
+        const result = await livekitService.endLivestream(livestreamId, userId, userRole);
 
         if (result.success) {
             res.status(200).json(result);
         } else {
-            res.status(400).json(result);
+            // Return 403 for permission errors, 400 for other errors
+            const statusCode = result.error === 'INSUFFICIENT_PERMISSIONS' ? 403 : 400;
+            res.status(statusCode).json(result);
         }
 
     } catch (error) {
@@ -159,6 +163,112 @@ exports.getHostToken = async (req, res) => {
 
     } catch (error) {
         console.error('Error in getHostToken controller:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
+// Get all livestreams (User/Admin)
+exports.getAllLive = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+
+        const result = await livekitService.getAllLive(page, limit);
+
+        if (result.success) {
+            res.status(200).json(result);
+        } else {
+            res.status(400).json(result);
+        }
+
+    } catch (error) {
+        console.error('Error in getAllLive controller:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
+// Get specific livestream details (User/Admin)
+exports.getLive = async (req, res) => {
+    try {
+        const { livestreamId } = req.params;
+
+        if (!livestreamId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Livestream ID is required'
+            });
+        }
+
+        const result = await livekitService.getLive(livestreamId);
+
+        if (result.success) {
+            res.status(200).json(result);
+        } else {
+            res.status(404).json(result);
+        }
+
+    } catch (error) {
+        console.error('Error in getLive controller:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
+// Leave livestream (User)
+exports.leaveLivestream = async (req, res) => {
+    try {
+        const { livestreamId } = req.body;
+        const userId = req.user.id;
+
+        if (!livestreamId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Livestream ID is required'
+            });
+        }
+
+        const result = await livekitService.leaveLivestream(livestreamId, userId);
+
+        if (result.success) {
+            res.status(200).json(result);
+        } else {
+            res.status(400).json(result);
+        }
+
+    } catch (error) {
+        console.error('Error in leaveLivestream controller:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
+// Get currently live streams (User/Admin)
+exports.getLiveNow = async (req, res) => {
+    try {
+        const result = await livekitService.getLiveNow();
+
+        if (result.success) {
+            res.status(200).json(result);
+        } else {
+            res.status(400).json(result);
+        }
+
+    } catch (error) {
+        console.error('Error in getLiveNow controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
