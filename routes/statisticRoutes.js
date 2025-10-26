@@ -56,6 +56,23 @@ router.get(
   exportCustomerStatistics
 );
 
+// 🏆 Top Customers
+router.get(
+  '/customers/top',
+  authenticateJWT,
+  authorizeRole(['admin']),
+  require('../controllers/customerStatisticsController').getTopCustomers
+);
+
+// 📈 Sparkline Data
+router.get(
+  '/customers/sparkline',
+  authenticateJWT,
+  authorizeRole(['admin']),
+  require('../controllers/customerStatisticsController').getCustomerSparkline
+);
+
+
 // ===============================
 // 📦 PRODUCT STATISTICS
 // ===============================
