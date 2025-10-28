@@ -1078,7 +1078,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       variant: feedback.variant_id ? {
         variant_id: feedback.variant_id._id,
         color: feedback.variant_id.productColorId ? feedback.variant_id.productColorId.color_name : null,
-        size: feedback.variant_id.productSizeId ? determinantSizeId.size_name : null,
+        size: feedback.variant_id.productSizeId ? feedback.variant_id.productSizeId.size_name : null,
         image: feedback.variant_id.variantImage || null
       } : null,
       feedback: {
