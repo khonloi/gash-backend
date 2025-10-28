@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const livestreamSchema = new mongoose.Schema({
   hostId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Accounts',
     required: true
   },
   title: {
@@ -36,13 +36,6 @@ const livestreamSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  // Current viewer count (stored in DB)
-  currentViewers: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  // Peak and minimum viewer counts (stored in DB)
   peakViewers: {
     type: Number,
     default: 0,
@@ -52,7 +45,15 @@ const livestreamSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
-  }
+  },
+  liveProductIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LiveProduct'
+  }],
+  liveCommentIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LiveComment'
+  }]
 }, {
   timestamps: true
 });

@@ -1,52 +1,38 @@
 const express = require('express');
 const router = express.Router();
-const livekitController = require('../controllers/livekitController');
+const livestreamController = require('../controllers/livestreamController');
 const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
 
-// ===== PUBLIC ROUTES (Không cần authentication) =====
-
-// Test route
-router.get('/test', (req, res) => {
-    res.json({
-        success: true,
-        message: 'Livestream API is working',
-        platform: 'livekit',
-        timestamp: new Date().toISOString()
-    });
-});
 
 // ===== USER ROUTES (Cần authentication) =====
 
-// Get live streams (currently live only)
-router.get('/live', authenticateJWT, livekitController.getLiveStreams);
+// Get currently live streams (User can only see live streams)
+router.get('/live-now', authenticateJWT, livestreamController.getLiveNow);
 
-// Get all livestreams (with pagination)
-router.get('/all', authenticateJWT, livekitController.getAllLive);
-
-// Get currently live streams only
-router.get('/now/live', authenticateJWT, livekitController.getLiveNow);
-
-// View livestream (join)
-router.post('/view', authenticateJWT, livekitController.joinLivestream);
+// Join livestream (view)
+router.post('/join', authenticateJWT, livestreamController.joinLivestream);
 
 // Leave livestream
-router.post('/leave', authenticateJWT, livekitController.leaveLivestream);
+router.post('/leave', authenticateJWT, livestreamController.leaveLivestream);
+
 
 // ===== ADMIN ROUTES (Cần authentication + role) =====
-
 // Start livestream
-router.post('/start', authenticateJWT, authorizeRole(['admin', 'manager']), livekitController.startLivestream);
+router.post('/start', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.startLivestream);
 
 // End livestream
-router.put('/end', authenticateJWT, authorizeRole(['admin', 'manager']), livekitController.endLivestream);
+router.put('/end', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.endLivestream);
 
-// Get host livestreams
-router.get('/host', authenticateJWT, authorizeRole(['admin', 'manager']), livekitController.getHostLivestreams);
+// Get host's livestreams
+router.get('/my-livestream', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.getHostLivestreams);
 
-// Get host token
-router.post('/token', authenticateJWT, authorizeRole(['admin', 'manager']), livekitController.getHostToken);
+// dùng để tạo token cho host, để host có thể join livestream
+router.post('/host-token', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.getHostToken);
 
-// Get specific livestream details (dynamic route, placed last)
-router.get('/:livestreamId', authenticateJWT, livekitController.getLive);
+// Get all livestreams 
+router.get('/all-livestream', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.getAllLive);
+
+// Get specific livestream details
+router.get('/livestream-by-id/:livestreamId', authenticateJWT, livestreamController.getLiveById);
 
 module.exports = router;

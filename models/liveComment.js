@@ -10,7 +10,7 @@ const LiveCommentSchema = new Schema(
     },
     senderId: {
       type: Schema.Types.ObjectId,
-      ref: "Account",
+      ref: "Accounts",
       required: true,
     },
     commentText: {
@@ -21,6 +21,33 @@ const LiveCommentSchema = new Schema(
       type: Date,
       default: Date.now,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+    deletedAt: {
+      type: Date,
+      default: null
+    },
+    deletedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null
+    },
+    isPinned: {
+      type: Boolean,
+      default: false
+    },
+    pinBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null
+    },
+    unpinBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null
+    }
   }
 );
 

@@ -10,7 +10,7 @@ const LiveProductSchema = new Schema(
     },
     productId: {
       type: Schema.Types.ObjectId,
-      ref: "Product",
+      ref: "newProducts",
       required: true,
     },
     addedAt: {
@@ -23,6 +23,20 @@ const LiveProductSchema = new Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    isPinned: {
+      type: Boolean,
+      default: false,
+    },
+    pinBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null,
+    },
+    unpinBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null,
     },
   }
 );

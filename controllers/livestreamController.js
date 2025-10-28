@@ -1,4 +1,4 @@
-const livekitService = require('../services/livekitService');
+const livestreamService = require('../services/livestreamService');
 
 // Start livestream (Admin)
 exports.startLivestream = async (req, res) => {
@@ -13,7 +13,7 @@ exports.startLivestream = async (req, res) => {
             });
         }
 
-        const result = await livekitService.startLivestream(hostId, title, description);
+        const result = await livestreamService.startLivestream(hostId, title, description);
 
         if (result.success) {
             res.status(200).json(result);
@@ -22,7 +22,6 @@ exports.startLivestream = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in startLivestream controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -45,7 +44,7 @@ exports.endLivestream = async (req, res) => {
             });
         }
 
-        const result = await livekitService.endLivestream(livestreamId, userId, userRole);
+        const result = await livestreamService.endLivestream(livestreamId, userId, userRole);
 
         if (result.success) {
             res.status(200).json(result);
@@ -56,7 +55,6 @@ exports.endLivestream = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in endLivestream controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -79,7 +77,7 @@ exports.joinLivestream = async (req, res) => {
             });
         }
 
-        const result = await livekitService.joinLivestream(livestreamId, userId, userName);
+        const result = await livestreamService.joinLivestream(livestreamId, userId, userName);
 
         if (result.success) {
             res.status(200).json(result);
@@ -88,7 +86,6 @@ exports.joinLivestream = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in joinLivestream controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -100,7 +97,7 @@ exports.joinLivestream = async (req, res) => {
 // Get live streams (User)
 exports.getLiveStreams = async (req, res) => {
     try {
-        const result = await livekitService.getLiveStreams();
+        const result = await livestreamService.getLiveStreams();
 
         if (result.success) {
             res.status(200).json(result);
@@ -109,7 +106,6 @@ exports.getLiveStreams = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in getLiveStreams controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -122,7 +118,7 @@ exports.getLiveStreams = async (req, res) => {
 exports.getHostLivestreams = async (req, res) => {
     try {
         const hostId = req.user.id;
-        const result = await livekitService.getHostLivestreams(hostId);
+        const result = await livestreamService.getHostLivestreams(hostId);
 
         if (result.success) {
             res.status(200).json(result);
@@ -131,7 +127,6 @@ exports.getHostLivestreams = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in getHostLivestreams controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -153,7 +148,7 @@ exports.getHostToken = async (req, res) => {
             });
         }
 
-        const result = await livekitService.getHostToken(roomName, hostId);
+        const result = await livestreamService.getHostToken(roomName, hostId);
 
         if (result.success) {
             res.status(200).json(result);
@@ -162,7 +157,6 @@ exports.getHostToken = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in getHostToken controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -174,10 +168,7 @@ exports.getHostToken = async (req, res) => {
 // Get all livestreams (User/Admin)
 exports.getAllLive = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-
-        const result = await livekitService.getAllLive(page, limit);
+        const result = await livestreamService.getAllLive();
 
         if (result.success) {
             res.status(200).json(result);
@@ -186,7 +177,6 @@ exports.getAllLive = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in getAllLive controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -196,9 +186,10 @@ exports.getAllLive = async (req, res) => {
 };
 
 // Get specific livestream details (User/Admin)
-exports.getLive = async (req, res) => {
+exports.getLiveById = async (req, res) => {
     try {
         const { livestreamId } = req.params;
+        const userRole = req.user?.role || null; // Get user role from JWT
 
         if (!livestreamId) {
             return res.status(400).json({
@@ -207,7 +198,8 @@ exports.getLive = async (req, res) => {
             });
         }
 
-        const result = await livekitService.getLive(livestreamId);
+        // Pass userRole to service
+        const result = await livestreamService.getLiveById(livestreamId, userRole);
 
         if (result.success) {
             res.status(200).json(result);
@@ -216,7 +208,6 @@ exports.getLive = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in getLive controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -238,7 +229,7 @@ exports.leaveLivestream = async (req, res) => {
             });
         }
 
-        const result = await livekitService.leaveLivestream(livestreamId, userId);
+        const result = await livestreamService.leaveLivestream(livestreamId, userId);
 
         if (result.success) {
             res.status(200).json(result);
@@ -247,7 +238,6 @@ exports.leaveLivestream = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in leaveLivestream controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',
@@ -259,7 +249,7 @@ exports.leaveLivestream = async (req, res) => {
 // Get currently live streams (User/Admin)
 exports.getLiveNow = async (req, res) => {
     try {
-        const result = await livekitService.getLiveNow();
+        const result = await livestreamService.getLiveNow();
 
         if (result.success) {
             res.status(200).json(result);
@@ -268,7 +258,6 @@ exports.getLiveNow = async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error in getLiveNow controller:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',

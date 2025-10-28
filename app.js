@@ -82,8 +82,13 @@ app.use('/notifications', notificationRoutes);
 
 // ===== Livestream Routes =====
 const livestreamRoutes = require('./routes/livestreamRoutes');
+const livestreamProductRoutes = require('./routes/livestreamProductRoutes');
+const livestreamCommentRoutes = require('./routes/livestreamCommentRoutes');
+const livestreamReactionRoutes = require('./routes/livestreamReactionRoutes');
 app.use('/livestream', livestreamRoutes);
-
+app.use('/livestream-products', livestreamProductRoutes);
+app.use('/livestream-comments', livestreamCommentRoutes);
+app.use('/livestream-reactions', livestreamReactionRoutes);
 
 // ===== 404 handler =====
 app.use((req, res, next) => {
