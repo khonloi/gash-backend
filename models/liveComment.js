@@ -51,4 +51,9 @@ const LiveCommentSchema = new Schema(
   }
 );
 
+// Indexes for better query performance
+LiveCommentSchema.index({ liveId: 1, isDeleted: 1, createdAt: -1 }); // Main query
+LiveCommentSchema.index({ liveId: 1, isPinned: -1, createdAt: -1 }); // Pinned comments query
+LiveCommentSchema.index({ liveId: 1, isDeleted: 1 }); // Admin query
+
 module.exports = mongoose.model("LiveComment", LiveCommentSchema);

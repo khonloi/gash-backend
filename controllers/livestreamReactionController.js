@@ -37,7 +37,9 @@ exports.addReaction = async (req, res) => {
     }
 };
 
-// Get reactions for a livestream
+// Get reaction counts for a livestream (User và Admin dùng chung)
+// Trả về counts (aggregate) thay vì array - tối ưu performance
+// Real-time updates qua WebSocket nên không cần pagination/limit
 exports.getLiveReactions = async (req, res) => {
     try {
         const { liveId } = req.params;

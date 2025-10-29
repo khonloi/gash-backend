@@ -41,4 +41,8 @@ const LiveProductSchema = new Schema(
   }
 );
 
+// Indexes for better query performance
+LiveProductSchema.index({ liveId: 1, isActive: 1 }); // Main query
+LiveProductSchema.index({ liveId: 1, isPinned: -1, addedAt: -1 }); // Sorted query
+
 module.exports = mongoose.model("LiveProduct", LiveProductSchema);

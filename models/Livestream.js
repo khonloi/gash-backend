@@ -64,4 +64,8 @@ livestreamSchema.index({ status: 1 });
 livestreamSchema.index({ startTime: -1 });
 livestreamSchema.index({ roomName: 1 });
 
+// Compound indexes for common query patterns
+livestreamSchema.index({ hostId: 1, status: 1 }); // For getHostLivestreams (hostId + status)
+livestreamSchema.index({ status: 1, startTime: -1 }); // For getAllLive and getLiveNow (status + sort)
+
 module.exports = mongoose.model('Livestream', livestreamSchema);

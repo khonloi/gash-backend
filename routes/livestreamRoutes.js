@@ -32,7 +32,7 @@ router.post('/host-token', authenticateJWT, authorizeRole(['admin', 'manager']),
 // Get all livestreams 
 router.get('/all-livestream', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.getAllLive);
 
-// Get specific livestream details
-router.get('/livestream-by-id/:livestreamId', authenticateJWT, livestreamController.getLiveById);
+// Get specific livestream details (Admin only)
+router.get('/livestream-by-id/:livestreamId', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.getLiveById);
 
 module.exports = router;

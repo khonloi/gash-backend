@@ -63,12 +63,13 @@ exports.endLivestream = async (req, res) => {
     }
 };
 
-// View livestream (User) - renamed from joinLivestream
+// View livestream (User hoặc Staff)
 exports.joinLivestream = async (req, res) => {
     try {
         const { livestreamId } = req.body;
         const userId = req.user.id;
         const userName = req.user.username;
+        const userRole = req.user.role; // Lấy role để phân biệt staff vs user
 
         if (!livestreamId) {
             return res.status(400).json({
@@ -77,7 +78,7 @@ exports.joinLivestream = async (req, res) => {
             });
         }
 
-        const result = await livestreamService.joinLivestream(livestreamId, userId, userName);
+        const result = await livestreamService.joinLivestream(livestreamId, userId, userName, userRole);
 
         if (result.success) {
             res.status(200).json(result);
@@ -185,11 +186,11 @@ exports.getAllLive = async (req, res) => {
     }
 };
 
-// Get specific livestream details (User/Admin)
+// Get specific livestream details (Admin only)
 exports.getLiveById = async (req, res) => {
     try {
         const { livestreamId } = req.params;
-        const userRole = req.user?.role || null; // Get user role from JWT
+        const userRole = req.user.role; // Admin/manager only (enforced by route middleware)
 
         if (!livestreamId) {
             return res.status(400).json({

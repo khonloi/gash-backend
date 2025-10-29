@@ -40,16 +40,28 @@ exports.addReaction = async (liveId, userId, reactionType) => {
             );
         }
 
-        // Populate user data
+        // Populate user data (minimal for websocket)
         await liveReaction.populate({
             path: 'userId',
-            select: 'name username image role'
+            select: 'name username image' // Removed 'role' - not needed for display
         });
 
-        // Emit realtime event to all viewers
+        // Emit realtime event with optimized payload (only necessary fields)
+        const reactionPayload = {
+            _id: liveReaction._id,
+            reactionType: liveReaction.reactionType,
+            createdAt: liveReaction.createdAt,
+            user: {
+                _id: liveReaction.userId._id,
+                name: liveReaction.userId.name,
+                username: liveReaction.userId.username,
+                image: liveReaction.userId.image
+            }
+        };
+
         getIO().to(`live_${liveId}`).emit('reaction:added', {
             liveId,
-            reaction: liveReaction
+            reaction: reactionPayload
         });
 
         return {
@@ -66,19 +78,37 @@ exports.addReaction = async (liveId, userId, reactionType) => {
     }
 };
 
-// Get reactions for a livestream (no pagination)
+// Get reaction counts for a livestream (User và Admin dùng chung - vì reaction ko có xóa)
+// Trả về counts (aggregate) thay vì array đầy đủ để tối ưu performance
+// Real-time updates qua WebSocket nên không cần pagination/limit
 exports.getLiveReactions = async (liveId) => {
     try {
-        // Get all reactions (no deletion filter needed)
-        const reactions = await LiveReaction.find({ liveId })
-            .populate('userId', 'name username image role')
-            .sort({ createdAt: -1 }); // Sort by creation date
+        const mongoose = require('mongoose');
+
+        // Get reaction counts by type (aggregate)
+        const reactionStats = await LiveReaction.aggregate([
+            { $match: { liveId: new mongoose.Types.ObjectId(liveId) } },
+            { $group: { _id: '$reactionType', count: { $sum: 1 } } }
+        ]);
+
+        // Convert to object format with all reaction types
+        const reactions = reactionStats.reduce((acc, item) => {
+            acc[item._id] = item.count;
+            return acc;
+        }, { like: 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 });
+
+        // Calculate total reactions
+        const total = Object.values(reactions).reduce((sum, count) => sum + count, 0);
 
         return {
             success: true,
             message: 'Reactions retrieved successfully',
-            data: reactions,
-            count: reactions.length
+            data: {
+                reactions: {
+                    ...reactions,
+                    total: total
+                }
+            }
         };
     } catch (error) {
         return {

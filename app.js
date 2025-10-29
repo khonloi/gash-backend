@@ -22,7 +22,15 @@ app.use(
 );
 
 // ===== Middleware =====
-app.use(morgan('dev'));
+// Only log in development or when DEBUG=true (reduce log spam in production)
+if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
+  app.use(morgan('dev'));
+} else {
+  // Only log errors in production
+  app.use(morgan('combined', {
+    skip: (req, res) => res.statusCode < 400
+  }));
+}
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());

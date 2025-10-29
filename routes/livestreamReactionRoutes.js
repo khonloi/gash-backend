@@ -8,7 +8,7 @@ const livestreamReactionController = require('../controllers/livestreamReactionC
 // Add reaction to livestream
 router.post('/add-reaction', authenticateJWT, livestreamReactionController.addReaction);
 
-// Get reactions for a livestream
+// Get reaction counts for a livestream 
 router.get('/reactions/:liveId', authenticateJWT, livestreamReactionController.getLiveReactions);
 
 module.exports = router;

@@ -1,21 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateJWT } = require('../middleware/authMiddleware');
+const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
 const { addProductToLive, removeProductFromLive, getActiveLiveProducts, pinProduct, removePinProduct } = require('../controllers/livestreamProductController');
 
-// Add product to livestream
-router.post('/add-live-product', addProductToLive);
+// ===== USER ROUTES (Cần authentication) =====
 
-// Remove product from livestream
-router.post('/remove-live-product', removeProductFromLive);
+// Get all active products in a livestream (User và Admin dùng chung - chỉ active products)
+router.get('/:liveId/live-products', authenticateJWT, getActiveLiveProducts);
 
-// Get all active products in a livestream
-router.get('/:liveId/live-products', getActiveLiveProducts);
+// ===== ADMIN ROUTES (Cần authentication + role) =====
 
-// Pin product
-router.post('/:liveProductId/pin-live-product', authenticateJWT, pinProduct);
+// Add product to livestream (Admin only)
+router.post('/add-live-product', authenticateJWT, authorizeRole(['admin', 'manager']), addProductToLive);
 
-// Remove pin from product
-router.post('/:liveProductId/unpin-live-product', authenticateJWT, removePinProduct);
+// Remove product from livestream (Admin only)
+router.post('/remove-live-product', authenticateJWT, authorizeRole(['admin', 'manager']), removeProductFromLive);
+
+// Pin product (Admin only)
+router.post('/:liveProductId/pin-live-product', authenticateJWT, authorizeRole(['admin', 'manager']), pinProduct);
+
+// Remove pin from product (Admin only)
+router.post('/:liveProductId/unpin-live-product', authenticateJWT, authorizeRole(['admin', 'manager']), removePinProduct);
 
 module.exports = router;
