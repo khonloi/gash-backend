@@ -42,6 +42,24 @@ async function updateCategoryService(id, { cat_name }) {
     err.status = 400;
     throw err;
   }
+
+  // Prevent update if any product belongs to this category
+  const newProduct = require('../models/newProduct');
+  const objectId = mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null;
+  const productCount = await newProduct.countDocuments({
+    $or: [
+      ...(objectId ? [{ categoryId: objectId }] : []),
+      { categoryId: id } // legacy string id support
+    ]
+  });
+  if (productCount > 0) {
+    const err = new Error(
+      'Không thể cập nhật Category vì còn sản phẩm đang thuộc Category này. Hãy cập nhật/xóa các sản phẩm liên quan trước.'
+    );
+    err.status = 409;
+    throw err;
+  }
+
   if (cat_name) {
     const existingCategory = await Categories.findOne({ cat_name, _id: { $ne: id } });
     if (existingCategory) {
@@ -50,6 +68,7 @@ async function updateCategoryService(id, { cat_name }) {
       throw err;
     }
   }
+
   const category = await Categories.findByIdAndUpdate(
     id,
     { cat_name },
@@ -74,8 +93,8 @@ async function deleteCategoryService(id, user) {
   const objectId = mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null;
   const productCount = await newProduct.countDocuments({
     $or: [
-      ...(objectId ? [{ cat_id: objectId }] : []),
-      { cat_id: id }
+      ...(objectId ? [{ categoryId: objectId }] : []),
+      { categoryId: id }
     ]
   });
   if (productCount > 0) {
@@ -98,4 +117,4 @@ module.exports = {
   getCategoryByIdService,
   updateCategoryService,
   deleteCategoryService
-}; 
+};

@@ -220,6 +220,18 @@ async function updateOrderService(id, updateData, user) {
   let newPayStatus = rest.pay_status || order.pay_status;
   let newRefund = rest.refund_status || order.refund_status;
 
+  // Validate cancelReason when transitioning to cancelled
+  if (newStatus === "cancelled") {
+    if (!rest.cancelReason || typeof rest.cancelReason !== 'string' || rest.cancelReason.length > 500) {
+      const err = new Error("A valid cancel reason (up to 500 characters) is required when cancelling an order");
+      err.status = 400;
+      throw err;
+    }
+  } else {
+    // Ensure cancelReason is set to empty string if not cancelling
+    rest.cancelReason = '';
+  }
+
   if (newStatus === "delivered") {
     newPayStatus = "paid";
   }
@@ -245,11 +257,11 @@ async function updateOrderService(id, updateData, user) {
     if (newStatus === "cancelled" && newPayStatus === "paid") {
       if (order.refund_status === "pending_refund") {
         const keys = Object.keys(rest);
-        const allowedKeys = ["refund_status", "refund_proof"];
+        const allowedKeys = ["refund_status", "refund_proof", "cancelReason"];
         const hasInvalidUpdate = keys.some((k) => !allowedKeys.includes(k));
         if (hasInvalidUpdate) {
           const err = new Error(
-            "When order is cancelled+paid (pending_refund), only refund_status/proof can be updated"
+            "When order is cancelled+paid (pending_refund), only refund_status, refund_proof, or cancelReason can be updated"
           );
           err.status = 400;
           throw err;

@@ -4,10 +4,38 @@ const newProduct = require("../models/newProduct");
 const OrderDetails = require("../models/OrderDetails");
 const Orders = require("../models/Orders");
 
+// HELPER: Update product status based on its variants
+const updateProductStatusBasedOnVariants = async (productId) => {
+  try {
+    const variants = await newProductVariant.find({ productId });
+
+    if (variants.length === 0) {
+      await newProduct.findByIdAndUpdate(
+        productId,
+        { productStatus: "pending", updatedAt: Date.now() },
+        { new: true }
+      );
+      return;
+    }
+
+    const hasActiveVariant = variants.some(v => v.variantStatus === "active");
+
+    const newStatus = hasActiveVariant ? "active" : "inactive";
+
+    await newProduct.findByIdAndUpdate(
+      productId,
+      { productStatus: newStatus, updatedAt: Date.now() },
+      { new: true }
+    );
+  } catch (error) {
+    console.error(`Failed to update product status for ${productId}:`, error);
+    // Don't throw — this is non-critical
+  }
+};
+
 // Create a new product variant with validation
 const createProductVariant = async (variantData) => {
   try {
-    // Validate required fields
     const {
       productId,
       productColorId,
@@ -16,6 +44,7 @@ const createProductVariant = async (variantData) => {
       variantPrice,
       stockQuantity,
     } = variantData;
+
     if (
       !productId ||
       !productColorId ||
@@ -27,7 +56,6 @@ const createProductVariant = async (variantData) => {
       throw new Error("All fields are required");
     }
 
-    // Validate ObjectIds
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error("Invalid product ID");
     }
@@ -38,7 +66,6 @@ const createProductVariant = async (variantData) => {
       throw new Error("Invalid product size ID");
     }
 
-    // Validate numeric fields
     if (variantPrice < 0) {
       throw new Error("Variant price cannot be negative");
     }
@@ -46,7 +73,14 @@ const createProductVariant = async (variantData) => {
       throw new Error("Stock quantity cannot be negative");
     }
 
-    // Check for duplicate variant (same product, color, and size)
+    const product = await newProduct.findById(productId);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+    if (product.productStatus === "discontinued") {
+      throw new Error("Cannot add variant to a discontinued product");
+    }
+
     const existingVariant = await newProductVariant.findOne({
       productId,
       productColorId,
@@ -58,29 +92,27 @@ const createProductVariant = async (variantData) => {
       );
     }
 
-    // Set variantStatus based on stockQuantity
     const variantStatus = stockQuantity > 0 ? "active" : "inactive";
     const variant = new newProductVariant({
       ...variantData,
       variantStatus
     });
     await variant.save();
-    
-    // Add variant ID to product's productVariantIds array
+
     const updatedProduct = await newProduct.findByIdAndUpdate(
       productId,
       { 
         $addToSet: { productVariantIds: variant._id },
-        productStatus: "active",
+        productStatus: "active", // At least one variant → active
         updatedAt: Date.now()
       },
       { new: true }
     );
-    
+
     if (!updatedProduct) {
       throw new Error("Product not found");
     }
-    
+
     return variant;
   } catch (error) {
     throw new Error(`Failed to create product variant: ${error.message}`);
@@ -151,7 +183,6 @@ const updateProductVariant = async (variantId, updateData) => {
       throw new Error("Invalid variant ID");
     }
 
-    // Validate update data
     const {
       productId,
       productColorId,
@@ -159,6 +190,7 @@ const updateProductVariant = async (variantId, updateData) => {
       variantPrice,
       stockQuantity,
     } = updateData;
+
     if (productId && !mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error("Invalid product ID");
     }
@@ -175,18 +207,23 @@ const updateProductVariant = async (variantId, updateData) => {
       throw new Error("Stock quantity cannot be negative");
     }
 
-    // Check for existing variant
     const existingVariant = await newProductVariant.findById(variantId);
     if (!existingVariant) {
       throw new Error("Product variant not found");
     }
 
-    // Prevent updates to discontinued variants
     if (existingVariant.variantStatus === "discontinued") {
       throw new Error("Cannot update a discontinued variant");
     }
 
-    // Check for duplicate variant
+    const product = await newProduct.findById(existingVariant.productId);
+    if (!product) {
+      throw new Error("Associated product not found");
+    }
+    if (product.productStatus === "discontinued") {
+      throw new Error("Cannot update variant of a discontinued product");
+    }
+
     if (productId || productColorId || productSizeId) {
       const existingDuplicate = await newProductVariant.findOne({
         productId: productId || existingVariant.productId,
@@ -201,7 +238,6 @@ const updateProductVariant = async (variantId, updateData) => {
       }
     }
 
-    // Set variantStatus based on stockQuantity
     let updatedData = { ...updateData, updatedAt: Date.now() };
     if (stockQuantity !== undefined) {
       updatedData.variantStatus = stockQuantity > 0 ? "active" : "inactive";
@@ -216,6 +252,10 @@ const updateProductVariant = async (variantId, updateData) => {
     if (!variant) {
       throw new Error("Product variant not found");
     }
+
+    // NEW: Update product status based on all variants
+    await updateProductStatusBasedOnVariants(existingVariant.productId);
+
     return variant;
   } catch (error) {
     throw new Error(`Failed to update product variant: ${error.message}`);
@@ -229,7 +269,6 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Invalid variant ID");
     }
 
-    // Check if variant exists in any non-cancelled order details
     const orderDetails = await OrderDetails.find({ variantId }).populate({
       path: "orderId",
       select: "orderStatus",
@@ -251,8 +290,7 @@ const deleteProductVariant = async (variantId) => {
     if (!variant) {
       throw new Error("Product variant not found");
     }
-    
-    // Remove variant ID from product's productVariantIds array
+
     const updatedProduct = await newProduct.findByIdAndUpdate(
       variant.productId,
       { 
@@ -261,20 +299,14 @@ const deleteProductVariant = async (variantId) => {
       },
       { new: true }
     );
-    
+
     if (!updatedProduct) {
       throw new Error("Product not found");
     }
 
-    // Set product status to "pending" if no variants remain
-    if (updatedProduct.productVariantIds.length === 0) {
-      await newProduct.findByIdAndUpdate(
-        variant.productId,
-        { productStatus: "pending", updatedAt: Date.now() },
-        { new: true }
-      );
-    }
-    
+    // NEW: Update product status after variant deletion
+    await updateProductStatusBasedOnVariants(variant.productId);
+
     return { message: "Product variant discontinued successfully" };
   } catch (error) {
     throw new Error(`Failed to delete product variant: ${error.message}`);
