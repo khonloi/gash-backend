@@ -15,9 +15,11 @@ async function createProductColorService({ color_name }) {
   const color = new ProductColors({ color_name });
   return await color.save();
 }
+
 async function getAllProductColorsService() {
   return await ProductColors.find();
 }
+
 async function getProductColorByIdService(id) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid color ID"); err.status = 400; throw err;
@@ -28,16 +30,30 @@ async function getProductColorByIdService(id) {
   }
   return color;
 }
+
 async function updateProductColorService(id, { color_name }) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid color ID"); err.status = 400; throw err;
   }
+
+  // Prevent update if any variant is using this color
+  const newProductVariant = require('../models/newProductVariant');
+  const inUseCount = await newProductVariant.countDocuments({ productColorId: id });
+  if (inUseCount > 0) {
+    const err = new Error(
+      'Không thể cập nhật Color vì còn biến thể sản phẩm đang dùng Color này. Hãy cập nhật/xóa các biến thể liên quan trước.'
+    );
+    err.status = 409;
+    throw err;
+  }
+
   if (color_name) {
     const existingColor = await ProductColors.findOne({ color_name, _id: { $ne: id } });
     if (existingColor) {
       const err = new Error("Color name already exists"); err.status = 400; throw err;
     }
   }
+
   const color = await ProductColors.findByIdAndUpdate(
     id,
     { color_name },
@@ -48,6 +64,7 @@ async function updateProductColorService(id, { color_name }) {
   }
   return color;
 }
+
 async function deleteProductColorService(id) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid color ID"); err.status = 400; throw err;
@@ -79,9 +96,11 @@ async function createProductSizeService({ size_name }) {
   const size = new ProductSizes({ size_name });
   return await size.save();
 }
+
 async function getAllProductSizesService() {
   return await ProductSizes.find();
 }
+
 async function getProductSizeByIdService(id) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid size ID"); err.status = 400; throw err;
@@ -92,16 +111,30 @@ async function getProductSizeByIdService(id) {
   }
   return size;
 }
+
 async function updateProductSizeService(id, { size_name }) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid size ID"); err.status = 400; throw err;
   }
+
+  // Prevent update if any variant is using this size
+  const newProductVariant = require('../models/newProductVariant');
+  const inUseCount = await newProductVariant.countDocuments({ productSizeId: id });
+  if (inUseCount > 0) {
+    const err = new Error(
+      'Không thể cập nhật Size vì còn biến thể sản phẩm đang dùng Size này. Hãy cập nhật/xóa các biến thể liên quan trước.'
+    );
+    err.status = 409;
+    throw err;
+  }
+
   if (size_name) {
     const existingSize = await ProductSizes.findOne({ size_name, _id: { $ne: id } });
     if (existingSize) {
       const err = new Error("Size name already exists"); err.status = 400; throw err;
     }
   }
+
   const size = await ProductSizes.findByIdAndUpdate(
     id,
     { size_name },
@@ -112,6 +145,7 @@ async function updateProductSizeService(id, { size_name }) {
   }
   return size;
 }
+
 async function deleteProductSizeService(id) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid size ID"); err.status = 400; throw err;

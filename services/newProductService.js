@@ -335,23 +335,46 @@ const updateProduct = async (productId, updateData) => {
   }
 };
 
-// Soft delete a product by setting status to discontinued
+// Soft delete a product by setting status to discontinued AND cascade to variants
 const deleteProduct = async (productId) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       throw new Error("Invalid product ID");
     }
 
-    const product = await newProduct.findByIdAndUpdate(
-      productId,
-      { productStatus: "discontinued", updatedAt: Date.now() },
-      { new: true }
-    );
-
+    const product = await newProduct.findById(productId).populate("productVariantIds");
     if (!product) {
       throw new Error("Product not found");
     }
-    return { message: "Product discontinued successfully" };
+
+    if (product.productStatus === "discontinued") {
+      return { message: "Product is already discontinued" };
+    }
+
+    // Step 1: Discontinue the product
+    await newProduct.findByIdAndUpdate(
+      productId,
+      { 
+        productStatus: "discontinued", 
+        updatedAt: Date.now() 
+      },
+      { new: true }
+    );
+
+    // Step 2: Discontinue all associated variants
+    if (product.productVariantIds && product.productVariantIds.length > 0) {
+      const variantIds = product.productVariantIds.map(v => v._id);
+
+      await newProductVariant.updateMany(
+        { _id: { $in: variantIds } },
+        { 
+          variantStatus: "discontinued", 
+          updatedAt: Date.now() 
+        }
+      );
+    }
+
+    return { message: "Product and all its variants discontinued successfully" };
   } catch (error) {
     throw new Error(`Failed to discontinue product: ${error.message}`);
   }

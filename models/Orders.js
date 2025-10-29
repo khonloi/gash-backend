@@ -41,13 +41,11 @@ const OrdersSchema = new mongoose.Schema(
       min: [0, 'Total price must be >= 0'],
     },
 
-
     discountAmount: {
       type: Number,
       default: 0,
       min: [0, 'Discount amount must be >= 0'],
     },
-
 
     finalPrice: {
       type: Number,
@@ -83,6 +81,18 @@ const OrdersSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+
+    cancelReason: {
+          type: String,
+          default: '',
+          maxlength: [500, 'Cancel reason cannot exceed 500 characters'],
+          required: [
+            function () {
+              return this.order_status === 'cancelled';
+            },
+            'Cancel reason is required when order is cancelled',
+          ],
+        },
 
     orderDetails: [
       {
