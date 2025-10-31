@@ -106,6 +106,42 @@ exports.getActiveLiveProducts = async (req, res) => {
     }
 };
 
+// Admin: get all live products including removed
+exports.getAllLiveProductsForAdmin = async (req, res) => {
+    try {
+        const { liveId } = req.params;
+
+        if (!liveId) {
+            return res.status(400).json({
+                success: false,
+                message: 'LiveId is required'
+            });
+        }
+
+        // Validate MongoDB ObjectId format
+        if (!mongoose.Types.ObjectId.isValid(liveId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid liveId format'
+            });
+        }
+
+        const result = await livestreamProductService.getAllLiveProductsForAdmin(liveId);
+
+        if (result.success) {
+            res.status(200).json(result);
+        } else {
+            res.status(400).json(result);
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
 // Pin product
 exports.pinProduct = async (req, res) => {
     try {

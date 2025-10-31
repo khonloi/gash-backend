@@ -173,8 +173,9 @@ exports.startLivestream = async (hostId, title, description) => {
             };
         }
 
-        // Generate unique room name
-        const roomName = `livestream_${hostId}_${Date.now()}`;
+        const shortHostId = hostId.toString().slice(-8); // Last 8 chars for uniqueness
+        const base36Timestamp = Date.now().toString(36); // Base36 encoding for shorter timestamp
+        const roomName = `livestream_${shortHostId}_${base36Timestamp}`;
 
         // Create LiveKit room
         const roomResult = await createRoom(roomName, {
@@ -257,14 +258,14 @@ exports.endLivestream = async (livestreamId, userId, userRole) => {
             };
         }
 
-        // Check permissions: Only admin or the livestream owner can end it
-        const isAdmin = userRole === 'admin' || userRole === 'manager';
-        const isOwner = livestream.hostId.toString() === userId.toString();
+        // Check permissions: Only admin or the livestream host can end it
+        const isAdmin = userRole === 'admin';
+        const isHost = livestream.hostId.toString() === userId.toString();
 
-        if (!isAdmin && !isOwner) {
+        if (!isAdmin && !isHost) {
             return {
                 success: false,
-                message: 'You do not have permission to end this livestream. Only the livestream owner or admin can end it.',
+                message: 'You do not have permission to end this livestream. Only the livestream host or admin can end it.',
                 error: 'INSUFFICIENT_PERMISSIONS'
             };
         }
@@ -293,7 +294,8 @@ exports.endLivestream = async (livestreamId, userId, userRole) => {
                 endedBy: {
                     userId: userId,
                     role: userRole,
-                    isOwner: isOwner
+                    isOwner: isHost,
+                    isAdmin: isAdmin
                 }
             }
         };
@@ -584,14 +586,16 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
             };
         }
 
-        // Import models
+        // Import models và services
         const LiveProduct = require('../models/LiveProduct');
         const LiveComment = require('../models/LiveComment');
+        const livestreamReactionService = require('./livestreamReactionService');
 
-        // Tìm livestream theo ID và populate host
+        // Tìm livestream theo ID và populate host (đầy đủ thông tin)
         const livestream = await Livestream.findById(livestreamId)
-            .select('_id hostId title description image roomName status startTime endTime peakViewers minViewers')
-            .populate('hostId', 'name email image role');
+            .select('_id hostId title description image roomName status startTime endTime peakViewers minViewers createdAt updatedAt')
+            .populate('hostId', 'name email image role username')
+            .lean();
 
         // Không tìm thấy livestream
         if (!livestream) {
@@ -601,58 +605,96 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
             };
         }
 
-        // Lấy tất cả LiveProducts cho livestream này (optimized with lean)
-        const liveProducts = await LiveProduct.find({
-            liveId: livestreamId,
-            isActive: true
-        }).sort({ isPinned: -1, addedAt: -1 })
-            .populate('pinBy', 'name username') // Removed 'role' - not needed
-            .populate('unpinBy', 'name username') // Removed 'role' - not needed
-            .populate({
-                path: 'productId',
-                select: 'productName description categoryId productImageIds', // Removed productVariantIds for performance
-                populate: [
-                    {
-                        path: 'categoryId',
-                        select: 'cat_name'
-                    },
-                    {
-                        path: 'productImageIds',
-                        select: 'imageUrl isMain',
-                        limit: 3 // Reduced from 5 to 3 for performance
-                    }
-                    // Removed productVariantIds populate - reduces query complexity
-                ]
+        // Lấy TẤT CẢ data song song để tối ưu performance (Promise.all)
+        const [liveProducts, liveComments, reactionData, currentViewers] = await Promise.all([
+            // 1. Tất cả LiveProducts (kể cả bị remove - isActive: false) với full product data
+            LiveProduct.find({
+                liveId: livestreamId
+                // Không filter isActive - lấy cả products đã bị remove
             })
-            .lean(); // Use lean() for read-only queries
+                .sort({ isPinned: -1, addedAt: -1 })
+                .populate('pinBy', 'name username role')
+                .populate('unpinBy', 'name username role')
+                .populate({
+                    path: 'productId',
+                    select: 'productName description categoryId productImageIds productVariantIds',
+                    populate: [
+                        {
+                            path: 'categoryId',
+                            select: 'cat_name'
+                        },
+                        {
+                            path: 'productImageIds',
+                            select: 'imageUrl isMain',
+                            limit: 5
+                        },
+                        {
+                            path: 'productVariantIds',
+                            populate: [
+                                {
+                                    path: 'productColorId',
+                                    select: 'color_name color_code'
+                                },
+                                {
+                                    path: 'productSizeId',
+                                    select: 'size_name'
+                                }
+                            ],
+                            select: 'variantImage variantPrice stockQuantity variantStatus'
+                        }
+                    ]
+                })
+                .lean(),
 
-        // Lấy comments: Admin xem hết (không limit) - chỉ admin mới có thể gọi getLiveById
-        const liveComments = await LiveComment.find({ liveId: livestreamId }) // Admin: get all comments including deleted
-            .populate('senderId', 'name username image') // Removed 'role'
-            .populate('deletedBy', 'name username') // Admin sees who deleted
-            .populate('pinBy', 'name username') // Removed 'role'
-            .populate('unpinBy', 'name username') // Removed 'role'
-            .sort({ isPinned: -1, createdAt: -1 })
-            // Không limit - admin cần xem hết để quản lý
-            .lean(); // Use lean() for read-only queries
+            // 2. Tất cả Comments (admin xem hết, including deleted)
+            LiveComment.find({ liveId: livestreamId })
+                .populate('senderId', 'name username image role')
+                .populate('deletedBy', 'name username role')
+                .populate('pinBy', 'name username role')
+                .populate('unpinBy', 'name username role')
+                .sort({ isPinned: -1, createdAt: -1 })
+                .lean(),
 
-        // Tính số lượng người xem hiện tại nếu đang live
-        let currentViewers = 0;
-        if (livestream.status === 'live') {
-            currentViewers = await getRealTimeViewers(livestream.roomName);
+            // 3. Reaction counts (aggregate)
+            livestreamReactionService.getLiveReactions(livestreamId),
+
+            // 4. Real-time viewer count (chỉ nếu đang live)
+            livestream.status === 'live'
+                ? getRealTimeViewers(livestream.roomName)
+                : Promise.resolve(0)
+        ]);
+
+        // Update viewer stats nếu đang live
+        if (livestream.status === 'live' && currentViewers > 0) {
             await updateViewerStats(livestream._id, currentViewers);
         }
 
-        // Trả về kết quả với LiveProducts và LiveComments
+        // Tính duration nếu livestream đã ended
+        let duration = null;
+        if (livestream.status === 'ended' && livestream.endTime && livestream.startTime) {
+            duration = new Date(livestream.endTime) - new Date(livestream.startTime);
+        }
+
+        // Trả về TẤT CẢ data của livestream
         return {
             success: true,
             message: 'Livestream details retrieved successfully',
             data: {
                 livestream: {
-                    ...livestream.toObject(),
-                    currentViewers, // Real-time for live, 0 for ended
-                    liveProducts, // Populated LiveProducts với full product data
-                    liveComments // Recent comments
+                    ...livestream,
+                    currentViewers: currentViewers, // Real-time for live, 0 for ended
+                    duration: duration // Duration in milliseconds (null if still live)
+                },
+                products: liveProducts, // Tất cả products với full data
+                comments: liveComments, // Tất cả comments (admin see all including deleted)
+                reactions: reactionData.success ? reactionData.data.reactions : {
+                    like: 0,
+                    love: 0,
+                    haha: 0,
+                    wow: 0,
+                    sad: 0,
+                    angry: 0,
+                    total: 0
                 }
             }
         };

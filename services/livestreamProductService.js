@@ -28,6 +28,13 @@ exports.addProductToLive = async (liveId, productId) => {
 
         await liveProduct.save();
 
+        // Update livestream's liveProductIds array
+        const Livestream = require('../models/Livestream');
+        await Livestream.findByIdAndUpdate(
+            liveId,
+            { $push: { liveProductIds: liveProduct._id } }
+        );
+
         // Populate product data with minimal fields for websocket (only essential for display)
         await liveProduct.populate({
             path: 'productId',
@@ -215,6 +222,49 @@ exports.getActiveLiveProducts = async (liveId) => {
         return {
             success: false,
             message: `Failed to get active products: ${error.message}`,
+            error: error.message
+        };
+    }
+};
+
+// Admin: get all live products (including removed), with timestamps
+exports.getAllLiveProductsForAdmin = async (liveId) => {
+    try {
+        const products = await LiveProduct.find({
+            liveId
+        })
+            .sort({ isPinned: -1, addedAt: -1 })
+            .populate('pinBy', 'name username role')
+            .populate('unpinBy', 'name username role')
+            .populate({
+                path: 'productId',
+                select: 'productName description categoryId productImageIds productVariantIds',
+                populate: [
+                    { path: 'categoryId', select: 'cat_name' },
+                    { path: 'productImageIds', select: 'imageUrl isMain', limit: 5 },
+                    {
+                        path: 'productVariantIds',
+                        populate: [
+                            { path: 'productColorId', select: 'color_name color_code' },
+                            { path: 'productSizeId', select: 'size_name' }
+                        ],
+                        select: 'variantImage variantPrice stockQuantity variantStatus'
+                    }
+                ]
+            })
+            .lean();
+
+        // products contain addedAt and removedAt (if removed)
+        return {
+            success: true,
+            message: 'All live products (including removed) retrieved successfully',
+            data: products,
+            count: products.length
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Failed to get all (including removed) live products: ${error.message}`,
             error: error.message
         };
     }

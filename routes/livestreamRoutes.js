@@ -20,8 +20,8 @@ router.post('/leave', authenticateJWT, livestreamController.leaveLivestream);
 // Start livestream
 router.post('/start', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.startLivestream);
 
-// End livestream
-router.put('/end', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.endLivestream);
+// End livestream (host or admin only - checked in service)
+router.put('/end', authenticateJWT, livestreamController.endLivestream);
 
 // Get host's livestreams
 router.get('/my-livestream', authenticateJWT, authorizeRole(['admin', 'manager']), livestreamController.getHostLivestreams);
