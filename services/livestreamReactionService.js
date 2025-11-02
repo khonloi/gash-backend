@@ -1,4 +1,6 @@
 const LiveReaction = require('../models/LiveReaction');
+const Livestream = require('../models/Livestream');
+const mongoose = require('mongoose');
 const { getIO } = require('../sockets/productSocket');
 
 // Add reaction to livestream
@@ -32,7 +34,6 @@ exports.addReaction = async (liveId, userId, reactionType) => {
         await liveReaction.save();
 
         // Update livestream's liveReactionIds array if it exists
-        const Livestream = require('../models/Livestream');
         if (Livestream.schema.paths.liveReactionIds) {
             await Livestream.findByIdAndUpdate(
                 liveId,
@@ -83,8 +84,6 @@ exports.addReaction = async (liveId, userId, reactionType) => {
 // Real-time updates qua WebSocket nên không cần pagination/limit
 exports.getLiveReactions = async (liveId) => {
     try {
-        const mongoose = require('mongoose');
-
         // Get reaction counts by type (aggregate)
         const reactionStats = await LiveReaction.aggregate([
             { $match: { liveId: new mongoose.Types.ObjectId(liveId) } },

@@ -28,12 +28,12 @@ const LiveProductSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    pinBy: {
+    addBy: {
       type: Schema.Types.ObjectId,
       ref: 'Accounts',
       default: null,
     },
-    unpinBy: {
+    removeBy: {
       type: Schema.Types.ObjectId,
       ref: 'Accounts',
       default: null,

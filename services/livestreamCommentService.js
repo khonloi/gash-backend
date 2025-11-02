@@ -1,4 +1,6 @@
 const LiveComment = require('../models/LiveComment');
+const LiveProduct = require('../models/LiveProduct');
+const Livestream = require('../models/Livestream');
 const { getIO } = require('../sockets/productSocket');
 
 // Add comment to livestream
@@ -23,7 +25,6 @@ exports.addComment = async (liveId, senderId, commentText) => {
         await liveComment.save();
 
         // Update livestream's liveCommentIds array
-        const Livestream = require('../models/Livestream');
         await Livestream.findByIdAndUpdate(
             liveId,
             { $push: { liveCommentIds: liveComment._id } }
@@ -237,7 +238,6 @@ exports.pinComment = async (commentId, liveId, userId, userRole) => {
         );
 
         // Unpin tất cả products trong livestream (vì chỉ có thể pin comment HOẶC product, không thể cả 2)
-        const LiveProduct = require('../models/LiveProduct');
         await LiveProduct.updateMany(
             {
                 liveId: liveId,
@@ -247,7 +247,6 @@ exports.pinComment = async (commentId, liveId, userId, userRole) => {
         );
 
         // Emit events cho các comments/products bị unpin (để frontend cập nhật UI)
-        const { getIO } = require('../sockets/productSocket');
         commentsToUnpin.forEach(commentToUnpin => {
             getIO().to(`live_${liveId}`).emit('comment:unpinned', {
                 liveId,

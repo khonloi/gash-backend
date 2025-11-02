@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 exports.addProductToLive = async (req, res) => {
     try {
         const { liveId, productId } = req.body;
+        const userId = req.user?.id;
 
         if (!liveId || !productId) {
             return res.status(400).json({
@@ -20,7 +21,7 @@ exports.addProductToLive = async (req, res) => {
             });
         }
 
-        const result = await livestreamProductService.addProductToLive(liveId, productId);
+        const result = await livestreamProductService.addProductToLive(liveId, productId, userId);
 
         if (result.success) {
             res.status(200).json(result);

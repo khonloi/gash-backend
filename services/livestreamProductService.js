@@ -1,7 +1,9 @@
 const LiveProduct = require('../models/LiveProduct');
+const LiveComment = require('../models/LiveComment');
+const Livestream = require('../models/Livestream');
 const { getIO } = require('../sockets/productSocket');
 
-exports.addProductToLive = async (liveId, productId) => {
+exports.addProductToLive = async (liveId, productId, userId = null) => {
     try {
         // Check if product is already active in this livestream
         const existingProduct = await LiveProduct.findOne({
@@ -23,19 +25,20 @@ exports.addProductToLive = async (liveId, productId) => {
             liveId,
             productId,
             addedAt: new Date(),
-            isActive: true
+            isActive: true,
+            addBy: userId // Track who added the product
         });
 
         await liveProduct.save();
 
         // Update livestream's liveProductIds array
-        const Livestream = require('../models/Livestream');
         await Livestream.findByIdAndUpdate(
             liveId,
             { $push: { liveProductIds: liveProduct._id } }
         );
 
         // Populate product data with minimal fields for websocket (only essential for display)
+        await liveProduct.populate('addBy', 'name username role');
         await liveProduct.populate({
             path: 'productId',
             select: 'productName categoryId productImageIds',
@@ -179,8 +182,8 @@ exports.getActiveLiveProducts = async (liveId) => {
             isActive: true
         })
             .sort({ isPinned: -1, addedAt: -1 }) // Pinned products first, then by added date
-            .populate('pinBy', 'name username role')
-            .populate('unpinBy', 'name username role')
+            .populate('addBy', 'name username role')
+            .populate('removeBy', 'name username role')
             .populate({
                 path: 'productId',
                 select: 'productName description categoryId productImageIds productVariantIds',
@@ -234,8 +237,8 @@ exports.getAllLiveProductsForAdmin = async (liveId) => {
             liveId
         })
             .sort({ isPinned: -1, addedAt: -1 })
-            .populate('pinBy', 'name username role')
-            .populate('unpinBy', 'name username role')
+            .populate('addBy', 'name username role')
+            .populate('removeBy', 'name username role')
             .populate({
                 path: 'productId',
                 select: 'productName description categoryId productImageIds productVariantIds',
@@ -320,11 +323,10 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
                 isPinned: true, // Chỉ unpin các product đang được pin
                 _id: { $ne: productId } // Exclude the product being pinned
             },
-            { isPinned: false, unpinBy: userId }
+            { isPinned: false, removeBy: userId }
         );
 
         // Unpin tất cả comments trong livestream (vì chỉ có thể pin comment HOẶC product, không thể cả 2)
-        const LiveComment = require('../models/LiveComment');
         const commentsToUnpin = await LiveComment.find({
             liveId: liveId,
             isPinned: true,
@@ -336,11 +338,10 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
                 liveId: liveId,
                 isPinned: true // Chỉ unpin các comment đang được pin
             },
-            { isPinned: false, unpinBy: userId }
+            { isPinned: false, removeBy: userId }
         );
 
         // Emit events cho các products/comments bị unpin (để frontend cập nhật UI)
-        const { getIO } = require('../sockets/productSocket');
         productsToUnpin.forEach(liveProductToUnpin => {
             getIO().to(`live_${liveId}`).emit('product:unpinned', {
                 liveId,
@@ -360,12 +361,12 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
 
         // Pin the specified product
         liveProduct.isPinned = true;
-        liveProduct.pinBy = userId;
-        liveProduct.unpinBy = null;
+        liveProduct.addBy = userId;
+        liveProduct.removeBy = null;
         await liveProduct.save();
 
         // Populate product data
-        await liveProduct.populate('pinBy', 'name username role');
+        await liveProduct.populate('addBy', 'name username role');
         await liveProduct.populate({
             path: 'productId',
             populate: [
@@ -410,9 +411,9 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
                     : null
             },
             pinnedBy: {
-                _id: liveProduct.pinBy._id,
-                name: liveProduct.pinBy.name,
-                username: liveProduct.pinBy.username
+                _id: liveProduct.addBy._id,
+                name: liveProduct.addBy.name,
+                username: liveProduct.addBy.username
             }
         };
 
@@ -469,14 +470,14 @@ exports.removePinProduct = async (productId, liveId, userId, userRole) => {
             };
         }
 
-        // Unpin the product (keep pinBy for statistics)
+        // Unpin the product (keep addBy for statistics)
         liveProduct.isPinned = false;
-        liveProduct.unpinBy = userId;
-        // Keep pinBy to track who originally pinned it
+        liveProduct.removeBy = userId;
+        // Keep addBy to track who originally pinned it
         await liveProduct.save();
 
         // Populate product data
-        await liveProduct.populate('unpinBy', 'name username role');
+        await liveProduct.populate('removeBy', 'name username role');
         await liveProduct.populate({
             path: 'productId',
             populate: [

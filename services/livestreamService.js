@@ -1,5 +1,9 @@
 const { generateAccessToken, createRoom, deleteRoom, roomService } = require('../config/livekit');
 const Livestream = require('../models/Livestream');
+const LiveProduct = require('../models/LiveProduct');
+const LiveComment = require('../models/LiveComment');
+const livestreamReactionService = require('./livestreamReactionService');
+const { broadcastViewerCount } = require('../sockets/productSocket');
 
 // Cache for viewer counts (to reduce API calls)
 const viewerCache = new Map(); // roomName -> { count: number, timestamp: number }
@@ -312,8 +316,10 @@ exports.endLivestream = async (livestreamId, userId, userRole) => {
 // Join livestream (User hoặc Staff)
 exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user') => {
     try {
-        // Find livestream
-        const livestream = await Livestream.findById(livestreamId);
+        // Find livestream and populate host
+        const livestream = await Livestream.findById(livestreamId)
+            .populate('hostId', 'name email image role username')
+            .lean();
         if (!livestream) {
             throw new Error('Livestream not found');
         }
@@ -336,7 +342,6 @@ exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user
         await updateViewerStats(livestream._id, currentViewers);
 
         // Broadcast viewer count update via WebSocket
-        const { broadcastViewerCount } = require('../sockets/productSocket');
         broadcastViewerCount(livestreamId);
 
         return {
@@ -355,6 +360,8 @@ exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user
                 peakViewers: livestream.peakViewers,
                 minViewers: livestream.minViewers,
                 status: livestream.status,
+                startTime: livestream.startTime,
+                endTime: livestream.endTime,
                 joinedAt: new Date()
             }
         };
@@ -388,7 +395,6 @@ exports.leaveLivestream = async (livestreamId, userId) => {
         await updateViewerStats(livestream._id, currentViewers);
 
         // Broadcast viewer count update via WebSocket
-        const { broadcastViewerCount } = require('../sockets/productSocket');
         broadcastViewerCount(livestreamId);
 
         return {
@@ -586,11 +592,6 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
             };
         }
 
-        // Import models và services
-        const LiveProduct = require('../models/LiveProduct');
-        const LiveComment = require('../models/LiveComment');
-        const livestreamReactionService = require('./livestreamReactionService');
-
         // Tìm livestream theo ID và populate host (đầy đủ thông tin)
         const livestream = await Livestream.findById(livestreamId)
             .select('_id hostId title description image roomName status startTime endTime peakViewers minViewers createdAt updatedAt')
@@ -613,8 +614,8 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
                 // Không filter isActive - lấy cả products đã bị remove
             })
                 .sort({ isPinned: -1, addedAt: -1 })
-                .populate('pinBy', 'name username role')
-                .populate('unpinBy', 'name username role')
+                .populate('addBy', 'name username role')
+                .populate('removeBy', 'name username role')
                 .populate({
                     path: 'productId',
                     select: 'productName description categoryId productImageIds productVariantIds',
@@ -723,8 +724,8 @@ exports.getLiveNow = async () => {
 
         // Dùng findOne vì chỉ có thể có 0 hoặc 1 livestream đang live (toàn hệ thống)
         const livestream = await Livestream.findOne({ status: 'live' })
-            .select('_id hostId title description image roomName status startTime peakViewers minViewers')
-            .populate('hostId', 'name email image role')
+            .select('_id hostId title description image roomName status startTime endTime peakViewers minViewers')
+            .populate('hostId', 'name email image role username')
             .sort({ startTime: -1 })
             .lean();
 

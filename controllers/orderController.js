@@ -313,10 +313,14 @@ exports.checkout = async (req, res) => {
 
     if (voucherCode) {
       try {
-        const applied = await applyVoucher(voucherCode, totalPrice);
-        voucher = applied.voucher;
-        discountAmount = applied.discountAmount;
-        finalPrice = applied.finalPrice;
+        const result = await applyVoucher(voucherCode, totalPrice);
+        // applyVoucher trả về { success, message, data: { voucher, discountAmount, finalPrice } }
+        if (result.success && result.data) {
+          voucher = result.data.voucher;
+          discountAmount = result.data.discountAmount;
+          finalPrice = result.data.finalPrice;
+        }
+        // Nếu không success (voucher invalid), bỏ qua voucher, giữ nguyên giá gốc
       } catch (err) {
         // bỏ qua voucher, giữ nguyên giá gốc
       }
@@ -447,18 +451,15 @@ exports.checkout = async (req, res) => {
         voucher: voucher ? {
           _id: voucher._id,
           code: voucher.code,
-          voucher_name: voucher.voucher_name,
           discountType: voucher.discountType,
           discountValue: voucher.discountValue,
-          discount_percentage: voucher.discount_percentage,
-          discount_amount: voucher.discount_amount,
           minOrderValue: voucher.minOrderValue,
-          maxDiscountAmount: voucher.maxDiscountAmount,
+          maxDiscount: voucher.maxDiscount,
           usedCount: voucher.usedCount,
           usageLimit: voucher.usageLimit,
           startDate: voucher.startDate,
           endDate: voucher.endDate,
-          isActive: voucher.isActive
+          isDeleted: voucher.isDeleted
         } : null,
         summary: {
           totalItems: orderDetailsToSave.length,
@@ -512,7 +513,7 @@ exports.cancelOrder = async (req, res) => {
     const orderId = req.params.id;
     const { cancelReason } = req.body; // Added cancelReason from request body
 
-// Validate cancelReason
+    // Validate cancelReason
     if (cancelReason && (typeof cancelReason !== 'string' || cancelReason.length > 500)) {
       return res.status(400).json({
         message: 'Invalid cancel reason. Must be a string up to 500 characters.'
