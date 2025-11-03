@@ -10,7 +10,7 @@ const LiveProductSchema = new Schema(
     },
     productId: {
       type: Schema.Types.ObjectId,
-      ref: "Product",
+      ref: "newProducts",
       required: true,
     },
     addedAt: {
@@ -24,7 +24,25 @@ const LiveProductSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    isPinned: {
+      type: Boolean,
+      default: false,
+    },
+    addBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null,
+    },
+    removeBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null,
+    },
   }
 );
+
+// Indexes for better query performance
+LiveProductSchema.index({ liveId: 1, isActive: 1 }); // Main query
+LiveProductSchema.index({ liveId: 1, isPinned: -1, addedAt: -1 }); // Sorted query
 
 module.exports = mongoose.model("LiveProduct", LiveProductSchema);

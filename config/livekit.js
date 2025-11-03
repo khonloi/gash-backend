@@ -17,14 +17,34 @@ const LIVEKIT_CONFIG = {
         enableTranscription: false
     },
 
-        // Token settings
+    // Token settings
     tokenSettings: {
-        ttl: 3600, // 1 hour
-        canPublish: true,
-        canSubscribe: true,
-        canPublishData: true
+        ttl: 7200, // 2 hours - Hợp lý và phù hợp cho hầu hết use cases
+        // Lý do chọn 2 giờ:
+        // Cân bằng tốt giữa security và performance
+        // Hầu hết livestream 1-2 giờ → không cần refresh
+        // Livestream dài hơn (>2h) → chỉ cần refresh 1 lần
+        // Security tốt hơn 4 giờ (token không quá lâu)
+        // Performance tốt (refresh không quá thường xuyên)
+        canPublish: false, // Viewers cannot publish video (only host can)
+        canSubscribe: true, // Viewers can subscribe to watch
+        canPublishData: true // Allow sending data messages (for comments/reactions)
     }
 };
+
+// Validate required environment variables
+const validateConfig = () => {
+    const requiredEnvVars = ['LIVEKIT_SERVER_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
+    const missing = requiredEnvVars.filter(varName => !process.env[varName]);
+
+    if (missing.length > 0) {
+        console.warn(`⚠️  Warning: Missing LiveKit environment variables: ${missing.join(', ')}`);
+        console.warn('   Using default/placeholder values. This will not work in production!');
+    }
+};
+
+// Validate on module load
+validateConfig();
 
 // Initialize LiveKit client
 const roomService = new RoomServiceClient(
@@ -42,12 +62,14 @@ const generateAccessToken = (roomName, participantName, participantIdentity, isH
     });
 
     // Grant permissions
+    // Host: can publish video/audio, can subscribe
+    // Viewers: can only subscribe (watch), cannot publish
     token.addGrant({
         room: roomName,
         roomJoin: true,
-        canPublish: isHost ? true : LIVEKIT_CONFIG.tokenSettings.canPublish,
-        canSubscribe: LIVEKIT_CONFIG.tokenSettings.canSubscribe,
-        canPublishData: LIVEKIT_CONFIG.tokenSettings.canPublishData,
+        canPublish: isHost, // Only host can publish video/audio
+        canSubscribe: LIVEKIT_CONFIG.tokenSettings.canSubscribe, // Both can subscribe/watch
+        canPublishData: LIVEKIT_CONFIG.tokenSettings.canPublishData, // Both can send data (comments)
         hidden: false,
         recorder: false
     });
@@ -74,7 +96,7 @@ const createRoom = async (roomName, options = {}) => {
         };
     } catch (error) {
         console.error('Error creating room:', error);
-            return {
+        return {
             success: false,
             error: error.message,
             message: 'Failed to create room'

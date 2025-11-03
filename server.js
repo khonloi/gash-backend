@@ -8,7 +8,7 @@ const chatSocket = require('./sockets/chat');
 const productSocket = require('./sockets/productSocket');
 
 // ===== LiveKit Service (SIMPLE) =====
-const livekitService = require('./services/livekitService');
+const livestreamService = require('./services/livestreamService');
 
 // Tạo HTTP server
 const server = http.createServer(app);

@@ -10,7 +10,7 @@ const LiveCommentSchema = new Schema(
     },
     senderId: {
       type: Schema.Types.ObjectId,
-      ref: "Account",
+      ref: "Accounts",
       required: true,
     },
     commentText: {
@@ -21,7 +21,39 @@ const LiveCommentSchema = new Schema(
       type: Date,
       default: Date.now,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+    deletedAt: {
+      type: Date,
+      default: null
+    },
+    deletedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null
+    },
+    isPinned: {
+      type: Boolean,
+      default: false
+    },
+    pinBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null
+    },
+    unpinBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'Accounts',
+      default: null
+    }
   }
 );
+
+// Indexes for better query performance
+LiveCommentSchema.index({ liveId: 1, isDeleted: 1, createdAt: -1 }); // Main query
+LiveCommentSchema.index({ liveId: 1, isPinned: -1, createdAt: -1 }); // Pinned comments query
+LiveCommentSchema.index({ liveId: 1, isDeleted: 1 }); // Admin query
 
 module.exports = mongoose.model("LiveComment", LiveCommentSchema);
