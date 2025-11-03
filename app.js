@@ -22,7 +22,15 @@ app.use(
 );
 
 // ===== Middleware =====
-app.use(morgan('dev'));
+// Only log in development or when DEBUG=true (reduce log spam in production)
+if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
+  app.use(morgan('dev'));
+} else {
+  // Only log errors in production
+  app.use(morgan('combined', {
+    skip: (req, res) => res.statusCode < 400
+  }));
+}
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -79,6 +87,16 @@ app.use('/new-carts', newCartRoutes);
 // ===== Notification Routes =====
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/notifications', notificationRoutes);
+
+// ===== Livestream Routes =====
+const livestreamRoutes = require('./routes/livestreamRoutes');
+const livestreamProductRoutes = require('./routes/livestreamProductRoutes');
+const livestreamCommentRoutes = require('./routes/livestreamCommentRoutes');
+const livestreamReactionRoutes = require('./routes/livestreamReactionRoutes');
+app.use('/livestream', livestreamRoutes);
+app.use('/livestream-products', livestreamProductRoutes);
+app.use('/livestream-comments', livestreamCommentRoutes);
+app.use('/livestream-reactions', livestreamReactionRoutes);
 
 // ===== 404 handler =====
 app.use((req, res, next) => {
