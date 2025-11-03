@@ -80,6 +80,11 @@ app.use('/new-carts', newCartRoutes);
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/notifications', notificationRoutes);
 
+// ===== Livestream Routes =====
+const livestreamRoutes = require('./routes/livestreamRoutes');
+app.use('/livestream', livestreamRoutes);
+
+
 // ===== 404 handler =====
 app.use((req, res, next) => {
   res.status(404).json({ success: false, message: 'Not Found' });
