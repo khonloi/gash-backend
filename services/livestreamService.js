@@ -1,7 +1,7 @@
 const { generateAccessToken, createRoom, deleteRoom, roomService } = require('../config/livekit');
 const Livestream = require('../models/Livestream');
-const LiveProduct = require('../models/LiveProduct');
-const LiveComment = require('../models/LiveComment');
+const LiveProduct = require('../models/liveProduct');
+const LiveComment = require('../models/liveComment');
 const livestreamReactionService = require('./livestreamReactionService');
 const { broadcastViewerCount } = require('../sockets/productSocket');
 
