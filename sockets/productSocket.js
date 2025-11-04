@@ -211,58 +211,6 @@ const startViewerCountBroadcast = (io, liveId) => {
   activeLivestreamRooms.set(liveId, roomData);
 };
 
-// Debounce tracker for manual broadcasts
-const broadcastDebounceMap = new Map(); // liveId -> timeoutId
-
-// Manually broadcast viewer count update (called when join/leave) with debounce
-const broadcastViewerCount = async (liveId) => {
-  if (!ioInstance) return;
-
-  // Debounce: only broadcast once every 1s even if multiple join/leave events
-  const existingTimeout = broadcastDebounceMap.get(liveId);
-  if (existingTimeout) {
-    clearTimeout(existingTimeout);
-  }
-
-  const timeoutId = setTimeout(async () => {
-    try {
-      const { getRealTimeViewers } = require('../services/livestreamService');
-      const Livestream = require('../models/Livestream');
-
-      const livestream = await Livestream.findOne({ _id: liveId, status: 'live' }).select('_id roomName status').lean();
-      if (livestream) {
-        const viewerCount = await getRealTimeViewers(livestream.roomName, false);
-        const roomData = activeLivestreamRooms.get(liveId);
-        if (roomData) {
-          roomData.lastViewerCount = viewerCount;
-          roomData.lastChangeTime = Date.now();
-          roomData.stableCount = 0;
-          // Reset to active interval on manual update
-          if (roomData.currentInterval !== VIEWER_COUNT_INTERVALS.ACTIVE) {
-            roomData.currentInterval = VIEWER_COUNT_INTERVALS.ACTIVE;
-            if (roomData.intervalId) {
-              clearInterval(roomData.intervalId);
-            }
-            // Restart broadcast with active interval
-            startViewerCountBroadcast(ioInstance, liveId);
-          }
-        }
-
-        ioInstance.to(`live_${liveId}`).emit('viewer:count', {
-          liveId,
-          count: viewerCount
-        });
-      }
-    } catch (error) {
-      // Silently handle error
-    } finally {
-      broadcastDebounceMap.delete(liveId);
-    }
-  }, 1000); // 1 second debounce
-
-  broadcastDebounceMap.set(liveId, timeoutId);
-};
-
 const getIO = () => {
   if (!ioInstance) {
     throw new Error('Socket.io not initialized!');
@@ -272,4 +220,3 @@ const getIO = () => {
 
 module.exports = initializeProductSocket;
 module.exports.getIO = getIO;
-module.exports.broadcastViewerCount = broadcastViewerCount;

@@ -15,6 +15,7 @@ app.use(
       'http://localhost:5174',
       'http://localhost:3000',
       'http://localhost:3001',
+      'https://gash-pi.vercel.app',
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
