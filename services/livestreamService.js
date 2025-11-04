@@ -1,9 +1,8 @@
 const { generateAccessToken, createRoom, deleteRoom, roomService } = require('../config/livekit');
 const Livestream = require('../models/Livestream');
-const LiveProduct = require('../models/LiveProduct');
-const LiveComment = require('../models/LiveComment');
+const LiveProduct = require('../models/liveProduct');
+const LiveComment = require('../models/liveComment');
 const livestreamReactionService = require('./livestreamReactionService');
-const { broadcastViewerCount } = require('../sockets/productSocket');
 
 // Cache for viewer counts (to reduce API calls)
 const viewerCache = new Map(); // roomName -> { count: number, timestamp: number }
@@ -61,8 +60,10 @@ const getRealTimeViewers = async (roomName, useCache = true) => {
         ]);
 
         if (!participants || participants.length === 0) {
-            // Cache the result
-            viewerCache.set(roomName, { count: 0, timestamp: Date.now() });
+            // Only cache if useCache is true (don't cache for real-time operations)
+            if (useCache) {
+                viewerCache.set(roomName, { count: 0, timestamp: Date.now() });
+            }
             return 0;
         }
 
@@ -85,8 +86,11 @@ const getRealTimeViewers = async (roomName, useCache = true) => {
             console.log(`Room ${roomName}: ${participants.length} participants, ${nonHostParticipants.length} viewer connections (excludes host only), ${uniqueViewers} unique viewers`);
         }
 
-        // Cache the result
-        viewerCache.set(roomName, { count: uniqueViewers, timestamp: Date.now() });
+        // Only cache if useCache is true (don't cache for real-time operations like getViewNumber)
+        // This ensures getViewNumber always gets fresh data without cache interference
+        if (useCache) {
+            viewerCache.set(roomName, { count: uniqueViewers, timestamp: Date.now() });
+        }
         return uniqueViewers; // Return unique users instead of total connections
     } catch (error) {
         // Cleanup timeout if still pending
@@ -121,9 +125,9 @@ const updateViewerStats = async (livestreamId, currentViewers) => {
             livestream.peakViewers = currentViewers;
         }
 
-        // Update min viewers (only if livestream is live and has viewers)
-        if (livestream.status === 'live' && currentViewers > 0) {
-            if (livestream.minViewers === 0 || currentViewers < livestream.minViewers) {
+        // Update min viewers (only if livestream is live, update even when count = 0)
+        if (livestream.status === 'live') {
+            if (livestream.minViewers === undefined || livestream.minViewers === null || livestream.minViewers === 0 || currentViewers < livestream.minViewers) {
                 livestream.minViewers = currentViewers;
             }
         }
@@ -335,14 +339,12 @@ exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user
         // Generate viewer access token
         const viewerToken = generateAccessToken(livestream.roomName, userName, participantIdentity, false);
 
-        // Get real-time viewer count from LiveKit (no cache for join/leave operations)
-        const currentViewers = await getRealTimeViewers(livestream.roomName, false);
+        // CRITICAL: Invalidate cache when user joins to ensure getViewNumber gets fresh data
+        // This ensures viewer count updates immediately when someone joins
+        viewerCache.delete(livestream.roomName);
 
-        // Update peak and min viewers
-        await updateViewerStats(livestream._id, currentViewers);
-
-        // Broadcast viewer count update via WebSocket
-        broadcastViewerCount(livestreamId);
+        // Note: Use getViewNumber API to get accurate viewer count (current, peak, min)
+        // No viewer count logic here to optimize performance
 
         return {
             success: true,
@@ -356,9 +358,6 @@ exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user
                 title: livestream.title,
                 description: livestream.description,
                 hostId: livestream.hostId,
-                currentViewers: currentViewers, // Real-time count
-                peakViewers: livestream.peakViewers,
-                minViewers: livestream.minViewers,
                 status: livestream.status,
                 startTime: livestream.startTime,
                 endTime: livestream.endTime,
@@ -375,36 +374,94 @@ exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user
     }
 };
 
+// Check if user is still in LiveKit room
+const isUserInRoom = async (roomName, userId) => {
+    try {
+        let timeoutId;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('LiveKit API timeout after 5s')), 5000);
+        });
+
+        const participants = await Promise.race([
+            roomService.listParticipants(roomName).finally(() => {
+                if (timeoutId) clearTimeout(timeoutId);
+            }),
+            timeoutPromise
+        ]);
+
+        if (!participants || participants.length === 0) {
+            return false;
+        }
+
+        // Check if userId exists in participants (identity = userId)
+        const userExists = participants.some(p => p.identity === userId.toString());
+        return userExists;
+
+    } catch (error) {
+        // On error, assume user is not in room (safe assumption)
+        if (process.env.DEBUG === 'true') {
+            console.error(`Error checking if user is in room: ${error.message}`);
+        }
+        return false;
+    }
+};
+
 // Leave livestream (User)
+// Optimized: Verifies user actually left LiveKit room before returning success
 exports.leaveLivestream = async (livestreamId, userId) => {
     try {
         // Find livestream
-        const livestream = await Livestream.findById(livestreamId);
+        const livestream = await Livestream.findById(livestreamId)
+            .select('_id roomName status')
+            .lean();
+        
         if (!livestream) {
-            throw new Error('Livestream not found');
+            return {
+                success: false,
+                message: 'Livestream not found'
+            };
         }
 
         if (livestream.status !== 'live') {
-            throw new Error('Livestream is not currently live');
+            return {
+                success: false,
+                message: 'Livestream is not currently live'
+            };
         }
 
-        // Get real-time viewer count from LiveKit (no cache for join/leave operations)
-        const currentViewers = await getRealTimeViewers(livestream.roomName, false);
+        // Verify user has actually left LiveKit room
+        // This ensures user disconnected from LiveKit before API returns success
+        const userStillInRoom = await isUserInRoom(livestream.roomName, userId);
+        
+        if (userStillInRoom) {
+            // User is still in room - they haven't actually left yet
+            return {
+                success: false,
+                message: 'User is still in livestream room. Please disconnect from LiveKit first.',
+                error: 'USER_STILL_IN_ROOM',
+                data: {
+                    livestreamId: livestream._id,
+                    userId: userId,
+                    actuallyLeft: false
+                }
+            };
+        }
 
-        // Update peak and min viewers
-        await updateViewerStats(livestream._id, currentViewers);
+        // User has actually left the room
+        // CRITICAL: Invalidate cache when user leaves to ensure getViewNumber gets fresh data
+        // This ensures viewer count updates immediately when someone leaves
+        viewerCache.delete(livestream.roomName);
 
-        // Broadcast viewer count update via WebSocket
-        broadcastViewerCount(livestreamId);
+        // Note: Use getViewNumber API to get accurate viewer count (current, peak, min)
+        // No viewer count logic here to optimize performance
 
         return {
             success: true,
             message: 'Left livestream successfully',
             data: {
                 livestreamId: livestream._id,
-                currentViewers: currentViewers, // Real-time count
-                peakViewers: livestream.peakViewers,
-                minViewers: livestream.minViewers,
+                userId: userId,
+                actuallyLeft: true,
                 leftAt: new Date()
             }
         };
@@ -499,8 +556,42 @@ exports.getHostLivestreams = async (hostId) => {
         // Get real-time viewer count only
         const currentViewers = await getRealTimeViewers(livestream.roomName);
 
-        // Update peak/min viewers
-        await updateViewerStats(livestream._id, currentViewers);
+        // Calculate peak and min viewers in real-time (same logic as getViewNumber)
+        let peakViewers = livestream.peakViewers || 0;
+        let minViewers = livestream.minViewers || 0;
+        let needsUpdate = false;
+
+        // Update peak viewers (always increase, never decrease)
+        if (currentViewers > peakViewers) {
+            peakViewers = currentViewers;
+            needsUpdate = true;
+        }
+
+        // Update min viewers (only if livestream is live, update even when count = 0)
+        if (minViewers === undefined || minViewers === null || minViewers === 0 || currentViewers < minViewers) {
+            minViewers = currentViewers;
+            needsUpdate = true;
+        }
+
+        // Update database if needed (non-blocking, don't wait for save)
+        if (needsUpdate) {
+            const livestreamDoc = await Livestream.findById(livestream._id);
+            if (livestreamDoc) {
+                if (currentViewers > (livestreamDoc.peakViewers || 0)) {
+                    livestreamDoc.peakViewers = currentViewers;
+                }
+                // Update min viewers (update even when count = 0)
+                if ((livestreamDoc.minViewers || 0) === 0 || currentViewers < livestreamDoc.minViewers) {
+                    livestreamDoc.minViewers = currentViewers;
+                }
+                livestreamDoc.save().catch(err => {
+                    // Silently handle save errors
+                    if (process.env.DEBUG_VIEWERS === 'true') {
+                        console.error('Error updating viewer stats:', err.message);
+                    }
+                });
+            }
+        }
 
         return {
             success: true,
@@ -508,7 +599,9 @@ exports.getHostLivestreams = async (hostId) => {
             data: {
                 livestream: {
                     ...livestream,
-                    currentViewers: currentViewers, // Real-time count
+                    currentViewers: currentViewers, // Real-time current viewer count
+                    peakViewers: peakViewers, // Peak viewers (highest ever, calculated real-time)
+                    minViewers: minViewers, // Min viewers (lowest when live, calculated real-time)
                     host: livestream.hostId // Host info (already populated)
                 }
             }
@@ -778,5 +871,8 @@ exports.getLiveNow = async () => {
         };
     }
 };
+
+// Get view number (real-time, excludes host) - Returns current, peak, and min viewers
+
 
 
