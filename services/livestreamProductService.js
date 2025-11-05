@@ -6,13 +6,13 @@ const { getIO } = require('../sockets/productSocket');
 exports.addProductToLive = async (liveId, productId, userId = null) => {
     try {
         // Check if product is already active in this livestream
-        const existingProduct = await LiveProduct.findOne({
+        const existingActiveProduct = await LiveProduct.findOne({
             liveId,
             productId,
             isActive: true
         });
 
-        if (existingProduct) {
+        if (existingActiveProduct) {
             return {
                 success: false,
                 message: 'Product is already active in this livestream',
@@ -20,7 +20,8 @@ exports.addProductToLive = async (liveId, productId, userId = null) => {
             };
         }
 
-        // Create new live product
+        // Always create new record for each add/remove cycle to track history correctly
+        // This allows logging accurate add/remove times for each cycle
         const liveProduct = new LiveProduct({
             liveId,
             productId,
@@ -94,63 +95,60 @@ exports.addProductToLive = async (liveId, productId, userId = null) => {
     }
 };
 
-exports.removeProductFromLive = async (liveId, productId) => {
+exports.removeProductFromLive = async (liveId, productId, userId = null) => {
     try {
-        // Check if product exists (active or not)
-        const existingProduct = await LiveProduct.findOne({
-            liveId,
-            productId
-        });
-
-        // If no product found, return error
-        if (!existingProduct) {
-            return {
-                success: false,
-                message: 'Product not found in this livestream',
-                error: 'PRODUCT_NOT_FOUND'
-            };
-        }
-
-        // If product exists but not active, return success (already removed)
-        if (!existingProduct.isActive) {
-            // Populate product data with specific fields
-            await existingProduct.populate({
-                path: 'productId',
-                select: 'productName description categoryId'
-            });
-            await existingProduct.populate({
-                path: 'productId.categoryId',
-                select: 'cat_name'
-            });
-
-            return {
-                success: true,
-                message: 'Product is already removed from livestream',
-                data: existingProduct
-            };
-        }
-
-        // Find and update the active product
+        // Find the ACTIVE product (must be isActive: true)
+        // This ensures we remove the correct record even if there are multiple records (from previous add/remove cycles)
         const liveProduct = await LiveProduct.findOneAndUpdate(
             {
                 liveId,
                 productId,
-                isActive: true
+                isActive: true // CRITICAL: Only find active product
             },
             {
                 isActive: false,
-                removedAt: new Date()
+                removedAt: new Date(),
+                removeBy: userId // Track who removed the product
             },
             { new: true }
         );
 
+        // If no active product found, return error
         if (!liveProduct) {
-            return {
-                success: false,
-                message: 'Active product not found in this livestream',
-                error: 'PRODUCT_NOT_ACTIVE'
-            };
+            // Check if product was ever added (to provide better error message)
+            const anyProduct = await LiveProduct.findOne({
+                liveId,
+                productId
+            });
+
+            if (!anyProduct) {
+                return {
+                    success: false,
+                    message: 'Product not found in this livestream',
+                    error: 'PRODUCT_NOT_FOUND'
+                };
+            } else {
+                // Product exists but not active (already removed)
+                await anyProduct.populate('removeBy', 'name username role');
+                await anyProduct.populate({
+                    path: 'productId',
+                    select: 'productName description categoryId'
+                });
+                await anyProduct.populate({
+                    path: 'productId.categoryId',
+                    select: 'cat_name'
+                });
+
+                return {
+                    success: true,
+                    message: 'Product is already removed from livestream',
+                    data: anyProduct
+                };
+            }
         }
+
+        // Populate removeBy for response
+        await liveProduct.populate('removeBy', 'name username role');
 
         // Emit realtime event with minimal payload (only IDs)
         getIO().to(`live_${liveId}`).emit('product:removed', {
@@ -163,7 +161,7 @@ exports.removeProductFromLive = async (liveId, productId) => {
 
         return {
             success: true,
-            message: 'Product removed from livestream successfully',
+            message: 'Product removed from livestream successfully!',
             data: liveProduct
         };
     } catch (error) {

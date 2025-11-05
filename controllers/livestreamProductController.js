@@ -40,6 +40,7 @@ exports.addProductToLive = async (req, res) => {
 exports.removeProductFromLive = async (req, res) => {
     try {
         const { liveId, productId } = req.body;
+        const userId = req.user.id; // Get userId from authenticated user
 
         if (!liveId || !productId) {
             return res.status(400).json({
@@ -56,7 +57,7 @@ exports.removeProductFromLive = async (req, res) => {
             });
         }
 
-        const result = await livestreamProductService.removeProductFromLive(liveId, productId);
+        const result = await livestreamProductService.removeProductFromLive(liveId, productId, userId);
 
         if (result.success) {
             res.status(200).json(result);
