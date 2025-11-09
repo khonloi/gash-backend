@@ -42,6 +42,23 @@ exports.createVoucher = async (voucherData) => {
         } = voucherData;
 
         // 1. Input validation 
+        // 1.0 Check for blank/empty required fields
+        // Note: minOrderValue can be 0, so we check for undefined/null/'' but not falsy
+        if (!code || code.trim() === '' ||
+            !discountType || discountType.trim() === '' ||
+            discountValue === undefined || discountValue === null || discountValue === '' ||
+            (minOrderValue === undefined || minOrderValue === null || minOrderValue === '') ||
+            startDate === undefined || startDate === null || startDate === '' ||
+            endDate === undefined || endDate === null || endDate === '' ||
+            usageLimit === undefined || usageLimit === null || usageLimit === '' ||
+            (discountType === 'percentage' && (maxDiscount === undefined || maxDiscount === null || maxDiscount === ''))) {
+            return {
+                success: false,
+                message: 'Please fill in all required fields',
+                error: 'VALIDATION_ERROR'
+            };
+        }
+
         // 1.1 Code
         if (!/^[A-Z0-9]{3,30}$/.test(code)) {
             return {
@@ -81,21 +98,45 @@ exports.createVoucher = async (voucherData) => {
         }
 
         // 1.4 Min order value
-        if (discountType === 'fixed' && minOrderValue !== null && discountValue > minOrderValue) {
+        // Validate type and value range (must be number >= 0)
+        if (typeof minOrderValue !== 'number') {
             return {
                 success: false,
-                message: 'For fixed discount, the discount value cannot exceed the minimum order value.',
-                error: 'DISCOUNT_EXCEEDS_MIN_ORDER'
+                message: 'Please fill in all required fields',
+                error: 'VALIDATION_ERROR'
+            };
+        }
+        if (minOrderValue < 0) {
+            return {
+                success: false,
+                message: 'Minimum order value cannot be negative.',
+                error: 'INVALID_MIN_ORDER_VALUE'
             };
         }
 
+        // Business logic validation for fixed discount:
+        // If minOrderValue > 0, discountValue cannot exceed minOrderValue
+        // If minOrderValue = 0, no restriction (voucher can be used for any order)
+        if (discountType === 'fixed' && minOrderValue > 0) {
+            if (discountValue > minOrderValue) {
+                return {
+                    success: false,
+                    message: 'For fixed discount, the discount value cannot exceed the minimum order value.',
+                    error: 'DISCOUNT_EXCEEDS_MIN_ORDER'
+                };
+            }
+        }
+
         // 1.5 Max discount
-        if (discountType === 'percentage' && (maxDiscount === null || maxDiscount === undefined)) {
-            return {
-                success: false,
-                message: 'For percentage discount, a maximum discount value is required.',
-                error: 'MISSING_MAX_DISCOUNT'
-            };
+        // Note: Blank check for maxDiscount is already done in section 1.0
+        if (discountType === 'percentage') {
+            if (typeof maxDiscount !== 'number' || maxDiscount <= 0) {
+                return {
+                    success: false,
+                    message: 'Maximum discount must be greater than 0.',
+                    error: 'INVALID_MAX_DISCOUNT'
+                };
+            }
         }
 
         // 1.6 Start date
@@ -142,13 +183,27 @@ exports.createVoucher = async (voucherData) => {
 
         return {
             success: true,
-            message: 'Voucher created successfully.',
+            message: 'Voucher added successfully',
             data: savedVoucher
         };
 
     } catch (error) {
         // 3. Handle MongoDB errors
         if (error.name === 'ValidationError') {
+            // Check if it's a required field error
+            const errors = error.errors || {};
+            const hasRequiredError = Object.values(errors).some(
+                err => err.kind === 'required' || err.message?.includes('required')
+            );
+
+            if (hasRequiredError) {
+                return {
+                    success: false,
+                    message: 'Please fill in all required fields',
+                    error: 'VALIDATION_ERROR'
+                };
+            }
+
             return {
                 success: false,
                 message: 'Invalid input: ' + error.message,
@@ -158,7 +213,7 @@ exports.createVoucher = async (voucherData) => {
         if (error.code === 11000) {
             return {
                 success: false,
-                message: 'Voucher code already exists.',
+                message: 'Voucher code already exists',
                 error: 'DUPLICATE_CODE'
             };
         }
@@ -193,6 +248,20 @@ exports.updateVoucher = async (id, updateData) => {
         }
 
         // 1. Input validation (follow field order)
+        // 1.0 Check for blank/empty fields when provided
+        if ((discountType !== undefined && (!discountType || discountType.trim() === '')) ||
+            (discountValue !== undefined && (discountValue === null || discountValue === '')) ||
+            (startDate !== undefined && (startDate === null || startDate === '')) ||
+            (endDate !== undefined && (endDate === null || endDate === '')) ||
+            (usageLimit !== undefined && (usageLimit === null || usageLimit === '')) ||
+            (maxDiscount !== undefined && (maxDiscount === null || maxDiscount === ''))) {
+            return {
+                success: false,
+                message: 'Please fill in all required fields',
+                error: 'VALIDATION_ERROR'
+            };
+        }
+
         // 1.2 Discount type
         if (discountType !== undefined) {
             if (!['percentage', 'fixed'].includes(discountType)) {
@@ -231,29 +300,70 @@ exports.updateVoucher = async (id, updateData) => {
 
         // 1.4 Min order value
         if (minOrderValue !== undefined) {
-            const effectiveDiscountType = discountType || voucher.discountType;
-            const effectiveDiscountValue = discountValue !== undefined ? discountValue : voucher.discountValue;
-            if (effectiveDiscountType === 'fixed' && effectiveDiscountValue > minOrderValue) {
+            // Validate type
+            if (minOrderValue === null || minOrderValue === '' || typeof minOrderValue !== 'number') {
                 return {
                     success: false,
-                    message: 'For fixed discount, the discount value cannot exceed the minimum order value.',
-                    error: 'DISCOUNT_EXCEEDS_MIN_ORDER'
+                    message: 'Please fill in all required fields',
+                    error: 'VALIDATION_ERROR'
                 };
             }
+            // Validate value range (must be >= 0)
+            if (minOrderValue < 0) {
+                return {
+                    success: false,
+                    message: 'Minimum order value cannot be negative.',
+                    error: 'INVALID_MIN_ORDER_VALUE'
+                };
+            }
+
+            // Business logic validation for fixed discount:
+            // If minOrderValue > 0, discountValue cannot exceed minOrderValue
+            // If minOrderValue = 0, no restriction (voucher can be used for any order)
+            const effectiveDiscountType = discountType !== undefined ? discountType : voucher.discountType;
+            const effectiveDiscountValue = discountValue !== undefined ? discountValue : voucher.discountValue;
+
+            if (effectiveDiscountType === 'fixed' && minOrderValue > 0) {
+                if (effectiveDiscountValue > minOrderValue) {
+                    return {
+                        success: false,
+                        message: 'For fixed discount, the discount value cannot exceed the minimum order value.',
+                        error: 'DISCOUNT_EXCEEDS_MIN_ORDER'
+                    };
+                }
+            }
+
             voucher.minOrderValue = minOrderValue;
         }
 
         // 1.5 Max discount
         if (maxDiscount !== undefined) {
-            const effectiveDiscountType = discountType || voucher.discountType;
-            if (effectiveDiscountType === 'percentage' && (maxDiscount === null || maxDiscount === undefined)) {
-                return {
-                    success: false,
-                    message: 'For percentage discount, a maximum discount value is required.',
-                    error: 'MISSING_MAX_DISCOUNT'
-                };
+            const effectiveDiscountType = discountType !== undefined ? discountType : voucher.discountType;
+            if (effectiveDiscountType === 'percentage') {
+                // For percentage discount, maxDiscount cannot be blank when provided
+                if (maxDiscount === null || maxDiscount === '') {
+                    return {
+                        success: false,
+                        message: 'Please fill in all required fields',
+                        error: 'VALIDATION_ERROR'
+                    };
+                }
+                if (typeof maxDiscount !== 'number' || maxDiscount <= 0) {
+                    return {
+                        success: false,
+                        message: 'Maximum discount must be greater than 0.',
+                        error: 'INVALID_MAX_DISCOUNT'
+                    };
+                }
             }
             voucher.maxDiscount = maxDiscount;
+        } else if (discountType !== undefined && discountType === 'percentage') {
+            // Changing to percentage but maxDiscount not provided
+            return {
+                success: false,
+                message: 'Please fill in all required fields',
+                error: 'VALIDATION_ERROR'
+            };
         }
 
         // 1.6 Start date
@@ -298,7 +408,7 @@ exports.updateVoucher = async (id, updateData) => {
 
         return {
             success: true,
-            message: 'Voucher updated successfully.',
+            message: 'Voucher edited successfully',
             data: updatedVoucher
         };
 
@@ -357,7 +467,7 @@ exports.deleteVoucher = async (id) => {
         // Trả về kết quả
         return {
             success: true,
-            message: 'Voucher disabled successfully.',
+            message: 'Voucher disabled successfully',
             data: {
                 id: voucher._id,
                 code: voucher.code,
@@ -375,31 +485,31 @@ exports.deleteVoucher = async (id) => {
 };
 
 // Get all vouchers for user (only active)
-exports.getAllVouchersForUser = async () => {
-    try {
-        // Chỉ lấy voucher chưa bị xóa (isDeleted: false)
-        const vouchers = await Voucher.find({ isDeleted: false })
-            .sort({ createdAt: -1 });
+// exports.getAllVouchersForUser = async () => {
+//     try {
+//         // Chỉ lấy voucher chưa bị xóa (isDeleted: false)
+//         const vouchers = await Voucher.find({ isDeleted: false })
+//             .sort({ createdAt: -1 });
 
-        const result = vouchers.map(v => {
-            const obj = v.toJSON();
-            obj.status = 'active';
-            return obj;
-        });
+//         const result = vouchers.map(v => {
+//             const obj = v.toJSON();
+//             obj.status = 'active';
+//             return obj;
+//         });
 
-        return {
-            success: true,
-            message: 'Vouchers retrieved successfully',
-            data: result
-        };
-    } catch (error) {
-        return {
-            success: false,
-            message: 'Failed to retrieve vouchers',
-            error: error.message
-        };
-    }
-};
+//         return {
+//             success: true,
+//             message: 'Vouchers retrieved successfully',
+//             data: result
+//         };
+//     } catch (error) {
+//         return {
+//             success: false,
+//             message: 'Failed to retrieve vouchers',
+//             error: error.message
+//         };
+//     }
+// };
 
 // Apply voucher (used in order processing)
 exports.applyVoucher = async (voucherCode, totalPrice) => {
@@ -457,10 +567,13 @@ exports.applyVoucher = async (voucherCode, totalPrice) => {
                 error: 'VOUCHER_LIMIT_REACHED'
             };
         }
-        if (totalPrice < voucher.minOrderValue) {
+        // Check minimum order value requirement
+        // If minOrderValue = 0, no restriction (any order > 0 can use the voucher)
+        // If minOrderValue > 0, order must meet the minimum requirement
+        if (voucher.minOrderValue > 0 && totalPrice < voucher.minOrderValue) {
             return {
                 success: false,
-                message: `Order must be at least ${voucher.minOrderValue} to use this voucher.`,
+                message: `Order must be at least Min Order Value to use this voucher.`,
                 error: 'MIN_ORDER_NOT_MET'
             };
         }
@@ -480,7 +593,7 @@ exports.applyVoucher = async (voucherCode, totalPrice) => {
 
         return {
             success: true,
-            message: 'Voucher applied successfully.',
+            message: 'Voucher applied successfully',
             data: {
                 voucher,
                 discountAmount,
@@ -509,7 +622,7 @@ exports.previewVoucher = async (voucherCode, totalPrice) => {
 
         return {
             success: true,
-            message: voucher ? 'Voucher applied successfully.' : 'No voucher applied.',
+            message: voucher ? 'Voucher applied successfully' : 'No voucher applied.',
             data: {
                 voucherId: voucher ? (voucher.id || voucher._id.toString()) : null,
                 code: voucher ? voucher.code : null,
