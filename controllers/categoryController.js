@@ -1,52 +1,126 @@
 const categoryService = require('../services/categoryService');
+const mongoose = require('mongoose');
 
+// Create category
 exports.createCategory = async (req, res) => {
   try {
-    const savedCategory = await categoryService.createCategoryService(req.body);
-    res.status(201).json({
-      message: 'Category created successfully',
-      category: savedCategory
-    });
+    const result = await categoryService.createCategoryService(req.body);
+
+    if (result.success) {
+      res.status(201).json(result);
+    } else {
+      const statusCode = result.error === 'DUPLICATE_CATEGORY_NAME' || result.error === 'VALIDATION_ERROR' || result.error === 'INVALID_CATEGORY_NAME_FORMAT' ? 400 : 500;
+      res.status(statusCode).json(result);
+    }
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error creating category' });
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
+// Get all categories
 exports.getAllCategories = async (req, res) => {
   try {
-    const categories = await categoryService.getAllCategoriesService();
-    res.status(200).json(categories);
+    const result = await categoryService.getAllCategoriesService();
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error retrieving categories' });
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
+// Get category by ID
 exports.getCategoryById = async (req, res) => {
   try {
-    const category = await categoryService.getCategoryByIdService(req.params.id);
-    res.status(200).json(category);
+    const result = await categoryService.getCategoryByIdService(req.params.id);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      const statusCode = result.error === 'CATEGORY_NOT_FOUND' ? 404 :
+        result.error === 'INVALID_ID_FORMAT' ? 400 : 500;
+      res.status(statusCode).json(result);
+    }
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error retrieving category' });
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
+// Update category
 exports.updateCategory = async (req, res) => {
   try {
-    const category = await categoryService.updateCategoryService(req.params.id, req.body);
-    res.status(200).json({
-      message: 'Category updated successfully',
-      category
-    });
+    const { id } = req.params;
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid category ID format.'
+      });
+    }
+
+    const result = await categoryService.updateCategoryService(id, req.body);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      const statusCode = result.error === 'CATEGORY_NOT_FOUND' ? 404 :
+        result.error === 'VALIDATION_ERROR' || result.error === 'DUPLICATE_CATEGORY_NAME' || result.error === 'INVALID_CATEGORY_NAME_FORMAT' || result.error === 'ALREADY_DELETED' ? 400 :
+          result.error === 'CATEGORY_IN_USE' ? 409 : 500;
+      res.status(statusCode).json(result);
+    }
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error updating category' });
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
+// Delete category
 exports.deleteCategory = async (req, res) => {
   try {
-    const result = await categoryService.deleteCategoryService(req.params.id, req.user);
-    res.status(200).json(result);
+    const { id } = req.params;
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid category ID format.'
+      });
+    }
+
+    const result = await categoryService.deleteCategoryService(id, req.user);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      const statusCode = result.error === 'CATEGORY_NOT_FOUND' ? 404 :
+        result.error === 'INVALID_ID_FORMAT' || result.error === 'ALREADY_DELETED' ? 400 :
+          result.error === 'CATEGORY_IN_USE' ? 409 : 500;
+      res.status(statusCode).json(result);
+    }
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error deleting category' });
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 }; 

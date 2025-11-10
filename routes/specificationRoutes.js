@@ -1,28 +1,28 @@
 const express = require("express");
 const router = express.Router();
 const {
-  authenticateJWT,
-  authorizeRole,
+    authenticateJWT,
+    authorizeRole,
 } = require("../middleware/authMiddleware");
 const {
-  // createProductImage,
-  // getAllProductImages,
-  // getProductImagesByProductId,
-  // getProductImageById,
-  // updateProductImage,
-  // deleteProductImage,
-  createProductColor,
-  getAllProductColors,
-  getProductColorById,
-  updateProductColor,
-  deleteProductColor,
-  createProductSize,
-  getAllProductSizes,
-  getProductSizeById,
-  updateProductSize,
-  deleteProductSize,
-  searchSpecifications
-} = require("../controllers/specController");
+    // createProductImage,
+    // getAllProductImages,
+    // getProductImagesByProductId,
+    // getProductImageById,
+    // updateProductImage,
+    // deleteProductImage,
+    createProductColor,
+    getAllProductColors,
+    getProductColorById,
+    updateProductColor,
+    deleteProductColor,
+    createProductSize,
+    getAllProductSizes,
+    getProductSizeById,
+    updateProductSize,
+    deleteProductSize,
+    searchSpecifications
+} = require("../controllers/specificationController");
 
 // --- Product Images Routes ---
 // router.post("/create-image", authenticateJWT, authorizeRole(["admin", "manager"]), createProductImage);
@@ -47,3 +47,4 @@ router.put("/update-size/:id", authenticateJWT, authorizeRole(["admin", "manager
 router.delete("/delete-size/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductSize);
 
 module.exports = router;
+
