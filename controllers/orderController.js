@@ -113,7 +113,7 @@ exports.getOrderById = async (req, res) => {
 exports.updateOrderByAdmin = async (req, res) => {
   try {
     // Chỉ admin và staff mới có thể cập nhật đơn hàng
-    if (req.user.role !== 'admin' && req.user.role !== 'staff') {
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
       return res.status(403).json({ message: 'Access denied: Admin/Staff role required' });
     }
 

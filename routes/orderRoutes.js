@@ -46,6 +46,6 @@ router.get('/user/:acc_id', authenticateJWT, getUserOrders);
 router.get('/admin/get-all-order', authenticateJWT, authorizeRole(['admin', 'manager']), getAllOrderForAdmin);
 
 // Cập nhật đơn hàng - Chỉ Admin/Staff
-router.put('/admin/update/:orderId', authenticateJWT, authorizeRole(['admin', 'staff']), updateOrderByAdmin);
+router.put('/admin/update/:orderId', authenticateJWT, authorizeRole(['admin', 'manager']), updateOrderByAdmin);
 
 module.exports = router;

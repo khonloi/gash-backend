@@ -23,15 +23,15 @@ router.delete('/:orderId/delete-feedback/:variantId', authenticateJWT, deleteFee
 
 // ADMIN APIs
 // Get all feedbacks with pagination and filters (Admin/Staff only)
-router.get("/get-all-feedbacks", authenticateJWT, authorizeRole(['admin', 'staff']), feedbackController.getAllFeedback);
+router.get("/get-all-feedbacks", authenticateJWT, authorizeRole(['admin', 'manager']), feedbackController.getAllFeedback);
 
 // Get feedback by ID (Admin/Staff only)
-router.get("/get-feedback-by-id/:feedbackId", authenticateJWT, authorizeRole(['admin', 'staff']), feedbackController.getFeedbackById);
+router.get("/get-feedback-by-id/:feedbackId", authenticateJWT, authorizeRole(['admin', 'manager']), feedbackController.getFeedbackById);
 
 // Delete feedback (soft delete) (Admin/Staff only)
-router.delete("/delete-feedback/:feedbackId", authenticateJWT, authorizeRole(['admin', 'staff']), feedbackController.deleteFeedback);
+router.delete("/delete-feedback/:feedbackId", authenticateJWT, authorizeRole(['admin', 'manager']), feedbackController.deleteFeedback);
 
 // Restore deleted feedback (Admin/Staff only)
-router.patch("/restore-feedback/:feedbackId", authenticateJWT, authorizeRole(['admin', 'staff']), feedbackController.restoreFeedback);
+router.patch("/restore-feedback/:feedbackId", authenticateJWT, authorizeRole(['admin', 'manager']), feedbackController.restoreFeedback);
 
 module.exports = router;
