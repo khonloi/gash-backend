@@ -29,7 +29,7 @@ exports.createProductColorService = async ({ color_name }) => {
             };
         }
 
-        // 2. Check duplicate
+        // 2. Check duplicate - chỉ check với các color chưa bị xóa (isDeleted: false)
         const existingColor = await ProductColors.findOne({ color_name: trimmedName, isDeleted: false });
         if (existingColor) {
             return {
@@ -307,7 +307,7 @@ exports.createProductSizeService = async ({ size_name }) => {
             };
         }
 
-        // 2. Check duplicate
+        // 2. Check duplicate - chỉ check với các size chưa bị xóa (isDeleted: false)
         const existingSize = await ProductSizes.findOne({ size_name: trimmedName, isDeleted: false });
         if (existingSize) {
             return {
