@@ -39,7 +39,7 @@ exports.exportBill = async (req, res) => {
         }
 
         // Check quyền: admin/staff có thể xem tất cả, user chỉ xem được bill của mình
-        if (req.user.role !== 'admin' && req.user.role !== 'staff' &&
+        if (req.user.role !== 'admin' && req.user.role !== 'manager' &&
             order.acc_id._id.toString() !== req.user.id) {
             return res.status(403).json({
                 success: false,

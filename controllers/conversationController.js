@@ -1,3 +1,4 @@
+// conversationController.js
 
 const Conversations = require('../models/Conversation');
 const Messages = require('../models/Message');
@@ -9,7 +10,11 @@ exports.getList = async (req, res) => {
     const filter = {};
     if (status) filter.status = status;
     if (accountId) filter.accountId = accountId;
-    if (staffId) filter.staffId = staffId;
+    if (staffId) filter.staffId = { $in: [staffId, null] };
+
+    // ---- ONLY CONVERSATIONS THAT HAVE AT LEAST ONE MESSAGE ----
+    const conversationsWithMsg = await Messages.distinct('conversationId');
+    filter._id = { $in: conversationsWithMsg };
 
     const conversations = await Conversations.find(filter)
       .populate('accountId', 'username email')
@@ -22,9 +27,25 @@ exports.getList = async (req, res) => {
       const accId = convo.accountId?._id?.toString() || convo.accountId?.toString();
       if (!uniqueMap.has(accId)) uniqueMap.set(accId, convo);
     }
+    const result = Array.from(uniqueMap.values());
 
-    res.json({ success: true, data: Array.from(uniqueMap.values()) });
+    // Compute lastMessage and unreadCount reliably
+    for (const convo of result) {
+      const lastMsg = await Messages.findOne({ conversationId: convo._id }).sort({ createdAt: -1 });
+      convo.lastMessage = lastMsg 
+        ? (lastMsg.messageText || (lastMsg.type === 'image' ? 'Image' : 'Media'))
+        : 'No message';
+
+      convo.unreadCount = await Messages.countDocuments({
+        conversationId: convo._id,
+        senderId: convo.accountId._id,  // Use populated _id
+        isRead: false
+      });
+    }
+
+    res.json({ success: true, data: result });
   } catch (err) {
+    console.error('getList error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -32,7 +53,12 @@ exports.getList = async (req, res) => {
 // 🟢 Lấy chi tiết + tin nhắn
 exports.getDetail = async (req, res) => {
   try {
-    const conversation = await Conversations.findById(req.params.id)
+    const { staffId } = req.query;
+    if (!staffId) {
+      return res.status(400).json({ success: false, message: 'staffId is required in query' });
+    }
+
+    let conversation = await Conversations.findById(req.params.id)
       .populate('accountId', 'username email')
       .populate('staffId', 'username email');
 
@@ -40,9 +66,24 @@ exports.getDetail = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
+    const convoStaffId = conversation.staffId?._id?.toString() || conversation.staffId?.toString();
+    if (convoStaffId && convoStaffId !== staffId) {
+      return res.status(403).json({ success: false, message: 'Unauthorized to access this conversation' });
+    }
+
+    if (!convoStaffId && conversation.status === 'open') {
+      conversation = await Conversations.findByIdAndUpdate(
+        req.params.id,
+        { staffId, status: 'pending' },
+        { new: true }
+      ).populate('accountId', 'username email')
+       .populate('staffId', 'username email');
+    }
+
     const messages = await Messages.find({ conversationId: req.params.id }).sort({ createdAt: 1 });
     res.json({ success: true, conversation, messages });
   } catch (err) {
+    console.error('getDetail error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -50,16 +91,29 @@ exports.getDetail = async (req, res) => {
 // 🟢 Đóng conversation
 exports.close = async (req, res) => {
   try {
-    const conversation = await Conversations.findByIdAndUpdate(
+    const { staffId } = req.body;
+    if (!staffId) {
+      return res.status(400).json({ success: false, message: 'staffId is required in body' });
+    }
+
+    const conversation = await Conversations.findById(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    const convoStaffId = conversation.staffId?._id?.toString() || conversation.staffId?.toString();
+    if (convoStaffId !== staffId) {
+      return res.status(403).json({ success: false, message: 'Unauthorized to close this conversation' });
+    }
+
+    const updatedConversation = await Conversations.findByIdAndUpdate(
       req.params.id,
       { status: 'closed' },
       { new: true }
     );
-    if (!conversation) {
-      return res.status(404).json({ success: false, message: 'Conversation not found' });
-    }
-    res.json({ success: true, data: conversation });
+    res.json({ success: true, data: updatedConversation });
   } catch (err) {
+    console.error('close error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -93,6 +147,7 @@ exports.create = async (req, res) => {
 
     res.status(201).json({ success: true, data: conversation });
   } catch (err) {
+    console.error('create error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -102,7 +157,7 @@ exports.take = async (req, res) => {
   try {
     const { staffId } = req.body;
     const convo = await Conversations.findOneAndUpdate(
-      { _id: req.params.id, status: 'open' },
+      { _id: req.params.id, status: 'open', staffId: null },
       { staffId, status: 'pending' },
       { new: true }
     );
@@ -113,7 +168,7 @@ exports.take = async (req, res) => {
 
     res.json({ success: true, data: convo });
   } catch (err) {
+    console.error('take error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
