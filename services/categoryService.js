@@ -6,7 +6,6 @@ const mongoose = require('mongoose');
 exports.createCategoryService = async ({ cat_name }) => {
   try {
     // 1. Input validation
-    // 1.0 Check for blank/empty required fields
     if (!cat_name || cat_name.trim() === '') {
       return {
         success: false,
@@ -15,18 +14,20 @@ exports.createCategoryService = async ({ cat_name }) => {
       };
     }
 
-    // 1.1 Category name validation
+    // 2. Category name validation
     const trimmedName = cat_name.trim();
     const categoryNamePattern = /^[a-zA-ZÀ-ỹ0-9\-]+$/;
-    if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName)) {
+    const hasLetter = /[a-zA-ZÀ-ỹ]/.test(trimmedName);
+
+    if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName) || !hasLetter) {
       return {
         success: false,
-        message: 'Category name must contain only letters, numbers, and hyphen, 3 to 30 characters long',
+        message: 'Category name must be 3 to 30 characters long and contain only letters, numbers, and hyphens',
         error: 'INVALID_CATEGORY_NAME_FORMAT'
       };
     }
 
-    // 2. Check duplicate
+    // 3. Check duplicate - chỉ check với các category chưa bị xóa (isDeleted: false)
     const existingCategory = await Categories.findOne({ cat_name: trimmedName, isDeleted: false });
     if (existingCategory) {
       return {
@@ -35,6 +36,8 @@ exports.createCategoryService = async ({ cat_name }) => {
         error: 'DUPLICATE_CATEGORY_NAME'
       };
     }
+
+    // 4. Create category
     const category = new Categories({ cat_name: trimmedName });
     const savedCategory = await category.save();
 
@@ -147,11 +150,11 @@ exports.updateCategoryService = async (id, { cat_name }) => {
     }
 
     // Prevent update if any product belongs to this category
-    const objectId = mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null;
+    const objectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
     const productCount = await newProduct.countDocuments({
       $or: [
         ...(objectId ? [{ categoryId: objectId }] : []),
-        { categoryId: id } // legacy string id support
+        { categoryId: id }
       ]
     });
     if (productCount > 0) {
@@ -176,10 +179,11 @@ exports.updateCategoryService = async (id, { cat_name }) => {
     if (cat_name) {
       const trimmedName = cat_name.trim();
       const categoryNamePattern = /^[a-zA-ZÀ-ỹ0-9\-]+$/;
-      if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName)) {
+      const hasLetter = /[a-zA-ZÀ-ỹ]/.test(trimmedName);
+      if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName) || !hasLetter) {
         return {
           success: false,
-          message: 'Category name must contain only letters, numbers, and hyphen, 3 to 30 characters long',
+          message: 'Category name must be 3 to 30 characters long and contain only letters, numbers, and hyphens',
           error: 'INVALID_CATEGORY_NAME_FORMAT'
         };
       }
@@ -252,8 +256,8 @@ exports.deleteCategoryService = async (id, user) => {
       };
     }
 
-    // Check if any product is using this category (handle both ObjectId and legacy string storage)
-    const objectId = mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null;
+    // Check if any product is using this category
+    const objectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
     const productCount = await newProduct.countDocuments({
       $or: [
         ...(objectId ? [{ categoryId: objectId }] : []),

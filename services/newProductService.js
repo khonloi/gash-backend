@@ -16,15 +16,29 @@ const createProduct = async (productData) => {
     } = productData;
     if (!productName || !categoryId || !description) {
       throw new Error(
-        "Product name, category ID, and description are required"
+        "Please fill in all required fields"
       );
     }
+
+    // Validate product name format
+    const trimmedProductName = productName.trim();
+    const productNamePattern = /^[a-zA-ZÀ-ỹ0-9\s\-]+$/;
+    if (trimmedProductName.length < 3 || trimmedProductName.length > 100 || !productNamePattern.test(trimmedProductName)) {
+      throw new Error("Product name must be 3 to 100 characters long and contain only letters, numbers, spaces, and hyphens");
+    }
+
+    // Validate description length
+    const trimmedDescription = description.trim();
+    if (trimmedDescription.length < 50 || trimmedDescription.length > 2000) {
+      throw new Error("Description must be between 50 and 2000 characters long");
+    }
+
     if (
       !productImageIds ||
       !Array.isArray(productImageIds) ||
       productImageIds.length === 0
     ) {
-      throw new Error("At least one product image is required");
+      throw new Error("Please fill in all required fields");
     }
 
     // Validate exactly one image has isMain: true
@@ -44,7 +58,7 @@ const createProduct = async (productData) => {
         'Product status must be either "active", "inactive", or "pending"'
       );
     }
-    const existingProduct = await newProduct.findOne({ productName });
+    const existingProduct = await newProduct.findOne({ productName: trimmedProductName });
     if (existingProduct) {
       throw new Error("Product with this name already exists");
     }
@@ -52,7 +66,7 @@ const createProduct = async (productData) => {
     let savedImageIds = [];
     for (const imageData of productImageIds) {
       if (!imageData.imageUrl) {
-        throw new Error("Image URL is required for each product image");
+        throw new Error("Please fill in all required fields");
       }
       const image = new newProductImage({
         imageUrl: imageData.imageUrl,
@@ -82,6 +96,8 @@ const createProduct = async (productData) => {
 
     const product = new newProduct({
       ...productData,
+      productName: trimmedProductName,
+      description: trimmedDescription,
       productImageIds: savedImageIds,
       productVariantIds: validatedVariantIds,
       productStatus: finalProductStatus,
@@ -213,12 +229,32 @@ const updateProduct = async (productId, updateData) => {
     const {
       productName,
       categoryId,
+      description,
       productStatus,
       productImageIds,
       productVariantIds,
     } = updateData;
     if (productName && productName.trim() === "") {
-      throw new Error("Product name cannot be empty");
+      throw new Error("Please fill in all required fields");
+    }
+
+    // Validate product name format if provided
+    let trimmedProductName = null;
+    if (productName) {
+      trimmedProductName = productName.trim();
+      const productNamePattern = /^[a-zA-ZÀ-ỹ0-9\s\-]+$/;
+      if (trimmedProductName.length < 3 || trimmedProductName.length > 100 || !productNamePattern.test(trimmedProductName)) {
+        throw new Error("Product name must be 3 to 100 characters long and contain only letters, numbers, spaces, and hyphens");
+      }
+    }
+
+    // Validate description length if provided
+    let trimmedDescription = null;
+    if (description !== undefined) {
+      trimmedDescription = description.trim();
+      if (trimmedDescription.length < 50 || trimmedDescription.length > 2000) {
+        throw new Error("Description must be between 50 and 2000 characters long");
+      }
     }
     if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
       throw new Error("Invalid category ID");
@@ -230,7 +266,7 @@ const updateProduct = async (productId, updateData) => {
       productImageIds &&
       (!Array.isArray(productImageIds) || productImageIds.length === 0)
     ) {
-      throw new Error("At least one product image is required");
+      throw new Error("Please fill in all required fields");
     }
 
     const existingProduct = await newProduct.findById(productId);
@@ -241,9 +277,9 @@ const updateProduct = async (productId, updateData) => {
       throw new Error("Cannot update a discontinued product");
     }
 
-    if (productName) {
+    if (productName && trimmedProductName) {
       const duplicateProduct = await newProduct.findOne({
-        productName,
+        productName: trimmedProductName,
         _id: { $ne: productId },
       });
       if (duplicateProduct) {
@@ -264,7 +300,7 @@ const updateProduct = async (productId, updateData) => {
       updatedImageIds = [];
       for (const imageData of productImageIds) {
         if (!imageData.imageUrl) {
-          throw new Error("Image URL is required for each product image");
+          throw new Error("Please fill in all required fields");
         }
         if (imageData._id && mongoose.Types.ObjectId.isValid(imageData._id)) {
           await newProductImage.findByIdAndUpdate(
@@ -309,16 +345,28 @@ const updateProduct = async (productId, updateData) => {
       finalProductStatus = "active";
     }
 
+    const updatePayload = {
+      ...updateData,
+      productImageIds: updatedImageIds,
+      productVariantIds: updatedVariantIds,
+      productStatus: finalProductStatus,
+      updatedAt: Date.now(),
+    };
+
+    // Use trimmed product name if provided
+    if (trimmedProductName) {
+      updatePayload.productName = trimmedProductName;
+    }
+
+    // Use trimmed description if provided
+    if (trimmedDescription) {
+      updatePayload.description = trimmedDescription;
+    }
+
     const product = await newProduct
       .findByIdAndUpdate(
         productId,
-        {
-          ...updateData,
-          productImageIds: updatedImageIds,
-          productVariantIds: updatedVariantIds,
-          productStatus: finalProductStatus,
-          updatedAt: Date.now(),
-        },
+        updatePayload,
         { new: true, runValidators: true }
       )
       .populate("productImageIds")
@@ -354,9 +402,9 @@ const deleteProduct = async (productId) => {
     // Step 1: Discontinue the product
     await newProduct.findByIdAndUpdate(
       productId,
-      { 
-        productStatus: "discontinued", 
-        updatedAt: Date.now() 
+      {
+        productStatus: "discontinued",
+        updatedAt: Date.now()
       },
       { new: true }
     );
@@ -367,9 +415,9 @@ const deleteProduct = async (productId) => {
 
       await newProductVariant.updateMany(
         { _id: { $in: variantIds } },
-        { 
-          variantStatus: "discontinued", 
-          updatedAt: Date.now() 
+        {
+          variantStatus: "discontinued",
+          updatedAt: Date.now()
         }
       );
     }
@@ -387,7 +435,7 @@ const addProductImage = async (productId, imageData) => {
       throw new Error("Invalid product ID");
     }
     if (!imageData.imageUrl) {
-      throw new Error("Image URL is required");
+      throw new Error("Please fill in all required fields");
     }
 
     const product = await newProduct
