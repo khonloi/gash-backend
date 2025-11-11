@@ -21,7 +21,7 @@ exports.createCategoryService = async ({ cat_name }) => {
     if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName)) {
       return {
         success: false,
-        message: 'Category name must contain only letters, numbers, and hyphen, 3 to 30 characters long',
+        message: 'Category name must be 3 to 30 characters long and contain only letters, numbers, and hyphens',
         error: 'INVALID_CATEGORY_NAME_FORMAT'
       };
     }
@@ -179,7 +179,7 @@ exports.updateCategoryService = async (id, { cat_name }) => {
       if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName)) {
         return {
           success: false,
-          message: 'Category name must contain only letters, numbers, and hyphen, 3 to 30 characters long',
+          message: 'Category name must be 3 to 30 characters long and contain only letters, numbers, and hyphens',
           error: 'INVALID_CATEGORY_NAME_FORMAT'
         };
       }
