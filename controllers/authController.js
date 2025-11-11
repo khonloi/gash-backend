@@ -71,4 +71,9 @@ exports.requestRegisterOtp = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Error generating OTP', error: error.message });
   }
-}; 
+};
+
+// Added: Endpoint for status check (to be protected by authenticateJWT in routes)
+exports.checkStatus = async (req, res) => {
+  res.status(200).json({ message: 'Account is active' });
+};
