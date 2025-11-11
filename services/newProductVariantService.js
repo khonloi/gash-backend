@@ -53,7 +53,7 @@ const createProductVariant = async (variantData) => {
       variantPrice == null ||
       stockQuantity == null
     ) {
-      throw new Error("All fields are required");
+      throw new Error("Please fill in all required fields");
     }
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {
@@ -101,7 +101,7 @@ const createProductVariant = async (variantData) => {
 
     const updatedProduct = await newProduct.findByIdAndUpdate(
       productId,
-      { 
+      {
         $addToSet: { productVariantIds: variant._id },
         productStatus: "active", // At least one variant → active
         updatedAt: Date.now()
@@ -293,7 +293,7 @@ const deleteProductVariant = async (variantId) => {
 
     const updatedProduct = await newProduct.findByIdAndUpdate(
       variant.productId,
-      { 
+      {
         $pull: { productVariantIds: variant._id },
         updatedAt: Date.now()
       },
