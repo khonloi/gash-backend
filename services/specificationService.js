@@ -24,12 +24,12 @@ exports.createProductColorService = async ({ color_name }) => {
         if (trimmedName.length < 2 || trimmedName.length > 30 || !colorNamePattern.test(trimmedName)) {
             return {
                 success: false,
-                message: 'Color name must contain only letters and numbers, 2 to 30 characters long',
+                message: 'Color name must be 2 to 30 characters long and contain only letters and numbers',
                 error: 'INVALID_COLOR_NAME_FORMAT'
             };
         }
 
-        // 2. Check duplicate
+        // 2. Check duplicate - chỉ check với các color chưa bị xóa (isDeleted: false)
         const existingColor = await ProductColors.findOne({ color_name: trimmedName, isDeleted: false });
         if (existingColor) {
             return {
@@ -166,7 +166,7 @@ exports.updateProductColorService = async (id, { color_name }) => {
             if (trimmedName.length < 2 || trimmedName.length > 30 || !colorNamePattern.test(trimmedName)) {
                 return {
                     success: false,
-                    message: 'Color name must contain only letters and numbers, 2 to 30 characters long',
+                    message: 'Color name must be 2 to 30 characters long and contain only letters and numbers',
                     error: 'INVALID_COLOR_NAME_FORMAT'
                 };
             }
@@ -302,12 +302,12 @@ exports.createProductSizeService = async ({ size_name }) => {
         if (trimmedName.length < 1 || trimmedName.length > 12 || !sizeNamePattern.test(trimmedName)) {
             return {
                 success: false,
-                message: 'Size name must contain only letters and numbers, up to 12 characters long',
+                message: 'Size name must be 1 to 12 characters long and contain only letters and numbers',
                 error: 'INVALID_SIZE_NAME_FORMAT'
             };
         }
 
-        // 2. Check duplicate
+        // 2. Check duplicate - chỉ check với các size chưa bị xóa (isDeleted: false)
         const existingSize = await ProductSizes.findOne({ size_name: trimmedName, isDeleted: false });
         if (existingSize) {
             return {
@@ -444,7 +444,7 @@ exports.updateProductSizeService = async (id, { size_name }) => {
             if (trimmedName.length < 1 || trimmedName.length > 12 || !sizeNamePattern.test(trimmedName)) {
                 return {
                     success: false,
-                    message: 'Size name must contain only letters and numbers, up to 12 characters long',
+                    message: 'Size name must be 1 to 12 characters long and contain only letters and numbers',
                     error: 'INVALID_SIZE_NAME_FORMAT'
                 };
             }
