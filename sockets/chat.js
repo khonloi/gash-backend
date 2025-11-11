@@ -5,168 +5,203 @@ module.exports = (io) => {
   io.on('connection', (socket) => {
     console.log('⚡ Client connected:', socket.id);
 
-    // Join room
+    // Join a specific conversation room
     socket.on('join_room', (conversationId) => {
       if (!conversationId) return;
       socket.join(conversationId.toString());
       console.log(`📥 ${socket.id} joined room ${conversationId}`);
     });
 
-    // ======================
-    // 🟢 User bắt đầu chat
-    // ======================
+    // User starts or resumes a chat
     socket.on('start_chat', async ({ userId, messageText }) => {
       try {
-        if (!userId) return socket.emit('error', 'Thiếu userId');
+        if (!userId) {
+          return socket.emit('error', 'userId is required');
+        }
 
+        // Find existing open or pending conversation
         let conversation = await Conversations.findOne({
           accountId: userId,
-          status: { $ne: 'closed' },
+          status: { $in: ['open', 'pending'] },
         });
 
-        let createdNew = false;
+        let isNew = false;
         if (!conversation) {
+          // Create new if none exists
           conversation = await Conversations.create({
             accountId: userId,
-            status: 'pending', // 👉 pending khi chưa có admin đọc
+            status: 'open',
           });
-          createdNew = true;
+          isNew = true;
+        } else {
+          // Update timestamp for existing
+          conversation.updatedAt = new Date();
+          await conversation.save();
         }
 
         const convoId = conversation._id.toString();
         socket.join(convoId);
 
-        // Gửi lịch sử tin nhắn
-        const history = await Messages.find({ conversationId: convoId }).sort({
-          createdAt: 1,
-        });
+        // Fetch message history
+        const messages = await Messages.find({ conversationId: convoId }).sort({ createdAt: 1 });
+
+        // Send history to the user
         socket.emit('chat_history', {
           conversation: { ...conversation.toObject(), id: convoId },
-          messages: history,
+          messages: messages.map(msg => ({ ...msg.toObject(), id: msg._id.toString() })),
         });
 
-        // Nếu user gửi kèm message → tạo tin nhắn mới
+        // If initial message provided, send it
         if (messageText && messageText.trim() !== '') {
-          const message = await Messages.create({
+          const newMessage = await Messages.create({
             conversationId: convoId,
             senderId: userId,
             messageText,
             type: 'text',
           });
-
           io.to(convoId).emit('new_message', {
-            ...message.toObject(),
+            ...newMessage.toObject(),
+            id: newMessage._id.toString(),
             conversationId: convoId,
           });
         }
 
-        // Nếu conversation mới tạo → báo admin
-        if (createdNew) {
+        // Notify admins if new conversation
+        if (isNew) {
           io.emit('conversation_created', {
             ...conversation.toObject(),
             id: convoId,
           });
         }
 
-        console.log(
-          `✅ start_chat handled for user ${userId}, convo ${convoId} (new:${createdNew})`
-        );
+        console.log(`✅ start_chat for user ${userId}, convo ${convoId} (new: ${isNew})`);
       } catch (err) {
         console.error('❌ start_chat error:', err);
-        socket.emit('error', 'Không thể bắt đầu chat.');
+        socket.emit('error', 'Failed to start chat');
       }
     });
 
-    // ======================
-    // 🟣 Staff nhận chat
-    // ======================
+    // Staff takes a conversation
     socket.on('take_conversation', async ({ staffId, conversationId }) => {
       try {
-        const convo = await Conversations.findOneAndUpdate(
-          { _id: conversationId, status: { $in: ['pending', 'open'] } },
-          { staffId, status: 'active' }, // 👉 đổi về active cho rõ nghĩa
+        if (!staffId || !conversationId) {
+          return socket.emit('error', 'staffId and conversationId required');
+        }
+
+        const conversation = await Conversations.findOneAndUpdate(
+          { _id: conversationId, status: 'open' },
+          { staffId, status: 'pending' },
           { new: true }
         );
 
-        if (!convo) return;
+        if (!conversation) {
+          return socket.emit('error', 'Conversation not available to take');
+        }
 
-        socket.join(convo._id.toString());
-        io.to(convo._id.toString()).emit('conversation_taken', {
-          ...convo.toObject(),
-          id: convo._id.toString(),
+        const convoId = conversation._id.toString();
+        socket.join(convoId);
+
+        io.to(convoId).emit('conversation_taken', {
+          ...conversation.toObject(),
+          id: convoId,
         });
+
+        console.log(`✅ Conversation ${convoId} taken by staff ${staffId}`);
       } catch (err) {
         console.error('❌ take_conversation error:', err);
+        socket.emit('error', 'Failed to take conversation');
       }
     });
 
-    // ======================
-    // 💬 Gửi tin nhắn (text / ảnh / sticker / emoji)
-    // ======================
-    socket.on(
-      'send_message',
-      async ({ conversationId, senderId, messageText, imageUrl, type }) => {
-        try {
-          if (!conversationId) return;
-
-          const msg = await Messages.create({
-            conversationId,
-            senderId,
-            messageText: messageText || '',
-            imageUrl: imageUrl || null,
-            type: type || 'text',
-            isRead: false,
-          });
-
-          io.to(conversationId.toString()).emit('new_message', {
-            ...msg.toObject(),
-            conversationId: conversationId.toString(),
-          });
-
-          // Cập nhật updatedAt của conversation để sort
-          await Conversations.findByIdAndUpdate(conversationId, {
-            updatedAt: new Date(),
-          });
-
-          console.log(`💬 Sent message [${type || 'text'}] to room ${conversationId}`);
-        } catch (err) {
-          console.error('❌ send_message error:', err);
+    // Send a message (text, image, sticker, emoji)
+    socket.on('send_message', async ({ conversationId, senderId, messageText, attachments, type, imageUrl }) => {
+      try {
+        if (!conversationId || !senderId) {
+          return socket.emit('error', 'conversationId and senderId required');
         }
-      }
-    );
 
-    // ======================
-    // 👁️ Mark as read
-    // ======================
+        const messageData = {
+          conversationId,
+          senderId,
+          type: type || 'text',
+          isRead: false,
+        };
+
+        if (type === 'text') {
+          messageData.messageText = messageText || '';
+        } else if (type === 'image') {
+          messageData.attachments = attachments || null;
+        } else if (['sticker', 'emoji'].includes(type)) {
+          messageData.imageUrl = imageUrl || null;
+        }
+
+        const newMessage = await Messages.create(messageData);
+
+        io.to(conversationId.toString()).emit('new_message', {
+          ...newMessage.toObject(),
+          id: newMessage._id.toString(),
+          conversationId: conversationId.toString(),
+        });
+
+        // Update conversation timestamp
+        await Conversations.findByIdAndUpdate(conversationId, { updatedAt: new Date() });
+
+        console.log(`💬 Message sent [${type || 'text'}] to ${conversationId}`);
+      } catch (err) {
+        console.error('❌ send_message error:', err);
+        socket.emit('error', 'Failed to send message');
+      }
+    });
+
+    // Mark messages as read
     socket.on('mark_read', async ({ conversationId, readerId }) => {
       try {
+        if (!conversationId || !readerId) {
+          return socket.emit('error', 'conversationId and readerId required');
+        }
+
         await Messages.updateMany(
           { conversationId, isRead: false },
           { isRead: true }
         );
 
         io.to(conversationId.toString()).emit('messages_read', {
-          conversationId,
+          conversationId: conversationId.toString(),
           readerId,
         });
+
+        console.log(`👁️ Messages marked read in ${conversationId} by ${readerId}`);
       } catch (err) {
         console.error('❌ mark_read error:', err);
+        socket.emit('error', 'Failed to mark as read');
       }
     });
 
-    // ======================
-    // 🔴 Đóng chat
-    // ======================
+    // Close a conversation
     socket.on('close_conversation', async ({ conversationId }) => {
       try {
-        await Conversations.findByIdAndUpdate(conversationId, {
-          status: 'closed',
-        });
+        if (!conversationId) {
+          return socket.emit('error', 'conversationId required');
+        }
+
+        const conversation = await Conversations.findByIdAndUpdate(
+          conversationId,
+          { status: 'closed' },
+          { new: true }
+        );
+
+        if (!conversation) {
+          return socket.emit('error', 'Conversation not found');
+        }
+
         io.to(conversationId.toString()).emit('conversation_closed', {
           conversationId: conversationId.toString(),
         });
+
+        console.log(`🔴 Conversation ${conversationId} closed`);
       } catch (err) {
         console.error('❌ close_conversation error:', err);
+        socket.emit('error', 'Failed to close conversation');
       }
     });
 
