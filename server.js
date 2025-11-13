@@ -6,6 +6,8 @@ require('dotenv').config();
 const app = require('./app');
 const chatSocket = require('./sockets/chat');
 const productSocket = require('./sockets/productSocket');
+const notificationSocket = require('./sockets/notificationSocket');
+const orderSocket = require('./sockets/orderSocket');
 
 // ===== LiveKit Service (SIMPLE) =====
 const livestreamService = require('./services/livestreamService');
@@ -39,6 +41,9 @@ mongoose.connect(process.env.MONGO_URI)
 chatSocket(io);
 // Socket product
 productSocket(io);
+// 🔔 Socket notification
+notificationSocket(io);
+
 
 // ===== Initialize LiveKit Service (SIMPLE) =====
 console.log('🚀 LiveKit service ready');

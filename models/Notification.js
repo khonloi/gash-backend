@@ -1,13 +1,41 @@
-// models/Notification.js
 const mongoose = require("mongoose");
 
 const NotificationSchema = new mongoose.Schema({
+  // 🔹 Dùng cho template
+  name: { type: String },
+
+  // 🔹 Thông tin chính
   title: { type: String, required: true },
   message: { type: String, required: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }, // null = gửi cho tất cả
+
+  // 🔹 Người nhận (nếu null thì là thông báo chung)
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Accounts",
+    default: null,
+  },
+
+  // 🔹 Loại thông báo
+  type: {
+    type: String,
+    enum: ["system", "order", "promotion", "preference"],
+    default: "system",
+  },
+
+  // 🔹 Trạng thái đọc
   isRead: { type: Boolean, default: false },
+
+  // 🔹 Là template hay không
+  isTemplate: { type: Boolean, default: false },
+
+  // 🔹 Ngày tạo
   createdAt: { type: Date, default: Date.now },
-  type: { type: String, enum: ["system", "order", "promotion"], default: "system" },
+
+  // ⚙️ Tuỳ chọn thông báo (email / web)
+  preferences: {
+    email: { type: Boolean, default: true },
+    web: { type: Boolean, default: true },
+  },
 });
 
 module.exports = mongoose.model("Notification", NotificationSchema);
