@@ -16,16 +16,23 @@ exports.createCategoryService = async ({ cat_name }) => {
 
     // 2. Category name validation
     const trimmedName = cat_name.trim();
-    const categoryNamePattern = /^[a-zA-ZÀ-ỹ0-9\-]+$/;
-    const hasLetter = /[a-zA-ZÀ-ỹ]/.test(trimmedName);
+    // Cho phép chữ cái (có dấu tiếng Việt), số và dấu gạch ngang
+    const categoryNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9\- ]+$/;
+    const hasLetter = /[a-zA-ZÀ-Ỵà-ỹ]/.test(trimmedName);
 
-    if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName) || !hasLetter) {
+    if (
+      trimmedName.length < 2 ||
+      trimmedName.length > 30 ||
+      !categoryNamePattern.test(trimmedName) ||
+      !hasLetter // không cho phép chỉ toàn số
+    ) {
       return {
         success: false,
-        message: 'Category name must be 3 to 30 characters long and contain only letters, numbers, and hyphens',
+        message: 'Category name must be 2 to 30 characters long, contain letters, numbers, or hyphens, and not be only numbers',
         error: 'INVALID_CATEGORY_NAME_FORMAT'
       };
     }
+
 
     // 3. Check duplicate - chỉ check với các category chưa bị xóa (isDeleted: false)
     const existingCategory = await Categories.findOne({ cat_name: trimmedName, isDeleted: false });
