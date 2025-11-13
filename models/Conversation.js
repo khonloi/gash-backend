@@ -17,6 +17,7 @@ const ConversationSchema = new mongoose.Schema(
             enum: ['open', 'pending', 'closed'],
             default: 'open',
         },
+        lastMessage: { type: String, default: null },
     },
     { timestamps: true }
 );
