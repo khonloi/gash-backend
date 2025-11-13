@@ -7,6 +7,7 @@ const app = require('./app');
 const chatSocket = require('./sockets/chat');
 const productSocket = require('./sockets/productSocket');
 const notificationSocket = require('./sockets/notificationSocket');
+const orderSocket = require('./sockets/orderSocket');
 
 // ===== LiveKit Service (SIMPLE) =====
 const livestreamService = require('./services/livestreamService');

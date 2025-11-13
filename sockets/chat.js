@@ -1,3 +1,4 @@
+// chat.js
 const Conversations = require('../models/Conversation');
 const Messages = require('../models/Message');
 
@@ -10,6 +11,13 @@ module.exports = (io) => {
       if (!conversationId) return;
       socket.join(conversationId.toString());
       console.log(`📥 ${socket.id} joined room ${conversationId}`);
+    });
+
+    // Leave a specific conversation room
+    socket.on('leave_room', (conversationId) => {
+      if (!conversationId) return;
+      socket.leave(conversationId.toString());
+      console.log(`📤 ${socket.id} left room ${conversationId}`);
     });
 
     // User starts or resumes a chat

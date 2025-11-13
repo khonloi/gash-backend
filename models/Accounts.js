@@ -32,14 +32,9 @@ const accountSchema = new mongoose.Schema({
     required: true,
     select: null 
   },
-  google_id: { 
-    type: String, 
-    unique: true, 
-    sparse: true 
-  },
   image: { 
     type: String, 
-    default: 'http://localhost:4000/default-pfp.jpg' 
+    default: 'https://i.redd.it/1to4yvt3i88c1.png' 
   },
   gender: { 
     type: String, 
