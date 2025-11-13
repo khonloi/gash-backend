@@ -20,14 +20,21 @@ exports.createProductColorService = async ({ color_name }) => {
 
         // 1.1 Color name validation
         const trimmedName = color_name.trim();
-        const colorNamePattern = /^[a-zA-ZÀ-ỹ0-9]+$/;
-        if (trimmedName.length < 2 || trimmedName.length > 30 || !colorNamePattern.test(trimmedName)) {
+        const colorNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9 ]+$/;
+
+        if (
+            trimmedName.length < 2 ||
+            trimmedName.length > 30 ||
+            !colorNamePattern.test(trimmedName) ||
+            /^[0-9]+$/.test(trimmedName) // không cho phép chỉ toàn số
+        ) {
             return {
                 success: false,
-                message: 'Color name must be 2 to 30 characters long and contain only letters and numbers',
+                message: 'Color name must be 2 to 30 characters long, contain letters or numbers, and not be only numbers',
                 error: 'INVALID_COLOR_NAME_FORMAT'
             };
         }
+
 
         // 2. Check duplicate - chỉ check với các color chưa bị xóa (isDeleted: false)
         const existingColor = await ProductColors.findOne({ color_name: trimmedName, isDeleted: false });
@@ -296,15 +303,31 @@ exports.createProductSizeService = async ({ size_name }) => {
             };
         }
 
-        // 1.1 Size name validation
         const trimmedName = size_name.trim();
-        const sizeNamePattern = /^[a-zA-ZÀ-ỹ0-9]+$/;
-        if (trimmedName.length < 1 || trimmedName.length > 12 || !sizeNamePattern.test(trimmedName)) {
+        const sizeNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9 ]+$/;
+
+        if (
+            trimmedName.length < 1 ||
+            trimmedName.length > 12 ||
+            !sizeNamePattern.test(trimmedName)
+        ) {
             return {
                 success: false,
                 message: 'Size name must be 1 to 12 characters long and contain only letters and numbers',
                 error: 'INVALID_SIZE_NAME_FORMAT'
             };
+        }
+
+        // Nếu chỉ là số → kiểm tra giới hạn
+        if (/^[0-9]+$/.test(trimmedName)) {
+            const numericValue = parseInt(trimmedName, 10);
+            if (numericValue < 20 || numericValue > 60) { // ngưỡng an toàn chung
+                return {
+                    success: false,
+                    message: 'Numeric size must be between 20 and 60',
+                    error: 'INVALID_SIZE_RANGE'
+                };
+            }
         }
 
         // 2. Check duplicate - chỉ check với các size chưa bị xóa (isDeleted: false)
