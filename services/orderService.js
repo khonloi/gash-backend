@@ -184,13 +184,19 @@ async function updateOrderService(id, updateData, user) {
     throw err;
   }
 
-  if (
+  // Check if order is finalized
+  // Only block updates if:
+  // 1. Order is delivered (final state)
+  // 2. Order is cancelled AND paid AND refunded (VNPAY only - fully processed)
+  // Note: Cancelled + paid orders can still be updated for refund management
+  const isFinalized =
     order.order_status === "delivered" ||
-    (order.order_status === "cancelled" && order.pay_status === "paid") ||
     (order.payment_method === "VNPAY" &&
       order.order_status === "cancelled" &&
-      order.refund_status === "refunded")
-  ) {
+      order.pay_status === "paid" &&
+      order.refund_status === "refunded");
+
+  if (isFinalized) {
     const err = new Error("This order is finalized and cannot be updated");
     err.status = 400;
     throw err;
@@ -203,6 +209,15 @@ async function updateOrderService(id, updateData, user) {
     delivered: [],
     cancelled: [],
   };
+
+  // For VNPAY orders, if unpaid, only allow cancellation
+  if (order.payment_method === "VNPAY" && order.pay_status === "unpaid") {
+    if (rest.order_status && rest.order_status !== "cancelled") {
+      const err = new Error("VNPAY unpaid orders can only be cancelled");
+      err.status = 400;
+      throw err;
+    }
+  }
 
   const currentStatus = order.order_status;
   if (
@@ -220,13 +235,21 @@ async function updateOrderService(id, updateData, user) {
   let newPayStatus = rest.pay_status || order.pay_status;
   let newRefund = rest.refund_status || order.refund_status;
 
-  // Validate cancelReason when transitioning to cancelled
-  if (newStatus === "cancelled") {
+  // Validate cancelReason only when transitioning TO cancelled (not when already cancelled)
+  // If order is already cancelled and we're only updating refund_proof or refund_status, don't require cancelReason
+  const isTransitioningToCancelled = rest.order_status === "cancelled" && order.order_status !== "cancelled";
+  const isOnlyUpdatingRefund = !rest.order_status && !rest.pay_status && (rest.refund_status || rest.refund_proof);
+
+  if (isTransitioningToCancelled) {
+    // Only require cancelReason when actually cancelling the order
     if (!rest.cancelReason || typeof rest.cancelReason !== 'string' || rest.cancelReason.length > 500) {
       const err = new Error("A valid cancel reason (up to 500 characters) is required when cancelling an order");
       err.status = 400;
       throw err;
     }
+  } else if (isOnlyUpdatingRefund) {
+    // When only updating refund (proof or status), keep existing cancelReason
+    // Don't modify cancelReason
   } else {
     // Ensure cancelReason is set to empty string if not cancelling
     rest.cancelReason = '';
