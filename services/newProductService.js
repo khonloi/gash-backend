@@ -29,8 +29,8 @@ const createProduct = async (productData) => {
 
     // Validate description length
     const trimmedDescription = description.trim();
-    if (trimmedDescription.length < 50 || trimmedDescription.length > 2000) {
-      throw new Error("Description must be between 50 and 2000 characters long");
+    if (trimmedDescription.length < 50 || trimmedDescription.length > 10000) {
+      throw new Error("Description must be between 50 and 10000 characters long");
     }
 
     if (
@@ -252,8 +252,8 @@ const updateProduct = async (productId, updateData) => {
     let trimmedDescription = null;
     if (description !== undefined) {
       trimmedDescription = description.trim();
-      if (trimmedDescription.length < 50 || trimmedDescription.length > 2000) {
-        throw new Error("Description must be between 50 and 2000 characters long");
+      if (trimmedDescription.length < 50 || trimmedDescription.length > 10000) {
+        throw new Error("Description must be between 50 and 10000 characters long");
       }
     }
     if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
