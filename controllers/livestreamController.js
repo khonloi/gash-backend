@@ -16,6 +16,17 @@ exports.startLivestream = async (req, res) => {
         const result = await livestreamService.startLivestream(hostId, title, description);
 
         if (result.success) {
+            // 🔔 Emit Socket.IO event for livestream count update
+            const io = req.app.get('io');
+            if (io) {
+                // Get actual count (should be 1 after starting)
+                const liveNowResult = await livestreamService.getLiveNow();
+                const count = liveNowResult.data?.livestream ? 1 : 0;
+                io.emit('livestreamCountChanged', {
+                    action: 'started',
+                    count: count
+                });
+            }
             res.status(200).json(result);
         } else {
             res.status(400).json(result);
@@ -47,6 +58,17 @@ exports.endLivestream = async (req, res) => {
         const result = await livestreamService.endLivestream(livestreamId, userId, userRole);
 
         if (result.success) {
+            // 🔔 Emit Socket.IO event for livestream count update
+            const io = req.app.get('io');
+            if (io) {
+                // Get actual count (should be 0 after ending)
+                const liveNowResult = await livestreamService.getLiveNow();
+                const count = liveNowResult.data?.livestream ? 1 : 0;
+                io.emit('livestreamCountChanged', {
+                    action: 'ended',
+                    count: count
+                });
+            }
             res.status(200).json(result);
         } else {
             // Return 403 for permission errors, 400 for other errors

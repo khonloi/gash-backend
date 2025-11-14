@@ -151,7 +151,23 @@ exports.updateOrderByAdmin = async (req, res) => {
       const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
         ? updatedOrder.acc_id._id.toString()
         : updatedOrder.acc_id.toString();
-      io.emit('orderUpdated', { userId, order: updatedOrder });
+      
+      // Ensure order is properly formatted with all fields
+      const formattedOrder = {
+        ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
+        acc_id: updatedOrder.acc_id,
+        name: updatedOrder.name,
+        orderDate: updatedOrder.orderDate,
+        updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
+        createdAt: updatedOrder.createdAt
+      };
+      
+      // Emit to specific user room for real-time updates
+      io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
+      // Also emit to admin room so dashboard gets updates
+      io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
+      
+      console.log(`📦 Order ${orderId} updated, emitted to user_${userId} and order_admins`);
     }
     res.status(200).json({
       success: true,
@@ -220,6 +236,36 @@ exports.vnpayReturn = async (req, res) => {
     // Phương thức thanh toán
     const paymentMethod = "VNPay";
 
+    // Emit Socket.IO event for payment status update
+    const io = req.app.get('io');
+    if (io && orderId) {
+      const updatedOrder = await Orders.findById(orderId)
+        .populate('acc_id', 'username name email phone')
+        .lean();
+      
+      if (updatedOrder && updatedOrder.acc_id) {
+        const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
+          ? updatedOrder.acc_id._id.toString()
+          : updatedOrder.acc_id.toString();
+        
+        // Ensure order is properly formatted with all fields
+        const formattedOrder = {
+          ...updatedOrder,
+          name: updatedOrder.name,
+          orderDate: updatedOrder.orderDate,
+          updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
+          createdAt: updatedOrder.createdAt
+        };
+        
+        // Emit to specific user room for real-time updates
+        io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
+        // Also emit to admin room so dashboard gets updates
+        io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
+        
+        console.log(`📦 Order ${orderId} payment updated (VNPay Return), emitted to user_${userId} and order_admins`);
+      }
+    }
+
     if (result.code === "00") {
       return res.status(200).json({
         success: true,
@@ -263,6 +309,37 @@ exports.vnpayIpn = async (req, res) => {
     }
 
     const result = await vnpayService.handleIpn(req.query);
+
+    // Emit Socket.IO event for payment status update (IPN)
+    const io = req.app.get('io');
+    if (io && req.query.vnp_TxnRef) {
+      const orderId = req.query.vnp_TxnRef;
+      const updatedOrder = await Orders.findById(orderId)
+        .populate('acc_id', 'username name email phone')
+        .lean();
+      
+      if (updatedOrder && updatedOrder.acc_id) {
+        const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
+          ? updatedOrder.acc_id._id.toString()
+          : updatedOrder.acc_id.toString();
+        
+        // Ensure order is properly formatted with all fields
+        const formattedOrder = {
+          ...updatedOrder,
+          name: updatedOrder.name,
+          orderDate: updatedOrder.orderDate,
+          updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
+          createdAt: updatedOrder.createdAt
+        };
+        
+        // Emit to specific user room for real-time updates
+        io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
+        // Also emit to admin room so dashboard gets updates
+        io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
+        
+        console.log(`📦 Order ${orderId} payment updated (VNPay IPN), emitted to user_${userId} and order_admins`);
+      }
+    }
 
     res.status(200).json(result);
   } catch (error) {
@@ -420,6 +497,53 @@ exports.checkout = async (req, res) => {
       variantId: { $in: objectVariantIds }
     });
 
+    // 🔔 Emit Socket.IO events for cart update and new order
+    const io = req.app.get('io');
+    if (io && userId) {
+      // Emit cart update
+      io.to(`user_${userId.toString()}`).emit('cartUpdated', {
+        action: 'cleared',
+        accountId: userId
+      });
+      
+      // Populate order with user details for Socket.IO emission
+      const populatedOrder = await Orders.findById(savedOrder._id)
+        .populate('acc_id', 'username name email phone')
+        .lean();
+      
+      // Emit new order creation for real-time updates with populated data
+      const formattedOrderForSocket = {
+        _id: populatedOrder._id,
+        acc_id: populatedOrder.acc_id,
+        name: populatedOrder.name,
+        addressReceive: populatedOrder.addressReceive,
+        phone: populatedOrder.phone,
+        totalPrice: populatedOrder.totalPrice,
+        voucher_id: populatedOrder.voucher_id,
+        discountAmount: populatedOrder.discountAmount,
+        finalPrice: populatedOrder.finalPrice,
+        order_status: populatedOrder.order_status,
+        pay_status: populatedOrder.pay_status,
+        payment_method: populatedOrder.payment_method,
+        orderDate: populatedOrder.orderDate,
+        createdAt: populatedOrder.createdAt,
+        updatedAt: populatedOrder.updatedAt || populatedOrder.createdAt,
+        orderDetails: orderDetailsIds
+      };
+      
+      io.to(`user_${userId.toString()}`).emit('orderUpdated', { 
+        userId: userId.toString(), 
+        order: formattedOrderForSocket 
+      });
+      // Also notify admins
+      io.to('order_admins').emit('orderUpdated', { 
+        userId: userId.toString(), 
+        order: formattedOrderForSocket 
+      });
+      
+      console.log(`📦 New order ${savedOrder._id} created, emitted to user_${userId} and order_admins`);
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Order created successfully with details, cart cleared',
@@ -563,6 +687,32 @@ exports.cancelOrder = async (req, res) => {
       { order_status: 'cancelled', cancelReason }, // Include cancelReason in update
       req.user
     );
+
+    // Emit Socket.IO event for order cancellation
+    const io = req.app.get('io');
+    if (io && updatedOrder && updatedOrder.acc_id) {
+      const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
+        ? updatedOrder.acc_id._id.toString()
+        : updatedOrder.acc_id.toString();
+      
+      // Ensure order is properly formatted with all fields
+      const formattedOrder = {
+        ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
+        acc_id: updatedOrder.acc_id,
+        name: updatedOrder.name,
+        orderDate: updatedOrder.orderDate,
+        updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
+        createdAt: updatedOrder.createdAt,
+        cancelReason: updatedOrder.cancelReason
+      };
+      
+      // Emit to specific user room for real-time updates
+      io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
+      // Also emit to admin room so dashboard gets updates
+      io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
+      
+      console.log(`📦 Order ${orderId} cancelled, emitted to user_${userId} and order_admins`);
+    }
 
     res.status(200).json({
       message: 'Order cancelled successfully',

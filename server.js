@@ -43,7 +43,8 @@ chatSocket(io);
 productSocket(io);
 // 🔔 Socket notification
 notificationSocket(io);
-
+// 📦 Socket order
+orderSocket(io);
 
 // ===== Initialize LiveKit Service (SIMPLE) =====
 console.log('🚀 LiveKit service ready');

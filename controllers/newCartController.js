@@ -8,6 +8,17 @@ class NewCartController {
       const newCartItem = await newCartService.createCartItem(req.user.id, cartData);
       const response = { ...newCartItem.toObject(), cartId: newCartItem._id };
       delete response._id;
+
+      // 🔔 Emit Socket.IO event for cart update
+      const io = req.app.get('io');
+      if (io && cartData.accountId) {
+        // Emit to user's room for instant badge update
+        io.to(cartData.accountId.toString()).emit('cartUpdated', {
+          action: 'created',
+          accountId: cartData.accountId
+        });
+      }
+
       res.status(201).json({ success: true, data: response });
     } catch (error) {
       res.status(400).json({ success: false, message: error.message });
@@ -47,6 +58,16 @@ class NewCartController {
       const updatedCartItem = await newCartService.updateCartItem(req.user.id, cartId, updateData);
       const response = { ...updatedCartItem.toObject(), cartId: updatedCartItem._id };
       delete response._id;
+
+      // 🔔 Emit Socket.IO event for cart update
+      const io = req.app.get('io');
+      if (io && updatedCartItem.accountId) {
+        io.to(updatedCartItem.accountId.toString()).emit('cartUpdated', {
+          action: 'updated',
+          accountId: updatedCartItem.accountId
+        });
+      }
+
       res.json({ success: true, data: response });
     } catch (error) {
       res.status(403).json({ success: false, message: error.message });
@@ -57,7 +78,30 @@ class NewCartController {
   async deleteCartItem(req, res) {
     try {
       const { cartId } = req.params;
+      
+      // Get cart item before deletion to emit event
+      const newCartService = require('../services/newCartService');
+      let accountId = null;
+      try {
+        const cartItem = await newCartService.getCartItemById(req.user.id, cartId);
+        if (cartItem && cartItem.accountId) {
+          accountId = cartItem.accountId.toString();
+        }
+      } catch (err) {
+        // Ignore error if cart item not found
+      }
+
       const result = await newCartService.deleteCartItem(req.user.id, cartId);
+
+      // 🔔 Emit Socket.IO event for cart update
+      const io = req.app.get('io');
+      if (io && accountId) {
+        io.to(accountId).emit('cartUpdated', {
+          action: 'deleted',
+          accountId: accountId
+        });
+      }
+
       res.json({ success: true, ...result });
     } catch (error) {
       res.status(403).json({ success: false, message: error.message });

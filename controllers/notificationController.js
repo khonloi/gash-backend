@@ -182,7 +182,18 @@ exports.getUserNotifications = async (req, res) => {
 
 exports.markAsRead = async (req, res) => {
   try {
-    await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
+    const notification = await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
+    if (notification) {
+      // 🔔 Emit Socket.IO event for notification badge update
+      const io = req.app.get('io');
+      const userId = notification.userId?.toString();
+      if (io && userId) {
+        io.to(userId).emit('notificationBadgeUpdate', { userId });
+      } else if (io && !userId) {
+        // Global notification, emit to all users
+        io.emit('notificationBadgeUpdate', { userId: null });
+      }
+    }
     res.json({ message: "Marked as read" });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -197,6 +208,16 @@ exports.clearAll = async (req, res) => {
       type: { $ne: "preference" },
       $or: [{ userId }, { userId: null }],
     });
+
+    // 🔔 Emit Socket.IO event for notification badge update
+    const io = req.app.get('io');
+    if (io && userId) {
+      io.to(userId.toString()).emit('notificationBadgeUpdate', { userId });
+    } else if (io) {
+      // Global notifications cleared, emit to all users
+      io.emit('notificationBadgeUpdate', { userId: null });
+    }
+
     res.json({
       message: "Cleared all notifications",
       deletedCount: result.deletedCount,
@@ -228,6 +249,13 @@ exports.deleteUserNotification = async (req, res) => {
     }
 
     await Notification.findByIdAndDelete(id);
+
+    // 🔔 Emit Socket.IO event for notification badge update
+    const io = req.app.get('io');
+    if (io && userId) {
+      io.to(userId.toString()).emit('notificationBadgeUpdate', { userId });
+    }
+
     return res.json({ message: "Deleted successfully" });
   } catch (error) {
     console.error("❌ Error in deleteUserNotification:", error);
