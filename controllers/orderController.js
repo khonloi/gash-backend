@@ -1,5 +1,6 @@
 const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
+const { createOrderNotification, emitOrderNotification } = require('../utils/orderNotificationHelper');
 
 exports.searchOrders = async (req, res) => {
   try {
@@ -145,6 +146,11 @@ exports.updateOrderByAdmin = async (req, res) => {
       Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
     );
 
+    // Get old order status before update for notification logic
+    const oldOrder = await orderService.getOrderByIdService(orderId, req.user);
+    const oldOrderStatus = oldOrder?.order_status;
+    const oldPayStatus = oldOrder?.pay_status;
+
     const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
     const io = req.app.get('io');
     if (io && updatedOrder && updatedOrder.acc_id) {
@@ -168,6 +174,35 @@ exports.updateOrderByAdmin = async (req, res) => {
       io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
       
       console.log(`📦 Order ${orderId} updated, emitted to user_${userId} and order_admins`);
+      
+      // 🔔 Create and emit order update notification
+      try {
+        const newOrderStatus = updatedOrder.order_status;
+        const newPayStatus = updatedOrder.pay_status;
+        
+        // Determine notification type based on what changed
+        let messageType = 'status_changed';
+        if (oldPayStatus !== newPayStatus && newPayStatus) {
+          messageType = 'payment_changed';
+        } else if (newOrderStatus === 'delivered' && oldOrderStatus !== 'delivered') {
+          messageType = 'delivered';
+        }
+        
+        const notification = await createOrderNotification({
+          userId,
+          orderId: orderId.toString(),
+          orderStatus: newOrderStatus,
+          payStatus: newPayStatus,
+          messageType
+        });
+        
+        // Small delay to ensure socket connection is established
+        setTimeout(() => {
+          emitOrderNotification(io, notification, userId);
+        }, 100);
+      } catch (notifError) {
+        console.error('❌ Error creating order update notification:', notifError);
+      }
     }
     res.status(200).json({
       success: true,
@@ -263,6 +298,24 @@ exports.vnpayReturn = async (req, res) => {
         io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
         
         console.log(`📦 Order ${orderId} payment updated (VNPay Return), emitted to user_${userId} and order_admins`);
+        
+        // 🔔 Create and emit payment status notification
+        try {
+          const notification = await createOrderNotification({
+            userId,
+            orderId: orderId.toString(),
+            orderStatus: formattedOrder.order_status,
+            payStatus: formattedOrder.pay_status,
+            messageType: 'payment_changed'
+          });
+          
+          // Small delay to ensure socket connection is established
+          setTimeout(() => {
+            emitOrderNotification(io, notification, userId);
+          }, 100);
+        } catch (notifError) {
+          console.error('❌ Error creating payment notification:', notifError);
+        }
       }
     }
 
@@ -338,6 +391,24 @@ exports.vnpayIpn = async (req, res) => {
         io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
         
         console.log(`📦 Order ${orderId} payment updated (VNPay IPN), emitted to user_${userId} and order_admins`);
+        
+        // 🔔 Create and emit payment status notification
+        try {
+          const notification = await createOrderNotification({
+            userId,
+            orderId: orderId.toString(),
+            orderStatus: formattedOrder.order_status,
+            payStatus: formattedOrder.pay_status,
+            messageType: 'payment_changed'
+          });
+          
+          // Small delay to ensure socket connection is established
+          setTimeout(() => {
+            emitOrderNotification(io, notification, userId);
+          }, 100);
+        } catch (notifError) {
+          console.error('❌ Error creating payment notification:', notifError);
+        }
       }
     }
 
@@ -542,6 +613,22 @@ exports.checkout = async (req, res) => {
       });
       
       console.log(`📦 New order ${savedOrder._id} created, emitted to user_${userId} and order_admins`);
+      
+      // 🔔 Create and emit order creation notification
+      try {
+        const notification = await createOrderNotification({
+          userId: userId.toString(),
+          orderId: savedOrder._id.toString(),
+          orderStatus: savedOrder.order_status,
+          payStatus: savedOrder.pay_status,
+          messageType: 'created'
+        });
+        
+        // Emit notification immediately
+        emitOrderNotification(io, notification, userId.toString());
+      } catch (notifError) {
+        console.error('❌ Error creating order creation notification:', notifError);
+      }
     }
 
     return res.status(201).json({
@@ -712,6 +799,24 @@ exports.cancelOrder = async (req, res) => {
       io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
       
       console.log(`📦 Order ${orderId} cancelled, emitted to user_${userId} and order_admins`);
+      
+      // 🔔 Create and emit order cancellation notification
+      try {
+        const notification = await createOrderNotification({
+          userId,
+          orderId: orderId.toString(),
+          orderStatus: updatedOrder.order_status,
+          payStatus: updatedOrder.pay_status,
+          messageType: 'cancelled'
+        });
+        
+        // Small delay to ensure socket connection is established
+        setTimeout(() => {
+          emitOrderNotification(io, notification, userId);
+        }, 100);
+      } catch (notifError) {
+        console.error('❌ Error creating order cancellation notification:', notifError);
+      }
     }
 
     res.status(200).json({
