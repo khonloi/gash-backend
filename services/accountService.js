@@ -221,7 +221,7 @@ exports.updateProfile = async (id, data, user) => {
   const { password: _, ...accountObj } = account.toObject();
   return {
     status: 200,
-    response: { message: "Profile updated successfully", account: accountObj },
+    response: { message: "Profile edit successfully", account: accountObj },
   };
 };
 
@@ -230,7 +230,7 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
     return {
       status: 403,
-      response: { message: "Access denied: Can only update own password" },
+      response: { message: "Access denied: Can only edit own password" },
     };
   }
 
@@ -242,7 +242,7 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
   if (account.acc_status === "inactive") {
     return {
       status: 403,
-      response: { message: "Cannot update a deleted account" },
+      response: { message: "Cannot edit a deleted account" },
     };
   }
 
@@ -262,7 +262,7 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
 
   return {
     status: 200,
-    response: { message: "Password updated successfully" },
+    response: { message: "Password edited successfully" },
   };
 };
 
@@ -270,7 +270,7 @@ exports.softDeleteAccount = async (id, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
     return {
       status: 403,
-      response: { message: "Access denied: Can only soft delete own account" },
+      response: { message: "Access denied: Can only delete own account" },
     };
   }
   const account = await Accounts.findById(id);
@@ -280,7 +280,7 @@ exports.softDeleteAccount = async (id, user) => {
   if (account.acc_status === "inactive") {
     return {
       status: 403,
-      response: { message: "Account is already soft-deleted" },
+      response: { message: "Account is already deleted" },
     };
   }
   account.role = "user";
@@ -288,7 +288,7 @@ exports.softDeleteAccount = async (id, user) => {
   await account.save();
   return {
     status: 200,
-    response: { message: "Account soft deleted successfully" },
+    response: { message: "Account deleted successfully" },
   };
 };
 
