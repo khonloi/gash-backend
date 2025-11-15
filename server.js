@@ -36,7 +36,8 @@ const io = new Server(server, {
 app.set('io', io);
 
 // Kết nối MongoDB
-mongoose.connect(process.env.MONGO_URI)
+const mongoURI = 'mongodb://localhost:27017/gash-db';
+mongoose.connect(mongoURI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB error:', err.message));
 
@@ -46,8 +47,7 @@ chatSocket(io);
 productSocket(io);
 // 🔔 Socket notification
 notificationSocket(io);
-// 📦 Socket order
-orderSocket(io);
+
 
 // ===== Initialize LiveKit Service (SIMPLE) =====
 console.log('🚀 LiveKit service ready');
