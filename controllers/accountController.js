@@ -104,3 +104,18 @@ exports.editStaffInformation = async (req, res) => {
     res.status(500).json({ message: 'Error editing staff information', error: error.message });
   }
 };
+
+// Get Account Order Statistics Controller
+exports.getAccountOrderStatistics = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Check authorization: only admin, manager, or the user themselves can access
+    if (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.id !== id) {
+      return res.status(403).json({ message: 'Access denied: Can only view own order statistics' });
+    }
+    const result = await accountService.getAccountOrderStatistics(id);
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    res.status(500).json({ message: 'Error retrieving order statistics', error: error.message });
+  }
+};

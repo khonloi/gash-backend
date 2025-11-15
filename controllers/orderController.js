@@ -157,7 +157,7 @@ exports.updateOrderByAdmin = async (req, res) => {
       const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
         ? updatedOrder.acc_id._id.toString()
         : updatedOrder.acc_id.toString();
-      
+
       // Ensure order is properly formatted with all fields
       const formattedOrder = {
         ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
@@ -167,19 +167,19 @@ exports.updateOrderByAdmin = async (req, res) => {
         updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
         createdAt: updatedOrder.createdAt
       };
-      
+
       // Emit to specific user room for real-time updates
       io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
       // Also emit to admin room so dashboard gets updates
       io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-      
+
       console.log(`📦 Order ${orderId} updated, emitted to user_${userId} and order_admins`);
-      
+
       // 🔔 Create and emit order update notification
       try {
         const newOrderStatus = updatedOrder.order_status;
         const newPayStatus = updatedOrder.pay_status;
-        
+
         // Determine notification type based on what changed
         let messageType = 'status_changed';
         if (oldPayStatus !== newPayStatus && newPayStatus) {
@@ -187,7 +187,7 @@ exports.updateOrderByAdmin = async (req, res) => {
         } else if (newOrderStatus === 'delivered' && oldOrderStatus !== 'delivered') {
           messageType = 'delivered';
         }
-        
+
         const notification = await createOrderNotification({
           userId,
           orderId: orderId.toString(),
@@ -195,7 +195,7 @@ exports.updateOrderByAdmin = async (req, res) => {
           payStatus: newPayStatus,
           messageType
         });
-        
+
         // Small delay to ensure socket connection is established
         setTimeout(() => {
           emitOrderNotification(io, notification, userId);
@@ -277,12 +277,12 @@ exports.vnpayReturn = async (req, res) => {
       const updatedOrder = await Orders.findById(orderId)
         .populate('acc_id', 'username name email phone')
         .lean();
-      
+
       if (updatedOrder && updatedOrder.acc_id) {
         const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
           ? updatedOrder.acc_id._id.toString()
           : updatedOrder.acc_id.toString();
-        
+
         // Ensure order is properly formatted with all fields
         const formattedOrder = {
           ...updatedOrder,
@@ -291,14 +291,14 @@ exports.vnpayReturn = async (req, res) => {
           updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
           createdAt: updatedOrder.createdAt
         };
-        
+
         // Emit to specific user room for real-time updates
         io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
         // Also emit to admin room so dashboard gets updates
         io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-        
+
         console.log(`📦 Order ${orderId} payment updated (VNPay Return), emitted to user_${userId} and order_admins`);
-        
+
         // 🔔 Create and emit payment status notification
         try {
           const notification = await createOrderNotification({
@@ -308,7 +308,7 @@ exports.vnpayReturn = async (req, res) => {
             payStatus: formattedOrder.pay_status,
             messageType: 'payment_changed'
           });
-          
+
           // Small delay to ensure socket connection is established
           setTimeout(() => {
             emitOrderNotification(io, notification, userId);
@@ -370,12 +370,12 @@ exports.vnpayIpn = async (req, res) => {
       const updatedOrder = await Orders.findById(orderId)
         .populate('acc_id', 'username name email phone')
         .lean();
-      
+
       if (updatedOrder && updatedOrder.acc_id) {
         const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
           ? updatedOrder.acc_id._id.toString()
           : updatedOrder.acc_id.toString();
-        
+
         // Ensure order is properly formatted with all fields
         const formattedOrder = {
           ...updatedOrder,
@@ -384,14 +384,14 @@ exports.vnpayIpn = async (req, res) => {
           updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
           createdAt: updatedOrder.createdAt
         };
-        
+
         // Emit to specific user room for real-time updates
         io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
         // Also emit to admin room so dashboard gets updates
         io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-        
+
         console.log(`📦 Order ${orderId} payment updated (VNPay IPN), emitted to user_${userId} and order_admins`);
-        
+
         // 🔔 Create and emit payment status notification
         try {
           const notification = await createOrderNotification({
@@ -401,7 +401,7 @@ exports.vnpayIpn = async (req, res) => {
             payStatus: formattedOrder.pay_status,
             messageType: 'payment_changed'
           });
-          
+
           // Small delay to ensure socket connection is established
           setTimeout(() => {
             emitOrderNotification(io, notification, userId);
@@ -576,12 +576,12 @@ exports.checkout = async (req, res) => {
         action: 'cleared',
         accountId: userId
       });
-      
+
       // Populate order with user details for Socket.IO emission
       const populatedOrder = await Orders.findById(savedOrder._id)
         .populate('acc_id', 'username name email phone')
         .lean();
-      
+
       // Emit new order creation for real-time updates with populated data
       const formattedOrderForSocket = {
         _id: populatedOrder._id,
@@ -601,19 +601,19 @@ exports.checkout = async (req, res) => {
         updatedAt: populatedOrder.updatedAt || populatedOrder.createdAt,
         orderDetails: orderDetailsIds
       };
-      
-      io.to(`user_${userId.toString()}`).emit('orderUpdated', { 
-        userId: userId.toString(), 
-        order: formattedOrderForSocket 
+
+      io.to(`user_${userId.toString()}`).emit('orderUpdated', {
+        userId: userId.toString(),
+        order: formattedOrderForSocket
       });
       // Also notify admins
-      io.to('order_admins').emit('orderUpdated', { 
-        userId: userId.toString(), 
-        order: formattedOrderForSocket 
+      io.to('order_admins').emit('orderUpdated', {
+        userId: userId.toString(),
+        order: formattedOrderForSocket
       });
-      
+
       console.log(`📦 New order ${savedOrder._id} created, emitted to user_${userId} and order_admins`);
-      
+
       // 🔔 Create and emit order creation notification
       try {
         const notification = await createOrderNotification({
@@ -623,7 +623,7 @@ exports.checkout = async (req, res) => {
           payStatus: savedOrder.pay_status,
           messageType: 'created'
         });
-        
+
         // Emit notification immediately
         emitOrderNotification(io, notification, userId.toString());
       } catch (notifError) {
@@ -781,7 +781,7 @@ exports.cancelOrder = async (req, res) => {
       const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
         ? updatedOrder.acc_id._id.toString()
         : updatedOrder.acc_id.toString();
-      
+
       // Ensure order is properly formatted with all fields
       const formattedOrder = {
         ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
@@ -792,14 +792,14 @@ exports.cancelOrder = async (req, res) => {
         createdAt: updatedOrder.createdAt,
         cancelReason: updatedOrder.cancelReason
       };
-      
+
       // Emit to specific user room for real-time updates
       io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
       // Also emit to admin room so dashboard gets updates
       io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-      
+
       console.log(`📦 Order ${orderId} cancelled, emitted to user_${userId} and order_admins`);
-      
+
       // 🔔 Create and emit order cancellation notification
       try {
         const notification = await createOrderNotification({
@@ -809,7 +809,7 @@ exports.cancelOrder = async (req, res) => {
           payStatus: updatedOrder.pay_status,
           messageType: 'cancelled'
         });
-        
+
         // Small delay to ensure socket connection is established
         setTimeout(() => {
           emitOrderNotification(io, notification, userId);
