@@ -141,6 +141,36 @@ const updateViewerStats = async (livestreamId, currentViewers) => {
 // Chỉ cho phép 1 livestream duy nhất tại 1 thời điểm (toàn hệ thống)
 exports.startLivestream = async (hostId, title, description) => {
     try {
+        // Validate title
+        if (!title || typeof title !== 'string') {
+            return {
+                success: false,
+                message: 'Please fill in all required fields',
+                error: 'INVALID_TITLE'
+            };
+        }
+
+        const trimmedTitle = title.trim();
+        if (trimmedTitle.length < 3 || trimmedTitle.length > 50) {
+            return {
+                success: false,
+                message: 'Livestream title must be between 3 and 50 characters',
+                error: 'TITLE_INVALID_LENGTH'
+            };
+        }
+
+        // Validate description (optional, but if provided, must be valid)
+        if (description && typeof description === 'string' && description.trim() !== '') {
+            const trimmedDescription = description.trim();
+            if (trimmedDescription.length < 10 || trimmedDescription.length > 100) {
+                return {
+                    success: false,
+                    message: 'Livestream description must be between 10 and 100 characters',
+                    error: 'DESCRIPTION_INVALID_LENGTH'
+                };
+            }
+        }
+
         // Check: Chỉ cho phép 1 livestream duy nhất tại 1 thời điểm (toàn hệ thống)
         const activeLivestream = await Livestream.findOne({
             status: 'live'
@@ -196,10 +226,11 @@ exports.startLivestream = async (hostId, title, description) => {
         }
 
         // Create livestream record in database
+        const trimmedDescription = description && typeof description === 'string' ? description.trim() : '';
         const livestream = new Livestream({
             hostId: hostId,
-            title: title,
-            description: description,
+            title: trimmedTitle,
+            description: trimmedDescription,
             roomName: roomName,
             status: 'live',
             startTime: new Date(),
@@ -414,7 +445,7 @@ exports.leaveLivestream = async (livestreamId, userId) => {
         const livestream = await Livestream.findById(livestreamId)
             .select('_id roomName status')
             .lean();
-        
+
         if (!livestream) {
             return {
                 success: false,
@@ -432,7 +463,7 @@ exports.leaveLivestream = async (livestreamId, userId) => {
         // Verify user has actually left LiveKit room
         // This ensures user disconnected from LiveKit before API returns success
         const userStillInRoom = await isUserInRoom(livestream.roomName, userId);
-        
+
         if (userStillInRoom) {
             // User is still in room - they haven't actually left yet
             return {
