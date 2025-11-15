@@ -313,10 +313,118 @@ const deleteProductVariant = async (variantId) => {
   }
 };
 
+// Bulk create product variants
+const bulkCreateProductVariants = async (bulkData) => {
+  try {
+    const {
+      productId,
+      productColorId,
+      variantImage,
+      variantPrice,
+      stockQuantity,
+      sizeIds, // Array of size IDs
+    } = bulkData;
+
+    if (
+      !productId ||
+      !productColorId ||
+      !variantImage ||
+      variantPrice == null ||
+      stockQuantity == null ||
+      !Array.isArray(sizeIds) ||
+      sizeIds.length === 0
+    ) {
+      throw new Error("Please fill in all required fields");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      throw new Error("Invalid product ID");
+    }
+    if (!mongoose.Types.ObjectId.isValid(productColorId)) {
+      throw new Error("Invalid product color ID");
+    }
+
+    // Validate all size IDs
+    for (const sizeId of sizeIds) {
+      if (!mongoose.Types.ObjectId.isValid(sizeId)) {
+        throw new Error(`Invalid product size ID: ${sizeId}`);
+      }
+    }
+
+    if (variantPrice < 0) {
+      throw new Error("Variant price cannot be negative");
+    }
+    if (stockQuantity < 0) {
+      throw new Error("Stock quantity cannot be negative");
+    }
+
+    const product = await newProduct.findById(productId);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+    if (product.productStatus === "discontinued") {
+      throw new Error("Cannot add variant to a discontinued product");
+    }
+
+    // Check for existing variants to avoid duplicates
+    const existingVariants = await newProductVariant.find({
+      productId,
+      productColorId,
+      productSizeId: { $in: sizeIds },
+    }).populate("productSizeId");
+
+    if (existingVariants.length > 0) {
+      const existingSizes = existingVariants.map(
+        (v) => v.productSizeId?.size_name || v.productSizeId?.toString() || v.productSizeId
+      );
+      throw new Error(
+        `Variants already exist for some sizes: ${existingSizes.join(", ")}`
+      );
+    }
+
+    const variantStatus = stockQuantity > 0 ? "active" : "inactive";
+
+    // Create all variants
+    const variants = sizeIds.map((productSizeId) => ({
+      productId,
+      productColorId,
+      productSizeId,
+      variantImage,
+      variantPrice,
+      stockQuantity,
+      variantStatus,
+    }));
+
+    // Insert all variants
+    const createdVariants = await newProductVariant.insertMany(variants);
+
+    // Update product with all variant IDs
+    const variantIds = createdVariants.map((v) => v._id);
+    const updatedProduct = await newProduct.findByIdAndUpdate(
+      productId,
+      {
+        $addToSet: { productVariantIds: { $each: variantIds } },
+        productStatus: "active", // At least one variant → active
+        updatedAt: Date.now(),
+      },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      throw new Error("Product not found");
+    }
+
+    return createdVariants;
+  } catch (error) {
+    throw new Error(`Failed to bulk create product variants: ${error.message}`);
+  }
+};
+
 module.exports = {
   createProductVariant,
   getAllProductVariants,
   getProductVariantById,
   updateProductVariant,
   deleteProductVariant,
+  bulkCreateProductVariants,
 };

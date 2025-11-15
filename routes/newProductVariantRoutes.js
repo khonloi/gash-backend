@@ -18,4 +18,7 @@ router.put('/update-variant/:id', authenticateJWT, authorizeRole(['manager', 'ad
 // Soft delete a product variant (restricted to manager/admin)
 router.delete('/delete-variant/:id', authenticateJWT, authorizeRole(['manager', 'admin']), productVariantController.deleteProductVariant);
 
+// Bulk create product variants (restricted to manager/admin)
+router.post('/bulk-create-variants', authenticateJWT, authorizeRole(['manager', 'admin']), productVariantController.bulkCreateProductVariants);
+
 module.exports = router;

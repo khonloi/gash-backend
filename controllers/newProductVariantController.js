@@ -86,10 +86,31 @@ const deleteProductVariant = async (req, res) => {
   }
 };
 
+const bulkCreateProductVariants = async (req, res) => {
+  try {
+    const variants = await productVariantService.bulkCreateProductVariants(req.body);
+    // Emit real-time events for each created variant
+    variants.forEach(variant => {
+      req.app.get('io').to('variantRoom').emit('variantCreated', variant);
+    });
+    res.status(201).json({
+      success: true,
+      data: variants,
+      message: `${variants.length} product variant(s) created successfully`
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   createProductVariant,
   getAllProductVariants,
   getProductVariantById,
   updateProductVariant,
-  deleteProductVariant
+  deleteProductVariant,
+  bulkCreateProductVariants
 };
