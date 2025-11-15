@@ -5,26 +5,47 @@ const OrderDetails = require("../models/OrderDetails");
 const Orders = require("../models/Orders");
 
 // HELPER: Update product status based on its variants
+// Rule: If product has at least 1 variant → status = "active"
+//       If product has no variants and was previously active → status = "inactive"
+//       If product has no variants and was never active → status = "pending"
 const updateProductStatusBasedOnVariants = async (productId) => {
   try {
-    const variants = await newProductVariant.find({ productId });
+    // Find all non-deleted variants (exclude discontinued)
+    const variants = await newProductVariant.find({
+      productId,
+      variantStatus: { $ne: "discontinued" }
+    });
 
-    if (variants.length === 0) {
-      await newProduct.findByIdAndUpdate(
-        productId,
-        { productStatus: "pending", updatedAt: Date.now() },
-        { new: true }
-      );
+    // Get current product to check previous status
+    const currentProduct = await newProduct.findById(productId);
+    if (!currentProduct) {
       return;
     }
 
-    const hasActiveVariant = variants.some(v => v.variantStatus === "active");
+    // If no variants exist
+    if (variants.length === 0) {
+      // If product was previously active (had variants), set to "inactive"
+      if (currentProduct.productStatus === "active") {
+        await newProduct.findByIdAndUpdate(
+          productId,
+          { productStatus: "inactive", updatedAt: Date.now() },
+          { new: true }
+        );
+      } else {
+        // If product was never active (new product), keep as "pending"
+        await newProduct.findByIdAndUpdate(
+          productId,
+          { productStatus: "pending", updatedAt: Date.now() },
+          { new: true }
+        );
+      }
+      return;
+    }
 
-    const newStatus = hasActiveVariant ? "active" : "inactive";
-
+    // If at least 1 variant exists, set status to "active"
     await newProduct.findByIdAndUpdate(
       productId,
-      { productStatus: newStatus, updatedAt: Date.now() },
+      { productStatus: "active", updatedAt: Date.now() },
       { new: true }
     );
   } catch (error) {
@@ -81,17 +102,43 @@ const createProductVariant = async (variantData) => {
       throw new Error("Cannot add variant to a discontinued product");
     }
 
+    // Check for existing variant (excluding discontinued ones)
     const existingVariant = await newProductVariant.findOne({
       productId,
       productColorId,
       productSizeId,
+      variantStatus: { $ne: "discontinued" }
     });
+
     if (existingVariant) {
-      throw new Error(
-        "Variant with this product, color, and size already exists"
-      );
+      // If variant exists, update it instead of creating new one
+      // Add stock quantity (accumulate)
+      const oldStockQuantity = existingVariant.stockQuantity || 0;
+      const newStockQuantity = oldStockQuantity + (stockQuantity || 0);
+      const newVariantStatus = newStockQuantity > 0 ? "active" : "inactive";
+
+      // Update existing variant with new data
+      existingVariant.variantPrice = variantPrice;
+      existingVariant.variantImage = variantImage;
+      existingVariant.stockQuantity = newStockQuantity;
+      existingVariant.variantStatus = newVariantStatus;
+      existingVariant.updatedAt = Date.now();
+
+      await existingVariant.save();
+
+      // Update product status based on variants
+      await updateProductStatusBasedOnVariants(productId);
+
+      // Return variant with flag indicating it was updated
+      return {
+        variant: existingVariant,
+        wasUpdated: true,
+        oldStockQuantity,
+        newStockQuantity
+      };
     }
 
+    // Create new variant if it doesn't exist
     const variantStatus = stockQuantity > 0 ? "active" : "inactive";
     const variant = new newProductVariant({
       ...variantData,
@@ -99,11 +146,11 @@ const createProductVariant = async (variantData) => {
     });
     await variant.save();
 
+    // Add variant to product
     const updatedProduct = await newProduct.findByIdAndUpdate(
       productId,
       {
         $addToSet: { productVariantIds: variant._id },
-        productStatus: "active", // At least one variant → active
         updatedAt: Date.now()
       },
       { new: true }
@@ -113,7 +160,14 @@ const createProductVariant = async (variantData) => {
       throw new Error("Product not found");
     }
 
-    return variant;
+    // Update product status based on variants (will set to "active" since we just added a variant)
+    await updateProductStatusBasedOnVariants(productId);
+
+    // Return variant with flag indicating it was created
+    return {
+      variant,
+      wasUpdated: false
+    };
   } catch (error) {
     throw new Error(`Failed to create product variant: ${error.message}`);
   }
