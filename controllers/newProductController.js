@@ -7,7 +7,7 @@ const createProduct = async (req, res) => {
     res.status(201).json({
       success: true,
       data: product,
-      message: "Product created successfully",
+      message: "Product added successfully",
     });
   } catch (error) {
     console.error("Create product error:", error.message);

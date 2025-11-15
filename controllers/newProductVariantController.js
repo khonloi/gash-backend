@@ -2,14 +2,26 @@ const productVariantService = require('../services/newProductVariantService');
 
 const createProductVariant = async (req, res) => {
   try {
-    const variant = await productVariantService.createProductVariant(req.body);
-    // Emit real-time event
-    req.app.get('io').to('variantRoom').emit('variantCreated', variant);
-    res.status(201).json({
-      success: true,
-      data: variant,
-      message: 'Product variant created successfully'
-    });
+    const result = await productVariantService.createProductVariant(req.body);
+    const variant = result.variant || result; // Handle both old and new return format
+    const wasUpdated = result.wasUpdated || false;
+
+    // Emit real-time event based on whether it was updated or created
+    if (wasUpdated) {
+      req.app.get('io').to('variantRoom').emit('variantUpdated', variant);
+      res.status(200).json({
+        success: true,
+        data: variant,
+        message: `Product variant updated successfully. Stock quantity: ${result.oldStockQuantity} + ${req.body.stockQuantity} = ${result.newStockQuantity}`
+      });
+    } else {
+      req.app.get('io').to('variantRoom').emit('variantCreated', variant);
+      res.status(201).json({
+        success: true,
+        data: variant,
+        message: 'Product variant added successfully'
+      });
+    }
   } catch (error) {
     res.status(400).json({
       success: false,
@@ -59,7 +71,7 @@ const updateProductVariant = async (req, res) => {
     res.status(200).json({
       success: true,
       data: variant,
-      message: 'Product variant updated successfully'
+      message: 'Product variant edited successfully'
     });
   } catch (error) {
     res.status(400).json({
@@ -86,10 +98,31 @@ const deleteProductVariant = async (req, res) => {
   }
 };
 
+const bulkCreateProductVariants = async (req, res) => {
+  try {
+    const variants = await productVariantService.bulkCreateProductVariants(req.body);
+    // Emit real-time events for each created variant
+    variants.forEach(variant => {
+      req.app.get('io').to('variantRoom').emit('variantCreated', variant);
+    });
+    res.status(201).json({
+      success: true,
+      data: variants,
+      message: `${variants.length} product variant(s) created successfully`
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   createProductVariant,
   getAllProductVariants,
   getProductVariantById,
   updateProductVariant,
-  deleteProductVariant
+  deleteProductVariant,
+  bulkCreateProductVariants
 };

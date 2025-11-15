@@ -1,4 +1,5 @@
 const Accounts = require("../models/Accounts");
+const Orders = require("../models/Orders");
 const mongoose = require("mongoose");
 
 exports.createAccount = async (data) => {
@@ -405,6 +406,35 @@ exports.editStaffInformation = async (id, data, user) => {
     response: {
       message: "Staff information updated successfully",
       account: accountObj,
+    },
+  };
+};
+
+exports.getAccountOrderStatistics = async (id) => {
+  if (!mongoose.isValidObjectId(id)) {
+    return {
+      status: 400,
+      response: { message: "Invalid account ID" },
+    };
+  }
+
+  const orders = await Orders.find({ acc_id: id })
+    .select('order_status finalPrice totalPrice');
+
+  const totalOrders = orders.length;
+  const totalSpent = orders.reduce((sum, order) => {
+    return sum + (order.finalPrice || order.totalPrice || 0);
+  }, 0);
+  const activeOrders = orders.filter(order =>
+    ['pending', 'confirmed', 'shipping'].includes(order.order_status)
+  ).length;
+
+  return {
+    status: 200,
+    response: {
+      totalOrders,
+      totalSpent,
+      activeOrders
     },
   };
 };

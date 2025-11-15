@@ -12,6 +12,9 @@ router.get('/', authenticateJWT, authorizeRole(['admin']), accountController.get
 // Search accounts (Admin only)
 router.get('/search', authenticateJWT, authorizeRole(['admin']), accountController.searchAccounts);
 
+// Get account order statistics (Admin, manager, or self) - Must be before /:id route
+router.get('/:id/order-statistics', authenticateJWT, accountController.getAccountOrderStatistics);
+
 // Get a single account by ID (Admin or self)
 router.get('/:id', authenticateJWT, accountController.getAccountById);
 
