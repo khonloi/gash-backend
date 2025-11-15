@@ -141,7 +141,7 @@ exports.updateAccount = async (id, data, user) => {
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot update a deleted account" },
@@ -187,7 +187,7 @@ exports.updateProfile = async (id, data, user) => {
     return { status: 404, response: { message: "Account not found" } };
   }
 
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot update a deleted account" },
@@ -239,7 +239,7 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
     return { status: 404, response: { message: "Account not found" } };
   }
 
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot update a deleted account" },
@@ -277,15 +277,14 @@ exports.softDeleteAccount = async (id, user) => {
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Account is already soft-deleted" },
     };
   }
-  account.is_deleted = true;
   account.role = "user";
-  account.acc_status = "deleted";
+  account.acc_status = "inactive";
   await account.save();
   return {
     status: 200,
@@ -329,7 +328,7 @@ exports.deleteAccount = async (id, user) => {
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.acc_status === "deleted" && account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot hard delete a soft-deleted account" },
@@ -366,7 +365,7 @@ exports.editStaffInformation = async (id, data, user) => {
     };
   }
 
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot edit information of a deleted account" },
