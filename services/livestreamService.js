@@ -120,15 +120,22 @@ const updateViewerStats = async (livestreamId, currentViewers) => {
         const livestream = await Livestream.findById(livestreamId);
         if (!livestream) return;
 
+        const now = new Date();
+
         // Update peak viewers (always increase, never decrease)
         if (currentViewers > livestream.peakViewers) {
             livestream.peakViewers = currentViewers;
+            livestream.peakViewersAt = now; // Save exact time when peak was reached
         }
 
-        // Update min viewers (only if livestream is live, update even when count = 0)
-        if (livestream.status === 'live') {
-            if (livestream.minViewers === undefined || livestream.minViewers === null || livestream.minViewers === 0 || currentViewers < livestream.minViewers) {
+        // Update min viewers (only if livestream is live and currentViewers > 0)
+        // minViewers should track the lowest viewer count when there are viewers (> 0)
+        // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+        if (livestream.status === 'live' && currentViewers > 0) {
+            // Update if minViewers is 0 (initial state) or currentViewers is lower than existing minViewers
+            if (livestream.minViewers === 0 || livestream.minViewers === undefined || livestream.minViewers === null || currentViewers < livestream.minViewers) {
                 livestream.minViewers = currentViewers;
+                livestream.minViewersAt = now; // Save exact time when min was reached
             }
         }
 
@@ -315,6 +322,7 @@ exports.endLivestream = async (livestreamId, userId, userRole) => {
         }
 
         // Update livestream status
+        // Note: peakViewersAt and minViewersAt are already saved when peak/min were reached during livestream
         livestream.status = 'ended';
         livestream.endTime = new Date();
         await livestream.save();
@@ -598,8 +606,10 @@ exports.getHostLivestreams = async (hostId) => {
             needsUpdate = true;
         }
 
-        // Update min viewers (only if livestream is live, update even when count = 0)
-        if (minViewers === undefined || minViewers === null || minViewers === 0 || currentViewers < minViewers) {
+        // Update min viewers (only when currentViewers > 0)
+        // minViewers should track the lowest viewer count when there are viewers (> 0)
+        // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+        if (currentViewers > 0 && (minViewers === 0 || minViewers === undefined || minViewers === null || currentViewers < minViewers)) {
             minViewers = currentViewers;
             needsUpdate = true;
         }
@@ -608,12 +618,17 @@ exports.getHostLivestreams = async (hostId) => {
         if (needsUpdate) {
             const livestreamDoc = await Livestream.findById(livestream._id);
             if (livestreamDoc) {
+                const now = new Date();
                 if (currentViewers > (livestreamDoc.peakViewers || 0)) {
                     livestreamDoc.peakViewers = currentViewers;
+                    livestreamDoc.peakViewersAt = now; // Save exact time when peak was reached
                 }
-                // Update min viewers (update even when count = 0)
-                if ((livestreamDoc.minViewers || 0) === 0 || currentViewers < livestreamDoc.minViewers) {
+                // Update min viewers (only when currentViewers > 0)
+                // Track lowest viewer count when there are viewers (> 0)
+                // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+                if (currentViewers > 0 && (livestreamDoc.minViewers === 0 || livestreamDoc.minViewers === undefined || livestreamDoc.minViewers === null || currentViewers < livestreamDoc.minViewers)) {
                     livestreamDoc.minViewers = currentViewers;
+                    livestreamDoc.minViewersAt = now; // Save exact time when min was reached
                 }
                 livestreamDoc.save().catch(err => {
                     // Silently handle save errors
@@ -718,7 +733,7 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
 
         // Tìm livestream theo ID và populate host (đầy đủ thông tin)
         const livestream = await Livestream.findById(livestreamId)
-            .select('_id hostId title description image roomName status startTime endTime peakViewers minViewers createdAt updatedAt')
+            .select('_id hostId title description image roomName status startTime endTime peakViewers peakViewersAt minViewers minViewersAt totalViewers createdAt updatedAt')
             .populate('hostId', 'name email image role username')
             .lean();
 

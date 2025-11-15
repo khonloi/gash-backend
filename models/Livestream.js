@@ -18,7 +18,7 @@ const livestreamSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['live', 'ended', 'scheduled'],
+    enum: ['live', 'ended'],
     default: 'live'
   },
   roomName: {
@@ -39,10 +39,18 @@ const livestreamSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  peakViewersAt: {
+    type: Date,
+    default: null
+  },
   minViewers: {
     type: Number,
     default: 0,
     min: 0
+  },
+  minViewersAt: {
+    type: Date,
+    default: null
   },
   liveProductIds: [{
     type: mongoose.Schema.Types.ObjectId,
