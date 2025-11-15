@@ -12,8 +12,11 @@ const orderSocket = require('./sockets/orderSocket');
 // ===== LiveKit Service (SIMPLE) =====
 const livestreamService = require('./services/livestreamService');
 
-// Tạo HTTP server
+// Tạo HTTP server với timeout cho upload nhiều file
 const server = http.createServer(app);
+server.timeout = 300000; // 5 phút (300 giây) cho upload nhiều file
+server.keepAliveTimeout = 65000; // 65 giây
+server.headersTimeout = 66000; // 66 giây
 
 // Socket.IO
 const io = new Server(server, {

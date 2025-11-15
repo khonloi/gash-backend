@@ -1,4 +1,5 @@
 const express = require('express');
+const multer = require('multer');
 const upload = require('../middleware/cloudinaryUtils'); // sử dụng Cloudinary middleware
 
 const router = express.Router();
@@ -23,7 +24,7 @@ router.post('/', upload.single('image'), (req, res) => {
 });
 
 // API upload nhiều file (key: images)
-router.post('/multiple', upload.array('images', 10), (req, res) => {
+router.post('/multiple', upload.array('images', 10), (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: 'No files uploaded' });
@@ -38,8 +39,45 @@ router.post('/multiple', upload.array('images', 10), (req, res) => {
       files,
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Upload multiple error:', err);
+    next(err);
   }
+}, (err, req, res, next) => {
+  // Xử lý lỗi multer
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: 'File too large. Maximum size is 10MB per file.'
+      });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        message: 'Too many files. Maximum is 10 files.'
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      message: `Upload error: ${err.message}`
+    });
+  }
+  // Xử lý lỗi Cloudinary timeout
+  if (err && (err.name === 'TimeoutError' || err.http_code === 499)) {
+    console.error('Cloudinary timeout error:', err);
+    return res.status(504).json({
+      success: false,
+      message: 'Upload timeout. The request took too long. Please try again with fewer or smaller files.'
+    });
+  }
+  if (err) {
+    console.error('Upload error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Upload failed. Please try again.'
+    });
+  }
+  next();
 });
 
 // ======================

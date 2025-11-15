@@ -338,11 +338,29 @@ const updateProduct = async (productId, updateData) => {
     }
 
     // Set product status based on variants
-    let finalProductStatus = productStatus || existingProduct.productStatus;
+    // Rule: If product has at least 1 variant → status = "active"
+    //       If product has no variants and was previously active → status = "inactive"
+    //       If product has no variants and was never active → status = "pending"
+    let finalProductStatus;
     if (updatedVariantIds.length === 0) {
-      finalProductStatus = "pending";
-    } else if (updatedVariantIds.length > 0 && finalProductStatus === "pending") {
+      // If product was previously active (had variants), set to "inactive"
+      if (existingProduct.productStatus === "active") {
+        finalProductStatus = "inactive";
+      } else {
+        // If product was never active (new product), keep as "pending"
+        finalProductStatus = "pending";
+      }
+    } else {
+      // If at least 1 variant exists, status must be "active"
       finalProductStatus = "active";
+    }
+
+    // Only allow manual status override if provided and product has variants
+    // (For cases like setting to "inactive" manually, but this should be rare)
+    if (productStatus && updatedVariantIds.length > 0 && productStatus !== "active") {
+      // Allow manual override, but log it
+      console.warn(`Product ${productId} has variants but status is set to ${productStatus} instead of "active"`);
+      finalProductStatus = productStatus;
     }
 
     const updatePayload = {
