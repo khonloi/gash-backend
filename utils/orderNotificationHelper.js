@@ -1,6 +1,13 @@
 const Notification = require('../models/Notification');
 
 /**
+ * Order Notification Helper
+ * 
+ * This module handles web (Socket.IO) notifications for order updates.
+ * Email notifications are handled by the frontend using EmailJS (similar to OTP emails).
+ */
+
+/**
  * Create a notification for order updates
  * @param {Object} params - Notification parameters
  * @param {String} params.userId - User ID to notify
@@ -32,33 +39,33 @@ async function createOrderNotification({ userId, orderId, orderStatus, payStatus
 
     switch (messageType) {
       case 'created':
-        title = '📦 New Order Created';
+        title = 'New Order Created';
         message = `Your order #${orderId.slice(-8)} has been successfully created and ${statusMessages[orderStatus] || 'is being processed'}.`;
         break;
 
       case 'status_changed':
-        title = '📦 Order Status Updated';
+        title = 'Order Status Updated';
         message = `Your order #${orderId.slice(-8)} ${statusMessages[orderStatus] || 'status has been updated'}.`;
         break;
 
       case 'payment_changed':
-        title = '💳 Payment Status Updated';
+        title = 'Payment Status Updated';
         const paymentMsg = paymentMessages[payStatus] || `payment status is ${payStatus}`;
         message = `Your order #${orderId.slice(-8)} ${paymentMsg}.`;
         break;
 
       case 'cancelled':
-        title = '❌ Order Cancelled';
+        title = 'Order Cancelled';
         message = `Your order #${orderId.slice(-8)} has been cancelled.`;
         break;
 
       case 'delivered':
-        title = '✅ Order Delivered';
+        title = 'Order Delivered';
         message = `Great news! Your order #${orderId.slice(-8)} has been delivered. Thank you for shopping with us!`;
         break;
 
       default:
-        title = '📦 Order Update';
+        title = 'Order Update';
         message = `Your order #${orderId.slice(-8)} has been updated.`;
     }
 
@@ -74,6 +81,10 @@ async function createOrderNotification({ userId, orderId, orderStatus, payStatus
     });
 
     await notification.save();
+
+    // Email notifications are handled by the frontend when they receive the Socket.IO notification
+    // This follows the same pattern as OTP emails (sent from frontend using EmailJS)
+
     return notification;
   } catch (error) {
     console.error('❌ Error creating order notification:', error);
