@@ -54,11 +54,44 @@ const accountSchema = new mongoose.Schema({
     enum: ['active', 'inactive', 'suspended', 'deleted'], 
     default: 'active' 
   },
-  // passkeys field removed
+  passkeys: [{
+    credentialID: {
+      type: String,
+      required: true
+    },
+    credentialPublicKey: {
+      type: String,
+      required: true
+    },
+    counter: {
+      type: Number,
+      default: 0
+    },
+    deviceType: {
+      type: String,
+      default: 'unknown'
+    },
+    backedUp: {
+      type: Boolean,
+      default: false
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   is_deleted: {
     type: Boolean,
     default: false,
     index: true
+  },
+  googleId: {
+    type: String,
+    sparse: true
+  },
+  requireAuthForCheckout: {
+    type: Boolean,
+    default: false
   },
 }, {
   timestamps: true
