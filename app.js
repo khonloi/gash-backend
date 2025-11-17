@@ -101,6 +101,10 @@ app.use('/livestream-products', livestreamProductRoutes);
 app.use('/livestream-comments', livestreamCommentRoutes);
 app.use('/livestream-reactions', livestreamReactionRoutes);
 
+// ===== Passkey Routes =====
+const passkeyRoutes = require('./routes/passkeyRoutes');
+app.use('/passkeys', passkeyRoutes);
+
 // ===== 404 handler =====
 app.use((req, res, next) => {
   res.status(404).json({ success: false, message: 'Not Found' });

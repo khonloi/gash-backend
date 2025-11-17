@@ -30,4 +30,10 @@ router.post('/register/request-otp', authController.requestRegisterOtp);
 // Check authentication status
 router.get('/check-status', authenticateJWT, authController.checkStatus);
 
+// Verify password for checkout authentication
+router.post('/verify-password', authenticateJWT, authController.verifyPassword);
+
+// Update checkout authentication setting
+router.put('/checkout-auth-setting', authenticateJWT, authController.updateCheckoutAuthSetting);
+
 module.exports = router;
