@@ -132,7 +132,7 @@ exports.generateRegistrationOptions = async (userId) => {
 /**
  * Verify registration response and save passkey
  */
-exports.verifyRegistration = async (userId, body) => {
+exports.verifyRegistration = async (userId, body, requestOrigin = null) => {
   try {
     console.log('Verifying registration for userId:', userId);
     console.log('Registration response received:', JSON.stringify(body, null, 2));
@@ -150,8 +150,13 @@ exports.verifyRegistration = async (userId, body) => {
       return { status: 400, response: { message: 'Challenge is required' } };
     }
 
+    // Use request origin if provided, otherwise fall back to configured origin
+    const expectedOrigin = requestOrigin || origin;
+    
     console.log('Expected challenge:', expectedChallenge);
-    console.log('Expected origin:', origin);
+    console.log('Expected origin:', expectedOrigin);
+    console.log('Request origin:', requestOrigin);
+    console.log('Configured origin:', origin);
     console.log('Expected RPID:', rpID);
     
     // Log the response structure to debug
@@ -174,9 +179,9 @@ exports.verifyRegistration = async (userId, body) => {
           }
           
           // Compare origins
-          if (clientData.origin !== origin) {
+          if (clientData.origin !== expectedOrigin) {
             console.error('Origin mismatch!');
-            console.error('  Expected:', origin);
+            console.error('  Expected:', expectedOrigin);
             console.error('  Received:', clientData.origin);
           } else {
             console.log('✓ Origin matches');
@@ -230,7 +235,7 @@ exports.verifyRegistration = async (userId, body) => {
       verification = await verifyRegistrationResponse({
         response: webauthnResponse,
         expectedChallenge: expectedChallenge,
-        expectedOrigin: origin,
+        expectedOrigin: expectedOrigin,
         expectedRPID: rpID,
         requireUserVerification: true, // Required for biometrics
       });
@@ -462,7 +467,7 @@ exports.generateAuthenticationOptions = async (username) => {
 /**
  * Verify authentication response and login
  */
-exports.verifyAuthentication = async (username, body) => {
+exports.verifyAuthentication = async (username, body, requestOrigin = null) => {
   try {
     const account = await Accounts.findOne({ username });
     if (!account) {
@@ -477,6 +482,9 @@ exports.verifyAuthentication = async (username, body) => {
     if (!expectedChallenge) {
       return { status: 400, response: { message: 'Challenge is required' } };
     }
+
+    // Use request origin if provided, otherwise fall back to configured origin
+    const expectedOrigin = requestOrigin || origin;
 
     // Find the passkey being used
     const credentialID = body.id;
@@ -530,7 +538,7 @@ exports.verifyAuthentication = async (username, body) => {
       verification = await verifyAuthenticationResponse({
         response: webauthnResponse,
         expectedChallenge,
-        expectedOrigin: origin,
+        expectedOrigin: expectedOrigin,
         expectedRPID: rpID,
         credential: {
           id: credentialIDBuffer,  // Note: property name is 'id', not 'credentialID'

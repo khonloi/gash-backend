@@ -26,7 +26,11 @@ exports.verifyRegistration = async (req, res) => {
     console.log('Controller: Verifying registration for userId:', userId);
     console.log('Controller: Request body keys:', Object.keys(req.body));
     
-    const result = await passkeyService.verifyRegistration(userId, req.body);
+    // Get origin from request headers
+    const requestOrigin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+    console.log('Controller: Request origin:', requestOrigin);
+    
+    const result = await passkeyService.verifyRegistration(userId, req.body, requestOrigin);
     res.status(result.status).json(result.response);
   } catch (error) {
     console.error('Controller error:', error);
@@ -66,7 +70,12 @@ exports.verifyAuthentication = async (req, res) => {
     if (!username) {
       return res.status(400).json({ message: 'Username is required' });
     }
-    const result = await passkeyService.verifyAuthentication(username, req.body);
+    
+    // Get origin from request headers
+    const requestOrigin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
+    console.log('Controller: Request origin for authentication:', requestOrigin);
+    
+    const result = await passkeyService.verifyAuthentication(username, req.body, requestOrigin);
     res.status(result.status).json(result.response);
   } catch (error) {
     res.status(500).json({ message: 'Error verifying authentication', error: error.message });
