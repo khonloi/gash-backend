@@ -136,7 +136,45 @@ exports.updateNotification = async (req, res) => {
 
 exports.deleteNotification = async (req, res) => {
   try {
+    // Get notification before deleting to know who to notify
+    const notification = await Notification.findById(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    const userId = notification.userId ? notification.userId.toString() : null;
+    const notificationId = notification._id.toString();
+
+    // Delete the notification
     await Notification.findByIdAndDelete(req.params.id);
+
+    // 🔔 Emit Socket.IO event to notify recipients
+    const io = req.app.get("io");
+    if (io) {
+      const deleteEvent = { notificationId, userId };
+      
+      if (userId) {
+        // Notify specific user - emit to multiple room formats for compatibility
+        io.to(userId).emit("notificationDeleted", deleteEvent);
+        io.to(`user_${userId}`).emit("notificationDeleted", deleteEvent);
+        
+        // Also emit to the socket ID if we have it
+        const { connectedUsers } = require("../sockets/notificationSocket");
+        const socketId = connectedUsers.get(userId);
+        if (socketId) {
+          io.to(socketId).emit("notificationDeleted", deleteEvent);
+        }
+        
+        console.log(`🗑️ Emitted notificationDeleted to user: ${userId}, socketId: ${socketId || 'none'}`);
+      } else {
+        // Global notification - notify all users
+        io.emit("notificationDeleted", deleteEvent);
+        console.log("🗑️ Emitted notificationDeleted to ALL users (global notification)");
+      }
+    } else {
+      console.warn("⚠️ Socket.IO not available in deleteNotification");
+    }
+
     res.json({ message: "Deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
