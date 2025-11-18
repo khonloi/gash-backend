@@ -36,7 +36,7 @@ const io = new Server(server, {
 app.set('io', io);
 
 // Kết nối MongoDB
-const mongoURI = 'mongodb://localhost:27017/gash-db';
+const mongoURI = 'mongodb+srv://ngquocbao99_db_user:DpapCfopxxebv6zF@ngquocbao99.emt1il1.mongodb.net/gash-db?retryWrites=true&w=majority&appName=ngquocbao99';
 mongoose.connect(mongoURI)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB error:', err.message));
