@@ -127,15 +127,18 @@ exports.updateUserPreferences = async (req, res) => {
 exports.getAllNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({
+      isTemplate: false,                     // 🔥 THÊM DÒNG NÀY
       type: { $ne: "preference" },
     })
       .populate("userId", "fullName username email")
       .sort({ createdAt: -1 });
+
     res.json(notifications);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
+
 
 exports.updateNotification = async (req, res) => {
   try {

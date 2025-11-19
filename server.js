@@ -36,10 +36,17 @@ const io = new Server(server, {
 app.set('io', io);
 
 // Kết nối MongoDB
-const mongoURI = 'mongodb://localhost:27017/gash-db';
+const mongoURI = process.env.MONGO_URI || process.env.MONGODB_URI;
+if (!mongoURI) {
+  console.error('❌ MONGO_URI or MONGODB_URI environment variable is not set');
+  process.exit(1);
+}
 mongoose.connect(mongoURI)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB error:', err.message));
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err.message);
+    process.exit(1);
+  });
 
 // Socket chat
 chatSocket(io);
