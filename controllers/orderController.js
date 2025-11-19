@@ -80,12 +80,16 @@ exports.getOrderById = async (req, res) => {
         totalPrice: detail.UnitPrice * detail.Quantity,
         feedback: detail.feedback ? {
           rating: detail.feedback.rating,
-          content: detail.feedback.content,
+          content: detail.feedback.is_deleted 
+            ? 'This feedback has been deleted by staff/admin' 
+            : detail.feedback.content,
           created_at: detail.feedback.created_at,
           updated_at: detail.feedback.updated_at,
           is_deleted: detail.feedback.is_deleted,
           has_rating: detail.feedback.rating !== null && detail.feedback.rating !== undefined,
-          has_content: detail.feedback.content && detail.feedback.content.trim() !== ''
+          has_content: detail.feedback.is_deleted 
+            ? true  // Show content flag as true so the deletion message displays
+            : (detail.feedback.content && detail.feedback.content.trim() !== '')
         } : null
       })) : [],
 
@@ -1227,19 +1231,12 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     const variantIds = allVariantsOfProduct.map(v => v._id);
 
     // Tìm tất cả feedback của tất cả variants thuộc product này
+    // Include deleted feedbacks so they can be shown to users with deletion message
     const query = {
       variant_id: { $in: variantIds },
       $or: [
         { 'feedback.rating': { $exists: true, $ne: null } },
         { 'feedback.content': { $exists: true, $ne: '' } }
-      ],
-      $and: [
-        {
-          $or: [
-            { 'feedback.is_deleted': { $exists: false } },
-            { 'feedback.is_deleted': false }
-          ]
-        }
       ]
     };
 
@@ -1289,11 +1286,12 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
         return bDate - aDate; // Mới nhất trước
       });
 
-    // Lấy tổng số feedback
-    const totalFeedbacks = sortedFeedbacks.length;
+    // Lấy tổng số feedback (excluding deleted ones for statistics)
+    const activeFeedbacks = sortedFeedbacks.filter(f => !f.feedback.is_deleted);
+    const totalFeedbacks = activeFeedbacks.length;
 
-    // Tính toán thống kê với rating
-    const feedbacksWithRating = allFeedbacks.filter(f => f.feedback.rating && f.feedback.rating !== null);
+    // Tính toán thống kê với rating (exclude deleted feedbacks from statistics)
+    const feedbacksWithRating = activeFeedbacks.filter(f => f.feedback.rating && f.feedback.rating !== null);
     const totalRatings = feedbacksWithRating.length;
     const averageRating = totalRatings > 0
       ? feedbacksWithRating.reduce((sum, feedback) => sum + feedback.feedback.rating, 0) / totalRatings
@@ -1339,12 +1337,16 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       } : null,
       feedback: {
         rating: feedback.feedback.rating,
-        content: feedback.feedback.content,
+        content: feedback.feedback.is_deleted 
+          ? 'This feedback has been deleted by staff/admin' 
+          : feedback.feedback.content,
         created_at: feedback.feedback.created_at,
         updated_at: feedback.feedback.updated_at,
         is_deleted: feedback.feedback.is_deleted,
         has_rating: feedback.feedback.rating !== null,
-        has_content: feedback.feedback.content && feedback.feedback.content.trim() !== ''
+        has_content: feedback.feedback.is_deleted 
+          ? true  // Show content flag as true so the deletion message displays
+          : (feedback.feedback.content && feedback.feedback.content.trim() !== '')
       },
       unit_price: feedback.UnitPrice,
       quantity: feedback.Quantity

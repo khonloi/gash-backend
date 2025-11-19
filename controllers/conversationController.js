@@ -6,11 +6,36 @@ const Messages = require('../models/Message');
 // 🟢 Lấy danh sách conversation
 exports.getList = async (req, res) => {
   try {
-    const { status, accountId, staffId } = req.query;
+    const { status, accountId, staffId, isAdmin } = req.query;
     const filter = {};
-    if (status) filter.status = status;
+    
+    // Exclude closed conversations unless explicitly requested
+    if (status) {
+      filter.status = status;
+    } else {
+      filter.status = { $ne: 'closed' };
+    }
+    
     if (accountId) filter.accountId = accountId;
-    if (staffId) filter.staffId = { $in: [staffId, null] };
+    
+    // If isAdmin is true, show all conversations (no staff filtering)
+    // Otherwise, if staffId is provided, only show conversations assigned to this staff or unassigned (open)
+    if (isAdmin === 'true' || isAdmin === true) {
+      // Admin can see all conversations - no staff filtering needed
+    } else if (staffId) {
+      const statusFilter = status ? { status } : { status: { $ne: 'closed' } };
+      filter.$and = [
+        {
+          $or: [
+            { staffId: staffId }, // Assigned to this staff
+            { staffId: null, status: 'open' } // Unassigned open conversations
+          ]
+        },
+        statusFilter
+      ];
+      // Remove the separate status filter since it's now in $and
+      delete filter.status;
+    }
 
     // ---- ONLY CONVERSATIONS THAT HAVE AT LEAST ONE MESSAGE ----
     const conversationsWithMsg = await Messages.distinct('conversationId');
