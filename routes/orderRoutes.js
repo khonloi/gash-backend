@@ -14,6 +14,7 @@ const {
   getUserOrders, // New endpoint
 } = require('../controllers/orderController');
 const orderController = require('../controllers/orderController');
+const debugOrderController = require('../controllers/debugOrderController');
 
 // router.post('/', authenticateJWT, createOrder); 
 // router.get('/', authenticateJWT, getAllOrders);
@@ -47,5 +48,8 @@ router.get('/admin/get-all-order', authenticateJWT, authorizeRole(['admin', 'man
 
 // Cập nhật đơn hàng - Chỉ Admin/Staff
 router.put('/admin/update/:orderId', authenticateJWT, authorizeRole(['admin', 'manager']), updateOrderByAdmin);
+
+// DEBUG API - Generate random orders (only when ENABLE_DEBUG_ORDERS=true)
+router.post('/debug/generate-orders', authenticateJWT, authorizeRole(['admin', 'manager']), debugOrderController.generateDebugOrders);
 
 module.exports = router;

@@ -8,49 +8,27 @@ const User = require("../models/Accounts");
 exports.createNotification = async (req, res) => {
   try {
     console.log("📩 Body nhận được từ FE:", req.body);
+    const { recipientType } = req.body;
     const notifications = await notificationService.createNotificationService(req.body);
 
     /** 🔔 Realtime emit qua Socket.IO */
     const io = req.app.get("io");
 
     if (io && notifications?.length) {
+      // Emit each notification to its specific user room
+      // The service already creates individual notifications for each recipient
       for (const n of notifications) {
-        if (n.recipientType === "all") {
-          // Gửi cho tất cả user
-          io.emit("newNotification", n);
-          console.log("📢 Sent to ALL users");
-        } 
-        else if (n.recipientType === "specific" && n.userId) {
-          // ✅ Gửi riêng cho user cụ thể (dùng username hoặc _id đều được)
-          let targetId = n.userId;
-
-          // Nếu không phải ObjectId → nghĩa là username
-          if (!mongoose.isValidObjectId(targetId)) {
-            const foundUser = await User.findOne({ username: n.userId });
-            if (foundUser) targetId = foundUser._id.toString();
-            else console.log("⚠️ Không tìm thấy user:", n.userId);
-          }
-
-          // ✅ Emit theo room thay vì socketId (fix realtime)
-          io.to(targetId.toString()).emit("newNotification", n);
+        if (n.userId) {
+          const targetId = n.userId.toString();
+          io.to(targetId).emit("newNotification", n);
           console.log("🎯 Sent to user room:", targetId);
-        } 
-        else if (n.recipientType === "multiple" && Array.isArray(n.userIds)) {
-          // ✅ Gửi cho nhiều user (username hoặc _id đều được)
-          for (let id of n.userIds) {
-            let targetId = id;
-
-            if (!mongoose.isValidObjectId(targetId)) {
-              const foundUser = await User.findOne({ username: id });
-              if (foundUser) targetId = foundUser._id.toString();
-            }
-
-            // ✅ Emit theo room thay vì socketId (fix realtime)
-            io.to(targetId.toString()).emit("newNotification", n);
-            console.log("🎯 Sent to user room:", targetId);
-          }
+        } else {
+          // If userId is null, it's a global notification - emit to all
+          io.emit("newNotification", n);
+          console.log("📢 Sent to ALL users (global notification)");
         }
       }
+      console.log(`✅ Emitted ${notifications.length} notification(s) via Socket.IO`);
     }
 
     return res.status(201).json({
@@ -158,7 +136,45 @@ exports.updateNotification = async (req, res) => {
 
 exports.deleteNotification = async (req, res) => {
   try {
+    // Get notification before deleting to know who to notify
+    const notification = await Notification.findById(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    const userId = notification.userId ? notification.userId.toString() : null;
+    const notificationId = notification._id.toString();
+
+    // Delete the notification
     await Notification.findByIdAndDelete(req.params.id);
+
+    // 🔔 Emit Socket.IO event to notify recipients
+    const io = req.app.get("io");
+    if (io) {
+      const deleteEvent = { notificationId, userId };
+      
+      if (userId) {
+        // Notify specific user - emit to multiple room formats for compatibility
+        io.to(userId).emit("notificationDeleted", deleteEvent);
+        io.to(`user_${userId}`).emit("notificationDeleted", deleteEvent);
+        
+        // Also emit to the socket ID if we have it
+        const { connectedUsers } = require("../sockets/notificationSocket");
+        const socketId = connectedUsers.get(userId);
+        if (socketId) {
+          io.to(socketId).emit("notificationDeleted", deleteEvent);
+        }
+        
+        console.log(`🗑️ Emitted notificationDeleted to user: ${userId}, socketId: ${socketId || 'none'}`);
+      } else {
+        // Global notification - notify all users
+        io.emit("notificationDeleted", deleteEvent);
+        console.log("🗑️ Emitted notificationDeleted to ALL users (global notification)");
+      }
+    } else {
+      console.warn("⚠️ Socket.IO not available in deleteNotification");
+    }
+
     res.json({ message: "Deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });

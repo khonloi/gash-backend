@@ -2,9 +2,10 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-const orderSocket = (io) => {
-  const connectedUsers = new Map(); // Store userId -> socketId
+// Store connected users map (exported for potential use in controllers)
+const connectedUsers = new Map();
 
+const orderSocket = (io) => {
   io.on('connection', (socket) => {
     console.log(`📦 Order socket connected: ${socket.id}`);
 
@@ -50,9 +51,9 @@ const orderSocket = (io) => {
       console.log(`❌ Order socket disconnected: ${socket.id}`);
     });
   });
-
-  // Export connectedUsers for use in controllers
-  orderSocket.connectedUsers = connectedUsers;
 };
+
+// Export connectedUsers for use in controllers (if needed)
+orderSocket.connectedUsers = connectedUsers;
 
 module.exports = orderSocket;
