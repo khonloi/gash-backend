@@ -120,15 +120,22 @@ const updateViewerStats = async (livestreamId, currentViewers) => {
         const livestream = await Livestream.findById(livestreamId);
         if (!livestream) return;
 
+        const now = new Date();
+
         // Update peak viewers (always increase, never decrease)
         if (currentViewers > livestream.peakViewers) {
             livestream.peakViewers = currentViewers;
+            livestream.peakViewersAt = now; // Save exact time when peak was reached
         }
 
-        // Update min viewers (only if livestream is live, update even when count = 0)
-        if (livestream.status === 'live') {
-            if (livestream.minViewers === undefined || livestream.minViewers === null || livestream.minViewers === 0 || currentViewers < livestream.minViewers) {
+        // Update min viewers (only if livestream is live and currentViewers > 0)
+        // minViewers should track the lowest viewer count when there are viewers (> 0)
+        // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+        if (livestream.status === 'live' && currentViewers > 0) {
+            // Update if minViewers is 0 (initial state) or currentViewers is lower than existing minViewers
+            if (livestream.minViewers === 0 || livestream.minViewers === undefined || livestream.minViewers === null || currentViewers < livestream.minViewers) {
                 livestream.minViewers = currentViewers;
+                livestream.minViewersAt = now; // Save exact time when min was reached
             }
         }
 
@@ -141,6 +148,36 @@ const updateViewerStats = async (livestreamId, currentViewers) => {
 // Chỉ cho phép 1 livestream duy nhất tại 1 thời điểm (toàn hệ thống)
 exports.startLivestream = async (hostId, title, description) => {
     try {
+        // Validate title
+        if (!title || typeof title !== 'string') {
+            return {
+                success: false,
+                message: 'Please fill in all required fields',
+                error: 'INVALID_TITLE'
+            };
+        }
+
+        const trimmedTitle = title.trim();
+        if (trimmedTitle.length < 3 || trimmedTitle.length > 50) {
+            return {
+                success: false,
+                message: 'Livestream title must be between 3 and 50 characters',
+                error: 'TITLE_INVALID_LENGTH'
+            };
+        }
+
+        // Validate description (optional, but if provided, must be valid)
+        if (description && typeof description === 'string' && description.trim() !== '') {
+            const trimmedDescription = description.trim();
+            if (trimmedDescription.length < 10 || trimmedDescription.length > 100) {
+                return {
+                    success: false,
+                    message: 'Livestream description must be between 10 and 100 characters',
+                    error: 'DESCRIPTION_INVALID_LENGTH'
+                };
+            }
+        }
+
         // Check: Chỉ cho phép 1 livestream duy nhất tại 1 thời điểm (toàn hệ thống)
         const activeLivestream = await Livestream.findOne({
             status: 'live'
@@ -196,10 +233,11 @@ exports.startLivestream = async (hostId, title, description) => {
         }
 
         // Create livestream record in database
+        const trimmedDescription = description && typeof description === 'string' ? description.trim() : '';
         const livestream = new Livestream({
             hostId: hostId,
-            title: title,
-            description: description,
+            title: trimmedTitle,
+            description: trimmedDescription,
             roomName: roomName,
             status: 'live',
             startTime: new Date(),
@@ -284,6 +322,7 @@ exports.endLivestream = async (livestreamId, userId, userRole) => {
         }
 
         // Update livestream status
+        // Note: peakViewersAt and minViewersAt are already saved when peak/min were reached during livestream
         livestream.status = 'ended';
         livestream.endTime = new Date();
         await livestream.save();
@@ -414,7 +453,7 @@ exports.leaveLivestream = async (livestreamId, userId) => {
         const livestream = await Livestream.findById(livestreamId)
             .select('_id roomName status')
             .lean();
-        
+
         if (!livestream) {
             return {
                 success: false,
@@ -432,7 +471,7 @@ exports.leaveLivestream = async (livestreamId, userId) => {
         // Verify user has actually left LiveKit room
         // This ensures user disconnected from LiveKit before API returns success
         const userStillInRoom = await isUserInRoom(livestream.roomName, userId);
-        
+
         if (userStillInRoom) {
             // User is still in room - they haven't actually left yet
             return {
@@ -567,8 +606,10 @@ exports.getHostLivestreams = async (hostId) => {
             needsUpdate = true;
         }
 
-        // Update min viewers (only if livestream is live, update even when count = 0)
-        if (minViewers === undefined || minViewers === null || minViewers === 0 || currentViewers < minViewers) {
+        // Update min viewers (only when currentViewers > 0)
+        // minViewers should track the lowest viewer count when there are viewers (> 0)
+        // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+        if (currentViewers > 0 && (minViewers === 0 || minViewers === undefined || minViewers === null || currentViewers < minViewers)) {
             minViewers = currentViewers;
             needsUpdate = true;
         }
@@ -577,12 +618,17 @@ exports.getHostLivestreams = async (hostId) => {
         if (needsUpdate) {
             const livestreamDoc = await Livestream.findById(livestream._id);
             if (livestreamDoc) {
+                const now = new Date();
                 if (currentViewers > (livestreamDoc.peakViewers || 0)) {
                     livestreamDoc.peakViewers = currentViewers;
+                    livestreamDoc.peakViewersAt = now; // Save exact time when peak was reached
                 }
-                // Update min viewers (update even when count = 0)
-                if ((livestreamDoc.minViewers || 0) === 0 || currentViewers < livestreamDoc.minViewers) {
+                // Update min viewers (only when currentViewers > 0)
+                // Track lowest viewer count when there are viewers (> 0)
+                // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+                if (currentViewers > 0 && (livestreamDoc.minViewers === 0 || livestreamDoc.minViewers === undefined || livestreamDoc.minViewers === null || currentViewers < livestreamDoc.minViewers)) {
                     livestreamDoc.minViewers = currentViewers;
+                    livestreamDoc.minViewersAt = now; // Save exact time when min was reached
                 }
                 livestreamDoc.save().catch(err => {
                     // Silently handle save errors
@@ -687,7 +733,7 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
 
         // Tìm livestream theo ID và populate host (đầy đủ thông tin)
         const livestream = await Livestream.findById(livestreamId)
-            .select('_id hostId title description image roomName status startTime endTime peakViewers minViewers createdAt updatedAt')
+            .select('_id hostId title description image roomName status startTime endTime peakViewers peakViewersAt minViewers minViewersAt totalViewers createdAt updatedAt')
             .populate('hostId', 'name email image role username')
             .lean();
 
