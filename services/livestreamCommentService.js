@@ -187,7 +187,7 @@ exports.hideComment = async (commentId, userId, userRole) => {
     }
 };
 
-// Pin comment (admin only) - unpins all other comments and products in the livestream
+// Pin comment (admin only) - unpins all other comments in the livestream (products are independent)
 exports.pinComment = async (commentId, liveId, userId, userRole) => {
     try {
         // Check permissions - only admin/manager can pin
@@ -244,16 +244,8 @@ exports.pinComment = async (commentId, liveId, userId, userRole) => {
         const liveIdStr = liveId?.toString?.() || String(liveId);
         const commentIdStr = commentId?.toString?.() || String(commentId);
 
-        // Unpin tất cả products trong livestream (vì chỉ có thể pin comment HOẶC product, không thể cả 2)
-        await LiveProduct.updateMany(
-            {
-                liveId: liveId,
-                isPinned: true // Chỉ unpin các product đang được pin
-            },
-            { isPinned: false }
-        );
-
-        // Emit events cho các comments/products bị unpin (để frontend cập nhật UI)
+        // Emit events cho các comments bị unpin (để frontend cập nhật UI)
+        // NOTE: Pin product và pin comment hoạt động độc lập, không ảnh hưởng đến nhau
         commentsToUnpin.forEach(commentToUnpin => {
             const unpinnedCommentId = commentToUnpin._id?.toString?.() || commentToUnpin._id;
             getIO().to(`live_${liveIdStr}`).emit('comment:unpinned', {

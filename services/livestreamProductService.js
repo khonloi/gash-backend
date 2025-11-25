@@ -271,7 +271,7 @@ exports.getAllLiveProductsForAdmin = async (liveId) => {
     }
 };
 
-// Pin product (admin only) - unpins all other products and comments in the livestream
+// Pin product (admin only) - unpins all other products in the livestream (comments are independent)
 exports.pinProduct = async (productId, liveId, userId, userRole) => {
     try {
         // Check permissions - only admin/manager can pin
@@ -324,38 +324,13 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
             { isPinned: false, removeBy: userId }
         );
 
-        // Unpin tất cả comments trong livestream (vì chỉ có thể pin comment HOẶC product, không thể cả 2)
-        const commentsToUnpin = await LiveComment.find({
-            liveId: liveId,
-            isPinned: true,
-            isDeleted: false
-        }).select('_id');
-
-        await LiveComment.updateMany(
-            {
-                liveId: liveId,
-                isPinned: true // Chỉ unpin các comment đang được pin
-            },
-            { isPinned: false, removeBy: userId }
-        );
-
-        // Emit events cho các products/comments bị unpin (để frontend cập nhật UI)
+        // Emit events cho các products bị unpin (để frontend cập nhật UI)
+        // NOTE: Pin product và pin comment hoạt động độc lập, không ảnh hưởng đến nhau
         productsToUnpin.forEach(liveProductToUnpin => {
             getIO().to(`live_${liveId}`).emit('product:unpinned', {
                 liveId,
                 productId: liveProductToUnpin.productId,
                 liveProductId: liveProductToUnpin._id,
-                isPinned: false
-            });
-        });
-
-        // Ensure liveId is string for consistent comparison
-        const liveIdStr = liveId?.toString?.() || String(liveId);
-        commentsToUnpin.forEach(commentToUnpin => {
-            const commentIdStr = commentToUnpin._id?.toString?.() || commentToUnpin._id;
-            getIO().to(`live_${liveIdStr}`).emit('comment:unpinned', {
-                liveId: liveIdStr,
-                commentId: commentIdStr,
                 isPinned: false
             });
         });
