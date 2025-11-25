@@ -349,10 +349,13 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
             });
         });
 
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = liveId?.toString?.() || String(liveId);
         commentsToUnpin.forEach(commentToUnpin => {
-            getIO().to(`live_${liveId}`).emit('comment:unpinned', {
-                liveId,
-                commentId: commentToUnpin._id,
+            const commentIdStr = commentToUnpin._id?.toString?.() || commentToUnpin._id;
+            getIO().to(`live_${liveIdStr}`).emit('comment:unpinned', {
+                liveId: liveIdStr,
+                commentId: commentIdStr,
                 isPinned: false
             });
         });

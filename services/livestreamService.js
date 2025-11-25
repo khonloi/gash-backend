@@ -790,8 +790,6 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
             LiveComment.find({ liveId: livestreamId })
                 .populate('senderId', 'name username image role')
                 .populate('deletedBy', 'name username role')
-                .populate('pinBy', 'name username role')
-                .populate('unpinBy', 'name username role')
                 .sort({ isPinned: -1, createdAt: -1 })
                 .lean(),
 

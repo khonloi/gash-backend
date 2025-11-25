@@ -37,23 +37,25 @@ exports.addComment = async (liveId, senderId, commentText) => {
         });
 
         // Emit realtime event with optimized payload (only necessary fields for websocket)
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = liveId?.toString?.() || String(liveId);
         const commentPayload = {
-            _id: liveComment._id,
-            liveId: liveComment.liveId,
+            _id: liveComment._id?.toString?.() || liveComment._id,
+            liveId: liveComment.liveId?.toString?.() || liveComment.liveId,
             commentText: liveComment.commentText,
             createdAt: liveComment.createdAt,
             isPinned: liveComment.isPinned,
             isDeleted: false, // Always false for new comments
             sender: {
-                _id: liveComment.senderId._id,
+                _id: liveComment.senderId._id?.toString?.() || liveComment.senderId._id,
                 name: liveComment.senderId.name,
                 username: liveComment.senderId.username,
                 image: liveComment.senderId.image
             }
         };
 
-        getIO().to(`live_${liveId}`).emit('comment:added', {
-            liveId,
+        getIO().to(`live_${liveIdStr}`).emit('comment:added', {
+            liveId: liveIdStr,
             comment: commentPayload
         });
 
@@ -88,8 +90,6 @@ exports.getLiveComments = async (liveId, userRole = 'user', limit = 50, skip = 0
         const commentsQuery = LiveComment.find(query)
             .populate('senderId', 'name username image') // Removed 'role' - not needed for display
             .populate('deletedBy', 'name username') // Populate deletedBy for admin
-            .populate('pinBy', 'name username') // Removed 'role' - not needed
-            .populate('unpinBy', 'name username') // Removed 'role' - not needed
             .sort({ isPinned: -1, createdAt: -1 }) // Pinned comments first, then by creation date
             .skip(parseInt(skip)) // Skip for pagination
             .lean(); // Use lean() early for better performance
@@ -161,9 +161,12 @@ exports.hideComment = async (commentId, userId, userRole) => {
         await comment.populate('deletedBy', 'name username role');
 
         // Emit realtime event to all viewers
-        getIO().to(`live_${comment.liveId}`).emit('comment:deleted', {
-            liveId: comment.liveId,
-            commentId: commentId
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = comment.liveId?.toString?.() || String(comment.liveId);
+        const commentIdStr = commentId?.toString?.() || String(commentId);
+        getIO().to(`live_${liveIdStr}`).emit('comment:deleted', {
+            liveId: liveIdStr,
+            commentId: commentIdStr
         });
 
         return {
@@ -234,8 +237,12 @@ exports.pinComment = async (commentId, liveId, userId, userRole) => {
                 isPinned: true, // Chỉ unpin các comment đang được pin
                 _id: { $ne: commentId } // Exclude the comment being pinned
             },
-            { isPinned: false, unpinBy: userId }
+            { isPinned: false }
         );
+
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = liveId?.toString?.() || String(liveId);
+        const commentIdStr = commentId?.toString?.() || String(commentId);
 
         // Unpin tất cả products trong livestream (vì chỉ có thể pin comment HOẶC product, không thể cả 2)
         await LiveProduct.updateMany(
@@ -243,45 +250,38 @@ exports.pinComment = async (commentId, liveId, userId, userRole) => {
                 liveId: liveId,
                 isPinned: true // Chỉ unpin các product đang được pin
             },
-            { isPinned: false, unpinBy: userId }
+            { isPinned: false }
         );
 
         // Emit events cho các comments/products bị unpin (để frontend cập nhật UI)
         commentsToUnpin.forEach(commentToUnpin => {
-            getIO().to(`live_${liveId}`).emit('comment:unpinned', {
-                liveId,
-                commentId: commentToUnpin._id,
+            const unpinnedCommentId = commentToUnpin._id?.toString?.() || commentToUnpin._id;
+            getIO().to(`live_${liveIdStr}`).emit('comment:unpinned', {
+                liveId: liveIdStr,
+                commentId: unpinnedCommentId,
                 isPinned: false
             });
         });
 
         // Pin the specified comment
         comment.isPinned = true;
-        comment.pinBy = userId;
-        comment.unpinBy = null;
         await comment.save();
 
         // Populate comment data
         await comment.populate('senderId', 'name username image role');
         await comment.populate('deletedBy', 'name username');
-        await comment.populate('pinBy', 'name username role');
 
         // Emit realtime event with optimized payload
         const pinnedPayload = {
-            _id: comment._id,
-            liveId: comment.liveId,
+            _id: comment._id?.toString?.() || comment._id,
+            liveId: comment.liveId?.toString?.() || comment.liveId,
             commentText: comment.commentText,
-            isPinned: true,
-            pinnedBy: {
-                _id: comment.pinBy._id,
-                name: comment.pinBy.name,
-                username: comment.pinBy.username
-            }
+            isPinned: true
         };
 
-        getIO().to(`live_${liveId}`).emit('comment:pinned', {
-            liveId,
-            commentId: commentId,
+        getIO().to(`live_${liveIdStr}`).emit('comment:pinned', {
+            liveId: liveIdStr,
+            commentId: commentIdStr,
             comment: pinnedPayload
         });
 
@@ -332,21 +332,21 @@ exports.removePinComment = async (commentId, liveId, userId, userRole) => {
             };
         }
 
-        // Unpin the comment (keep pinBy for statistics)
+        // Unpin the comment
         comment.isPinned = false;
-        comment.unpinBy = userId;
-        // Keep pinBy to track who originally pinned it
         await comment.save();
 
         // Populate comment data
         await comment.populate('senderId', 'name username image role');
         await comment.populate('deletedBy', 'name username');
-        await comment.populate('unpinBy', 'name username role');
 
         // Emit realtime event (minimal payload - only IDs)
-        getIO().to(`live_${liveId}`).emit('comment:unpinned', {
-            liveId,
-            commentId: commentId,
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = liveId?.toString?.() || String(liveId);
+        const commentIdStr = commentId?.toString?.() || String(commentId);
+        getIO().to(`live_${liveIdStr}`).emit('comment:unpinned', {
+            liveId: liveIdStr,
+            commentId: commentIdStr,
             isPinned: false
         });
 
