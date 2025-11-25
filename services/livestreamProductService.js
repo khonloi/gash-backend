@@ -51,26 +51,37 @@ exports.addProductToLive = async (liveId, productId, userId = null) => {
                 {
                     path: 'productImageIds',
                     select: 'imageUrl isMain',
-                    options: { limit: 1, sort: { isMain: -1 } } // Only first/main image
+                    options: { limit: 5, sort: { isMain: -1 } } // Get up to 5 images, main image first
                 }
             ]
         });
 
         // Emit realtime event with optimized payload
+        // Include productImageIds with isMain flag for proper image display
         const productPayload = {
             _id: liveProduct._id,
             liveId: liveProduct.liveId,
-            productId: liveProduct.productId._id,
+            productId: {
+                _id: liveProduct.productId._id,
+                productName: liveProduct.productId.productName,
+                categoryId: liveProduct.productId.categoryId ? {
+                    cat_name: liveProduct.productId.categoryId.cat_name
+                } : null,
+                // Send full productImageIds array with isMain flag
+                productImageIds: liveProduct.productId.productImageIds || []
+            },
             addedAt: liveProduct.addedAt,
             isPinned: liveProduct.isPinned,
             isActive: true,
+            addBy: liveProduct.addBy,
+            // Keep backward compatibility with old frontend code
             product: {
                 productName: liveProduct.productId.productName,
                 category: liveProduct.productId.categoryId ? {
                     cat_name: liveProduct.productId.categoryId.cat_name
                 } : null,
                 image: liveProduct.productId.productImageIds && liveProduct.productId.productImageIds.length > 0
-                    ? liveProduct.productId.productImageIds[0].imageUrl
+                    ? (liveProduct.productId.productImageIds.find(img => img.isMain === true)?.imageUrl || liveProduct.productId.productImageIds[0].imageUrl)
                     : null
             }
         };
@@ -161,7 +172,7 @@ exports.removeProductFromLive = async (liveId, productId, userId = null) => {
 
         return {
             success: true,
-            message: 'Product removed from livestream successfully!',
+            message: 'Product removed from livestream successfully',
             data: liveProduct
         };
     } catch (error) {
@@ -372,18 +383,30 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
         });
 
         // Emit realtime event with optimized payload (only essential fields)
+        // Include productImageIds with isMain flag for proper image display
         const pinnedPayload = {
             _id: liveProduct._id,
             liveId: liveProduct.liveId,
-            productId: liveProduct.productId._id,
+            productId: {
+                _id: liveProduct.productId._id,
+                productName: liveProduct.productId.productName,
+                categoryId: liveProduct.productId.categoryId ? {
+                    cat_name: liveProduct.productId.categoryId.cat_name
+                } : null,
+                // Send full productImageIds array with isMain flag
+                productImageIds: liveProduct.productId.productImageIds || []
+            },
             isPinned: true,
+            addedAt: liveProduct.addedAt,
+            addBy: liveProduct.addBy,
+            // Keep backward compatibility with old frontend code
             product: {
                 productName: liveProduct.productId.productName,
                 category: liveProduct.productId.categoryId ? {
                     cat_name: liveProduct.productId.categoryId.cat_name
                 } : null,
                 image: liveProduct.productId.productImageIds && liveProduct.productId.productImageIds.length > 0
-                    ? liveProduct.productId.productImageIds[0].imageUrl
+                    ? (liveProduct.productId.productImageIds.find(img => img.isMain === true)?.imageUrl || liveProduct.productId.productImageIds[0].imageUrl)
                     : null
             },
             pinnedBy: {
