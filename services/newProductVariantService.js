@@ -93,6 +93,9 @@ const createProductVariant = async (variantData) => {
     if (stockQuantity < 0) {
       throw new Error("Stock quantity cannot be negative");
     }
+    if (stockQuantity > 1000) {
+      throw new Error("The stock quantity must not exceed 1000");
+    }
 
     const product = await newProduct.findById(productId);
     if (!product) {
@@ -115,6 +118,9 @@ const createProductVariant = async (variantData) => {
       // Add stock quantity (accumulate)
       const oldStockQuantity = existingVariant.stockQuantity || 0;
       const newStockQuantity = oldStockQuantity + (stockQuantity || 0);
+      if (newStockQuantity > 1000) {
+        throw new Error("The stock quantity must not exceed 1000");
+      }
       const newVariantStatus = newStockQuantity > 0 ? "active" : "inactive";
 
       // Update existing variant with new data
@@ -260,6 +266,9 @@ const updateProductVariant = async (variantId, updateData) => {
     if (stockQuantity != null && stockQuantity < 0) {
       throw new Error("Stock quantity cannot be negative");
     }
+    if (stockQuantity != null && stockQuantity > 1000) {
+      throw new Error("The stock quantity must not exceed 1000");
+    }
 
     const existingVariant = await newProductVariant.findById(variantId);
     if (!existingVariant) {
@@ -284,6 +293,7 @@ const updateProductVariant = async (variantId, updateData) => {
         productColorId: productColorId || existingVariant.productColorId,
         productSizeId: productSizeId || existingVariant.productSizeId,
         _id: { $ne: variantId },
+        variantStatus: { $ne: "discontinued" }, // Only check with active/inactive variants
       });
       if (existingDuplicate) {
         throw new Error(
@@ -323,16 +333,26 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Invalid variant ID");
     }
 
-    const orderDetails = await OrderDetails.find({ variantId }).populate({
-      path: "orderId",
-      select: "orderStatus",
+    const orderDetails = await OrderDetails.find({ variant_id: variantId }).populate({
+      path: "order_id",
+      select: "order_status",
     });
 
-    const hasNonCancelledOrders = orderDetails.some(
-      (detail) => detail.orderId.orderStatus !== "cancelled"
+    // Only prevent deletion if there are orders that are pending, confirmed, or shipping
+    // Allow deletion if all orders are delivered or cancelled
+    // This prevents deletion of variants that are part of active orders
+    const hasActiveOrders = orderDetails.some(
+      (detail) => {
+        // Skip if order_id is null or not populated
+        if (!detail.order_id) {
+          return false;
+        }
+        const status = detail.order_id.order_status;
+        return status === "pending" || status === "confirmed" || status === "shipping";
+      }
     );
-    if (hasNonCancelledOrders) {
-      throw new Error("Cannot delete variant with active orders");
+    if (hasActiveOrders) {
+      throw new Error("Cannot delete variant because it still contains active orders.");
     }
 
     const variant = await newProductVariant.findByIdAndUpdate(
@@ -411,6 +431,9 @@ const bulkCreateProductVariants = async (bulkData) => {
     if (stockQuantity < 0) {
       throw new Error("Stock quantity cannot be negative");
     }
+    if (stockQuantity > 1000) {
+      throw new Error("The stock quantity must not exceed 1000");
+    }
 
     const product = await newProduct.findById(productId);
     if (!product) {
@@ -420,11 +443,12 @@ const bulkCreateProductVariants = async (bulkData) => {
       throw new Error("Cannot add variant to a discontinued product");
     }
 
-    // Check for existing variants to avoid duplicates
+    // Check for existing variants to avoid duplicates (only active/inactive, not discontinued)
     const existingVariants = await newProductVariant.find({
       productId,
       productColorId,
       productSizeId: { $in: sizeIds },
+      variantStatus: { $ne: "discontinued" }, // Only check with active/inactive variants
     }).populate("productSizeId");
 
     if (existingVariants.length > 0) {

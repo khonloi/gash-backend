@@ -80,14 +80,14 @@ exports.getOrderById = async (req, res) => {
         totalPrice: detail.UnitPrice * detail.Quantity,
         feedback: detail.feedback ? {
           rating: detail.feedback.rating,
-          content: detail.feedback.is_deleted 
-            ? 'This feedback has been deleted by staff/admin' 
+          content: detail.feedback.is_deleted
+            ? 'This feedback has been deleted by staff/admin'
             : detail.feedback.content,
           created_at: detail.feedback.created_at,
           updated_at: detail.feedback.updated_at,
           is_deleted: detail.feedback.is_deleted,
           has_rating: detail.feedback.rating !== null && detail.feedback.rating !== undefined,
-          has_content: detail.feedback.is_deleted 
+          has_content: detail.feedback.is_deleted
             ? true  // Show content flag as true so the deletion message displays
             : (detail.feedback.content && detail.feedback.content.trim() !== '')
         } : null
@@ -154,6 +154,25 @@ exports.updateOrderByAdmin = async (req, res) => {
     const oldOrder = await orderService.getOrderByIdService(orderId, req.user);
     const oldOrderStatus = oldOrder?.order_status;
     const oldPayStatus = oldOrder?.pay_status;
+
+    // If order status is being changed to 'cancelled' and it wasn't cancelled before, restore stock
+    if (order_status === 'cancelled' && oldOrderStatus !== 'cancelled') {
+      const newProductVariants = require("../models/newProductVariant");
+      if (oldOrder.orderDetails && oldOrder.orderDetails.length > 0) {
+        for (const orderDetail of oldOrder.orderDetails) {
+          if (orderDetail.variant_id) {
+            const variant = await newProductVariants.findById(orderDetail.variant_id);
+            if (variant) {
+              // Restore stock quantity
+              variant.stockQuantity += orderDetail.Quantity;
+              // Auto-update variantStatus based on stockQuantity
+              variant.variantStatus = variant.stockQuantity > 0 ? "active" : "inactive";
+              await variant.save();
+            }
+          }
+        }
+      }
+    }
 
     const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
     const io = req.app.get('io');
@@ -559,6 +578,8 @@ exports.checkout = async (req, res) => {
       const variant = await newProductVariants.findById(variant_id);
       if (variant) {
         variant.stockQuantity -= Quantity;
+        // Auto-update variantStatus based on stockQuantity
+        variant.variantStatus = variant.stockQuantity > 0 ? "active" : "inactive";
         await variant.save();
       }
     }
@@ -766,6 +787,8 @@ exports.cancelOrder = async (req, res) => {
           if (variant) {
             // Cộng lại số lượng đã mua vào stock
             variant.stockQuantity += orderDetail.Quantity;
+            // Auto-update variantStatus based on stockQuantity
+            variant.variantStatus = variant.stockQuantity > 0 ? "active" : "inactive";
             await variant.save();
           }
         }
@@ -1337,14 +1360,14 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       } : null,
       feedback: {
         rating: feedback.feedback.rating,
-        content: feedback.feedback.is_deleted 
-          ? 'This feedback has been deleted by staff/admin' 
+        content: feedback.feedback.is_deleted
+          ? 'This feedback has been deleted by staff/admin'
           : feedback.feedback.content,
         created_at: feedback.feedback.created_at,
         updated_at: feedback.feedback.updated_at,
         is_deleted: feedback.feedback.is_deleted,
         has_rating: feedback.feedback.rating !== null,
-        has_content: feedback.feedback.is_deleted 
+        has_content: feedback.feedback.is_deleted
           ? true  // Show content flag as true so the deletion message displays
           : (feedback.feedback.content && feedback.feedback.content.trim() !== '')
       },
