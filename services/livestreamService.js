@@ -820,6 +820,8 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
             data: {
                 livestream: {
                     ...livestream,
+                    peakViewersAt: livestream.peakViewersAt || null, // Ensure field is always present
+                    minViewersAt: livestream.minViewersAt || null, // Ensure field is always present
                     currentViewers: currentViewers, // Real-time for live, 0 for ended
                     duration: duration // Duration in milliseconds (null if still live)
                 },
