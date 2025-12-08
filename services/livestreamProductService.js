@@ -51,26 +51,37 @@ exports.addProductToLive = async (liveId, productId, userId = null) => {
                 {
                     path: 'productImageIds',
                     select: 'imageUrl isMain',
-                    options: { limit: 1, sort: { isMain: -1 } } // Only first/main image
+                    options: { limit: 5, sort: { isMain: -1 } } // Get up to 5 images, main image first
                 }
             ]
         });
 
         // Emit realtime event with optimized payload
+        // Include productImageIds with isMain flag for proper image display
         const productPayload = {
             _id: liveProduct._id,
             liveId: liveProduct.liveId,
-            productId: liveProduct.productId._id,
+            productId: {
+                _id: liveProduct.productId._id,
+                productName: liveProduct.productId.productName,
+                categoryId: liveProduct.productId.categoryId ? {
+                    cat_name: liveProduct.productId.categoryId.cat_name
+                } : null,
+                // Send full productImageIds array with isMain flag
+                productImageIds: liveProduct.productId.productImageIds || []
+            },
             addedAt: liveProduct.addedAt,
             isPinned: liveProduct.isPinned,
             isActive: true,
+            addBy: liveProduct.addBy,
+            // Keep backward compatibility with old frontend code
             product: {
                 productName: liveProduct.productId.productName,
                 category: liveProduct.productId.categoryId ? {
                     cat_name: liveProduct.productId.categoryId.cat_name
                 } : null,
                 image: liveProduct.productId.productImageIds && liveProduct.productId.productImageIds.length > 0
-                    ? liveProduct.productId.productImageIds[0].imageUrl
+                    ? (liveProduct.productId.productImageIds.find(img => img.isMain === true)?.imageUrl || liveProduct.productId.productImageIds[0].imageUrl)
                     : null
             }
         };
@@ -161,7 +172,7 @@ exports.removeProductFromLive = async (liveId, productId, userId = null) => {
 
         return {
             success: true,
-            message: 'Product removed from livestream successfully!',
+            message: 'Product removed from livestream successfully',
             data: liveProduct
         };
     } catch (error) {
@@ -271,7 +282,7 @@ exports.getAllLiveProductsForAdmin = async (liveId) => {
     }
 };
 
-// Pin product (admin only) - unpins all other products and comments in the livestream
+// Pin product (admin only) - unpins all other products in the livestream (comments are independent)
 exports.pinProduct = async (productId, liveId, userId, userRole) => {
     try {
         // Check permissions - only admin/manager can pin
@@ -324,35 +335,13 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
             { isPinned: false, removeBy: userId }
         );
 
-        // Unpin tất cả comments trong livestream (vì chỉ có thể pin comment HOẶC product, không thể cả 2)
-        const commentsToUnpin = await LiveComment.find({
-            liveId: liveId,
-            isPinned: true,
-            isDeleted: false
-        }).select('_id');
-
-        await LiveComment.updateMany(
-            {
-                liveId: liveId,
-                isPinned: true // Chỉ unpin các comment đang được pin
-            },
-            { isPinned: false, removeBy: userId }
-        );
-
-        // Emit events cho các products/comments bị unpin (để frontend cập nhật UI)
+        // Emit events cho các products bị unpin (để frontend cập nhật UI)
+        // NOTE: Pin product và pin comment hoạt động độc lập, không ảnh hưởng đến nhau
         productsToUnpin.forEach(liveProductToUnpin => {
             getIO().to(`live_${liveId}`).emit('product:unpinned', {
                 liveId,
                 productId: liveProductToUnpin.productId,
                 liveProductId: liveProductToUnpin._id,
-                isPinned: false
-            });
-        });
-
-        commentsToUnpin.forEach(commentToUnpin => {
-            getIO().to(`live_${liveId}`).emit('comment:unpinned', {
-                liveId,
-                commentId: commentToUnpin._id,
                 isPinned: false
             });
         });
@@ -394,18 +383,30 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
         });
 
         // Emit realtime event with optimized payload (only essential fields)
+        // Include productImageIds with isMain flag for proper image display
         const pinnedPayload = {
             _id: liveProduct._id,
             liveId: liveProduct.liveId,
-            productId: liveProduct.productId._id,
+            productId: {
+                _id: liveProduct.productId._id,
+                productName: liveProduct.productId.productName,
+                categoryId: liveProduct.productId.categoryId ? {
+                    cat_name: liveProduct.productId.categoryId.cat_name
+                } : null,
+                // Send full productImageIds array with isMain flag
+                productImageIds: liveProduct.productId.productImageIds || []
+            },
             isPinned: true,
+            addedAt: liveProduct.addedAt,
+            addBy: liveProduct.addBy,
+            // Keep backward compatibility with old frontend code
             product: {
                 productName: liveProduct.productId.productName,
                 category: liveProduct.productId.categoryId ? {
                     cat_name: liveProduct.productId.categoryId.cat_name
                 } : null,
                 image: liveProduct.productId.productImageIds && liveProduct.productId.productImageIds.length > 0
-                    ? liveProduct.productId.productImageIds[0].imageUrl
+                    ? (liveProduct.productId.productImageIds.find(img => img.isMain === true)?.imageUrl || liveProduct.productId.productImageIds[0].imageUrl)
                     : null
             },
             pinnedBy: {
