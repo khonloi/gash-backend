@@ -118,16 +118,16 @@ exports.getAllFeedback = async (req, res) => {
       } else {
         // Wrap existing conditions in $and
         const existingConditions = { ...query };
-        query = {
-          $and: [
-            existingConditions,
-            hasRatingOrContent
-          ]
-        };
+        // Clear query and rebuild with $and
+        Object.keys(query).forEach(key => delete query[key]);
+        query.$and = [
+          existingConditions,
+          hasRatingOrContent
+        ];
       }
     } else {
       // If no existing conditions, just use the rating/content requirement
-      query = hasRatingOrContent;
+      Object.assign(query, hasRatingOrContent);
     }
 
     const sortObj = {};
