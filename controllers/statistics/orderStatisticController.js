@@ -230,14 +230,35 @@ async function getOrderStatistics(req, res) {
       { $limit: 5 }, // Top 5
     ]);
 
-    // Cart Abandonment Rate (% of users with carts but no orders)
-    // Note: This is calculated globally, not filtered by period
-    const usersWithCarts = await NewCart.distinct("accountId");
-    const usersWithOrders = await Orders.distinct("acc_id");
-    const abandonedUsers = usersWithCarts.filter(
-      (id) => !usersWithOrders.includes(id.toString())
+    // Cart Abandonment Rate (% of users with carts but no orders within period)
+    // Calculate: Users who added items to cart within period but never placed an order in that period
+    // A cart is considered "abandoned" if:
+    // 1. Cart was created within the period
+    // 2. No order was placed by that user within the period
+    
+    // Get all unique users who have carts created within the period
+    const usersWithCartsInPeriod = await NewCart.distinct("accountId", {
+      createdAt: { $gte: startDate, $lte: endDate }
+    });
+    
+    // Get all unique users who placed orders within the period
+    const usersWithOrdersInPeriod = await Orders.distinct("acc_id", baseMatch);
+    
+    // Convert both to strings for proper comparison (ObjectId comparison can be tricky)
+    const usersWithOrdersSet = new Set(
+      usersWithOrdersInPeriod.map(id => id.toString())
     );
-    const totalUsersWithCarts = usersWithCarts.length;
+    
+    // Find users with carts created in period but no orders placed in period
+    const abandonedUsers = usersWithCartsInPeriod.filter(
+      (cartUserId) => {
+        const cartUserIdStr = cartUserId.toString();
+        // Check if this user placed any order in the period
+        return !usersWithOrdersSet.has(cartUserIdStr);
+      }
+    );
+    
+    const totalUsersWithCarts = usersWithCartsInPeriod.length;
     const cartAbandonmentRate =
       totalUsersWithCarts > 0
         ? (abandonedUsers.length / totalUsersWithCarts) * 100
