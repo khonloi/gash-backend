@@ -101,6 +101,35 @@ exports.getAllFeedback = async (req, res) => {
       query['feedback.content'] = { $regex: search.trim(), $options: 'i' };
     }
 
+    // Filter out feedbacks with no rating and no content
+    // Only include feedbacks that have at least rating OR content
+    const hasRatingOrContent = {
+      $or: [
+        { 'feedback.rating': { $exists: true, $ne: null, $gte: 1, $lte: 5 } },
+        { 'feedback.content': { $exists: true, $ne: '', $ne: null } }
+      ]
+    };
+    
+    if (Object.keys(query).length > 0) {
+      // If there are existing conditions, combine them with $and
+      if (query.$and) {
+        // If $and already exists, add to it
+        query.$and.push(hasRatingOrContent);
+      } else {
+        // Wrap existing conditions in $and
+        const existingConditions = { ...query };
+        query = {
+          $and: [
+            existingConditions,
+            hasRatingOrContent
+          ]
+        };
+      }
+    } else {
+      // If no existing conditions, just use the rating/content requirement
+      query = hasRatingOrContent;
+    }
+
     const sortObj = {};
     const validSortFields = ['created_at', 'updated_at', 'rating', 'orderDate'];
     const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
@@ -149,7 +178,12 @@ exports.getAllFeedback = async (req, res) => {
     });
 
     const formattedFeedbacks = feedbacks
-      .filter(feedback => feedback.order_id && feedback.variant_id)
+      .filter(feedback => {
+        // Filter out feedbacks with no rating and no content
+        const hasRating = feedback.feedback?.rating !== null && feedback.feedback?.rating !== undefined && feedback.feedback.rating >= 1 && feedback.feedback.rating <= 5;
+        const hasContent = feedback.feedback?.content && feedback.feedback.content.trim() !== '';
+        return feedback.order_id && feedback.variant_id && (hasRating || hasContent);
+      })
       .map(feedback => ({
         _id: feedback._id || null,
         order: feedback.order_id
