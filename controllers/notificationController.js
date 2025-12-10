@@ -28,7 +28,7 @@ exports.createNotification = async (req, res) => {
           console.log("📢 Sent to ALL users (global notification)");
         }
       }
-      console.log(`✅ Emitted ${notifications.length} notification(s) via Socket.IO`);
+      console.log(`Emitted ${notifications.length} notification(s) via Socket.IO`);
     }
 
     return res.status(201).json({
@@ -37,7 +37,7 @@ exports.createNotification = async (req, res) => {
       notifications,
     });
   } catch (error) {
-    console.error("❌ Error in createNotification:", error);
+    console.error("Error in createNotification:", error);
     return res
       .status(400)
       .json({ error: error.message || "Failed to send notification." });
@@ -69,7 +69,7 @@ exports.getUserPreferences = async (req, res) => {
       preferences: pref.preferences || { email: true, web: true },
     });
   } catch (error) {
-    console.error("❌ getUserPreferences:", error);
+    console.error("getUserPreferences:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -96,7 +96,7 @@ exports.updateUserPreferences = async (req, res) => {
       preferences: updated.preferences,
     });
   } catch (error) {
-    console.error("❌ updateUserPreferences:", error);
+    console.error("updateUserPreferences:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -274,7 +274,7 @@ exports.deleteUserNotification = async (req, res) => {
 
     return res.json({ message: "Deleted successfully" });
   } catch (error) {
-    console.error("❌ Error in deleteUserNotification:", error);
+    console.error("Error in deleteUserNotification:", error);
     res.status(500).json({ error: error.message });
   }
 };

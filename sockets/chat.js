@@ -113,9 +113,9 @@ module.exports = (io) => {
           });
         }
 
-        console.log(`✅ start_chat for user ${userId}, convo ${convoId} (new: ${isNew}, hasMessage: ${hasMessage})`);
+        console.log(`start_chat for user ${userId}, convo ${convoId} (new: ${isNew}, hasMessage: ${hasMessage})`);
       } catch (err) {
-        console.error('❌ start_chat error:', err);
+        console.error('start_chat error:', err);
         socket.emit('error', 'Failed to start chat');
       }
     });
@@ -146,9 +146,9 @@ module.exports = (io) => {
           id: convoId,
         });
 
-        console.log(`✅ Conversation ${convoId} taken by staff ${staffId}`);
+        console.log(`Conversation ${convoId} taken by staff ${staffId}`);
       } catch (err) {
-        console.error('❌ take_conversation error:', err);
+        console.error('take_conversation error:', err);
         socket.emit('error', 'Failed to take conversation');
       }
     });
@@ -222,7 +222,7 @@ module.exports = (io) => {
 
         console.log(`💬 Message sent [${type || 'text'}] to ${conversationId}`);
       } catch (err) {
-        console.error('❌ send_message error:', err);
+        console.error('send_message error:', err);
         socket.emit('error', 'Failed to send message');
       }
     });
@@ -246,7 +246,7 @@ module.exports = (io) => {
 
         console.log(`👁️ Messages marked read in ${conversationId} by ${readerId}`);
       } catch (err) {
-        console.error('❌ mark_read error:', err);
+        console.error('mark_read error:', err);
         socket.emit('error', 'Failed to mark as read');
       }
     });
@@ -274,13 +274,13 @@ module.exports = (io) => {
 
         console.log(`🔴 Conversation ${conversationId} closed`);
       } catch (err) {
-        console.error('❌ close_conversation error:', err);
+        console.error('close_conversation error:', err);
         socket.emit('error', 'Failed to close conversation');
       }
     });
 
     socket.on('disconnect', () => {
-      console.log('❌ Client disconnected:', socket.id);
+      console.log('Client disconnected:', socket.id);
     });
   });
 };

@@ -87,7 +87,7 @@ async function createOrderNotification({ userId, orderId, orderStatus, payStatus
 
     return notification;
   } catch (error) {
-    console.error('❌ Error creating order notification:', error);
+    console.error('Error creating order notification:', error);
     throw error;
   }
 }
@@ -122,29 +122,18 @@ function emitOrderNotification(io, notification, userId) {
       return;
     }
     
-    // Emit to specific user room (notificationSocket uses userId.toString() as room name)
-    io.to(userIdStr).emit('newNotification', notificationData);
-    // Also emit badge update to update the notification count
-    io.to(userIdStr).emit('notificationBadgeUpdate', { userId: userIdStr });
-    
-    // Also try emitting to user_${userId} room (for orderSocket compatibility)
+    // Emit to user room (users join both userIdStr and user_${userIdStr} rooms)
+    // Only emit once to avoid duplicate notifications and emails
+    // Use user_${userIdStr} format as it's consistent with orderSocket
     io.to(`user_${userIdStr}`).emit('newNotification', notificationData);
+    // Also emit badge update to update the notification count
     io.to(`user_${userIdStr}`).emit('notificationBadgeUpdate', { userId: userIdStr });
     
-    // Also emit to socket directly as a fallback
-    const { connectedUsers } = require('../sockets/notificationSocket');
-    const socketId = connectedUsers.get(userIdStr);
-    if (socketId) {
-      io.to(socketId).emit('newNotification', notificationData);
-      io.to(socketId).emit('notificationBadgeUpdate', { userId: userIdStr });
-      console.log(`   Also emitted directly to socket ${socketId}`);
-    }
-    
     // Log for debugging
-    console.log(`🔔 Order notification emitted to user ${userIdStr} (rooms: ${userIdStr}, user_${userIdStr})`);
+    console.log(`🔔 Order notification emitted to user ${userIdStr} (room: user_${userIdStr})`);
     console.log(`   Notification ID: ${notificationData._id}, Title: ${notificationData.title}`);
   } catch (error) {
-    console.error('❌ Error emitting order notification:', error);
+    console.error('Error emitting order notification:', error);
   }
 }
 
