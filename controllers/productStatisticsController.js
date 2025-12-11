@@ -7,10 +7,10 @@ const ExcelJS = require("exceljs");
    ====================================================== */
 exports.getProductStatistics = async (req, res) => {
   try {
-    // ✅ Lấy các tham số filter từ FE gửi lên
+    // Lấy các tham số filter từ FE gửi lên
     const { period = "all", category = "all", status = "all" } = req.query;
 
-    // ✅ Tạo bộ lọc động cho MongoDB
+    // Tạo bộ lọc động cho MongoDB
     const filter = {};
 
     // --- Lọc theo danh mục ---
@@ -60,7 +60,7 @@ exports.getProductStatistics = async (req, res) => {
       createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
     });
 
-    // ✅ Trả về kết quả
+    // Trả về kết quả
     res.status(200).json({
       success: true,
       data: {
@@ -73,7 +73,7 @@ exports.getProductStatistics = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Error fetching product statistics:", error.message);
+    console.error("Error fetching product statistics:", error.message);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -89,7 +89,7 @@ exports.getCategoryDistribution = async (req, res) => {
     const data = await NewProduct.aggregate([
       {
         $lookup: {
-          from: "categories", // ✅ đúng tên collection chứa danh mục
+          from: "categories", // đúng tên collection chứa danh mục
           localField: "categoryId",
           foreignField: "_id",
           as: "categoryInfo",
@@ -104,7 +104,7 @@ exports.getCategoryDistribution = async (req, res) => {
       {
         $group: {
           _id: {
-            $ifNull: ["$categoryInfo.cat_name", "Unknown"], // ✅ đúng field cat_name
+            $ifNull: ["$categoryInfo.cat_name", "Unknown"], // đúng field cat_name
           },
           value: { $sum: 1 },
         },
@@ -124,7 +124,7 @@ exports.getCategoryDistribution = async (req, res) => {
       data: data.length ? data : [],
     });
   } catch (error) {
-    console.error("❌ Error fetching category distribution:", error);
+    console.error("Error fetching category distribution:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching category distribution",
@@ -154,7 +154,7 @@ exports.getTopProducts = async (req, res) => {
 
     res.status(200).json({ success: true, data: formatted });
   } catch (error) {
-    console.error("❌ Error fetching top products:", error);
+    console.error("Error fetching top products:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching top products",
@@ -202,7 +202,7 @@ exports.exportProductStatistics = async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
-    console.error("❌ Error exporting product statistics:", error);
+    console.error("Error exporting product statistics:", error);
     res.status(500).json({
       success: false,
       message: "Error exporting Excel",

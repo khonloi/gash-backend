@@ -40,7 +40,7 @@ async function testEmailJS(testEmail) {
   console.log('');
 
   if (!serviceId || !templateId || !userKey) {
-    console.error('❌ EmailJS is not fully configured. Please check your .env file.');
+    console.error('EmailJS is not fully configured. Please check your .env file.');
     if (!privateKey) {
       console.error('');
       console.error('⚠️ IMPORTANT: For server-side usage, you need EMAILJS_PRIVATE_KEY');
@@ -51,7 +51,7 @@ async function testEmailJS(testEmail) {
   }
 
   if (!testEmail) {
-    console.error('❌ Please provide a test email address as an argument.');
+    console.error('Please provide a test email address as an argument.');
     console.log('   Usage: node scripts/testEmailJS.js <test-email>');
     process.exit(1);
   }
@@ -101,7 +101,7 @@ async function testEmailJS(testEmail) {
       timeout: 15000,
     });
 
-    console.log('✅ SUCCESS!');
+    console.log('SUCCESS!');
     console.log(`   Status: ${response.status}`);
     console.log(`   Status Text: ${response.statusText}`);
     if (response.data) {
@@ -109,7 +109,7 @@ async function testEmailJS(testEmail) {
     }
     console.log('\n📧 Test email should be sent. Please check your inbox (and spam folder).');
   } catch (error) {
-    console.error('❌ ERROR SENDING EMAIL:');
+    console.error('ERROR SENDING EMAIL:');
     console.error(`   Message: ${error.message}`);
     
     if (error.response) {

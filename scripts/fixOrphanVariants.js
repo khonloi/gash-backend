@@ -50,7 +50,7 @@ db.once('open', async () => {
           }
         );
 
-        console.log(`  ✅ Fixed! Now has ${allVariantIds.length} variants\n`);
+        console.log(`  Fixed! Now has ${allVariantIds.length} variants\n`);
       }
     }
 

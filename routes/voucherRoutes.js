@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getAllVouchersForAdmin, createVoucher, updateVoucher, deleteVoucher, getAllVouchersForUser, previewVoucher } = require('../controllers/voucherController');
-const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
+const { authenticateJWT } = require('../middleware/authMiddleware');
 
 
 //get all vouchers for admin

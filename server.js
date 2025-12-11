@@ -58,19 +58,19 @@ const gracefulShutdown = (signal) => {
 
   // Close server
   server.close(() => {
-    console.log('✅ HTTP server closed');
+    console.log('HTTP server closed');
     process.exit(0);
   });
 };
 
 // Error handlers
 process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
+  console.error('Uncaught Exception:', error);
   gracefulShutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   gracefulShutdown('unhandledRejection');
 });
 

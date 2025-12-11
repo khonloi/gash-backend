@@ -14,7 +14,7 @@ const orderSocket = (io) => {
       if (!userId) return;
       connectedUsers.set(userId.toString(), socket.id);
       socket.join(`user_${userId.toString()}`);
-      console.log(`✅ User ${userId} joined order room: user_${userId}`);
+      console.log(`User ${userId} joined order room: user_${userId}`);
     });
 
     // Handle authenticated connection (with JWT token)
@@ -27,15 +27,15 @@ const orderSocket = (io) => {
         
         connectedUsers.set(userId.toString(), socket.id);
         socket.join(`user_${userId.toString()}`);
-        console.log(`✅ Authenticated user ${userId} joined order room`);
+        console.log(`Authenticated user ${userId} joined order room`);
 
         // Join admin room if user is admin or manager
         if (decoded.role === 'admin' || decoded.role === 'manager') {
           socket.join('order_admins');
-          console.log(`✅ Admin/Manager ${userId} joined order_admins room`);
+          console.log(`Admin/Manager ${userId} joined order_admins room`);
         }
       } catch (err) {
-        console.error('❌ Authentication error:', err.message);
+        console.error('Authentication error:', err.message);
       }
     });
 
@@ -44,11 +44,11 @@ const orderSocket = (io) => {
       for (const [userId, sockId] of connectedUsers.entries()) {
         if (sockId === socket.id) {
           connectedUsers.delete(userId);
-          console.log(`❌ User ${userId} disconnected from orders`);
+          console.log(`User ${userId} disconnected from orders`);
           break;
         }
       }
-      console.log(`❌ Order socket disconnected: ${socket.id}`);
+      console.log(`Order socket disconnected: ${socket.id}`);
     });
   });
 };
