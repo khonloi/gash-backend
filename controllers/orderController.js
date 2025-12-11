@@ -224,7 +224,7 @@ exports.updateOrderByAdmin = async (req, res) => {
           emitOrderNotification(io, notification, userId);
         }, 100);
       } catch (notifError) {
-        console.error('❌ Error creating order update notification:', notifError);
+        console.error('Error creating order update notification:', notifError);
       }
     }
     res.status(200).json({
@@ -337,7 +337,7 @@ exports.vnpayReturn = async (req, res) => {
             emitOrderNotification(io, notification, userId);
           }, 100);
         } catch (notifError) {
-          console.error('❌ Error creating payment notification:', notifError);
+          console.error('Error creating payment notification:', notifError);
         }
       }
     }
@@ -430,7 +430,7 @@ exports.vnpayIpn = async (req, res) => {
             emitOrderNotification(io, notification, userId);
           }, 100);
         } catch (notifError) {
-          console.error('❌ Error creating payment notification:', notifError);
+          console.error('Error creating payment notification:', notifError);
         }
       }
     }
@@ -652,7 +652,7 @@ exports.checkout = async (req, res) => {
         // Emit notification immediately
         emitOrderNotification(io, notification, userId.toString());
       } catch (notifError) {
-        console.error('❌ Error creating order creation notification:', notifError);
+        console.error('Error creating order creation notification:', notifError);
       }
     }
 
@@ -842,7 +842,7 @@ exports.cancelOrder = async (req, res) => {
           emitOrderNotification(io, notification, userId);
         }, 100);
       } catch (notifError) {
-        console.error('❌ Error creating order cancellation notification:', notifError);
+        console.error('Error creating order cancellation notification:', notifError);
       }
     }
 
