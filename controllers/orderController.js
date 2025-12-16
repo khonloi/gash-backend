@@ -31,6 +31,8 @@ exports.getOrderById = async (req, res) => {
       refund_status: order.refund_status,
       refund_proof: order.refund_proof,
       cancelReason: order.cancelReason, // Added cancelReason to response
+      vnpay_payment_url: order.vnpay_payment_url,
+      vnpay_expiry_time: order.vnpay_expiry_time,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
 
@@ -1396,6 +1398,78 @@ exports.getAllOrderForAdmin = async (req, res) => {
     res.status(error.status || 500).json({
       success: false,
       message: error.message || 'Error retrieving all orders for admin'
+    });
+  }
+};
+
+exports.cancelOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cancelReason } = req.body;
+    const user = req.user;
+
+    // Validate order ID
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid order ID' });
+    }
+
+    const order = await Orders.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Check authorization: only admin/manager or the order owner can cancel
+    if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id.toString() !== user.id) {
+      return res.status(403).json({ message: 'Access denied: Can only cancel own order' });
+    }
+
+    // Check if order can be cancelled
+    if (order.order_status === 'cancelled') {
+      return res.status(400).json({ message: 'Order is already cancelled' });
+    }
+
+    if (order.order_status === 'delivered') {
+      return res.status(400).json({ message: 'Cannot cancel delivered order' });
+    }
+
+    if (order.pay_status === 'paid' && order.order_status !== 'pending') {
+      return res.status(400).json({ message: 'Cannot cancel paid order that is being processed' });
+    }
+
+    // Validate cancel reason
+    if (!cancelReason || cancelReason.trim().length === 0) {
+      return res.status(400).json({ message: 'Cancel reason is required' });
+    }
+
+    if (cancelReason.length > 500) {
+      return res.status(400).json({ message: 'Cancel reason cannot exceed 500 characters' });
+    }
+
+    // Update order
+    order.order_status = 'cancelled';
+    order.cancelReason = cancelReason.trim();
+
+    // Clear VNPay payment data if it exists
+    if (order.payment_method === 'VNPAY') {
+      order.vnpay_payment_url = '';
+      order.vnpay_expiry_time = null;
+    }
+
+    await order.save();
+
+    // Create notification for order cancellation
+    await createOrderNotification(order._id, 'cancelled', order.acc_id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Order cancelled successfully',
+      data: order
+    });
+  } catch (error) {
+    console.error('Cancel order error:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Error cancelling order'
     });
   }
 };

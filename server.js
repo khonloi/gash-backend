@@ -11,6 +11,7 @@ const orderSocket = require('./sockets/orderSocket');
 
 // ===== LiveKit Service (SIMPLE) =====
 const livestreamService = require('./services/livestreamService');
+const vnpayExpiryService = require('./services/vnpayExpiryService');
 
 // Tạo HTTP server với timeout cho upload nhiều file
 const server = http.createServer(app);
@@ -37,7 +38,11 @@ app.set('io', io);
 
 // Kết nối MongoDB
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB connected'))
+  .then(() => {
+    console.log('MongoDB connected');
+    // Start VNPay expiry checker
+    vnpayExpiryService.startExpiryChecker();
+  })
   .catch(err => console.error('MongoDB error:', err.message));
 
 // Socket cha

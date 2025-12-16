@@ -59,6 +59,13 @@ exports.createPaymentUrl = async (orderId, bankCode, language, user, req) => {
       throw error;
     }
 
+    // Set VNPay expiry time (15 minutes from now)
+    const expiryTime = new Date();
+    expiryTime.setMinutes(expiryTime.getMinutes() + 15);
+    order.vnpay_expiry_time = expiryTime;
+    order.vnpay_payment_url = ''; // Will be set after URL creation
+    await order.save();
+
     const date = new Date();
     const createDate = moment(date).format('YYYYMMDDHHmmss');
     const ipAddr = req.headers['x-forwarded-for'] || 
@@ -93,6 +100,10 @@ exports.createPaymentUrl = async (orderId, bankCode, language, user, req) => {
     const signed = createSecureHash(vnp_Params, secretKey);
     vnp_Params['vnp_SecureHash'] = signed;
     vnpUrl += '?' + qs.stringify(vnp_Params, { encode: false });
+
+    // Save the payment URL to the order
+    order.vnpay_payment_url = vnpUrl;
+    await order.save();
 
     return vnpUrl;
   } catch (error) {
@@ -141,11 +152,15 @@ exports.handleReturn = async (vnp_Params) => {
         return { code: "00", message: 'Payment successful' };
       }
       order.pay_status = 'paid';
+      order.vnpay_expiry_time = null; // Clear expiry time on successful payment
+      order.vnpay_payment_url = ''; // Clear payment URL
       await order.save();
       return { code: rspCode, message: 'Payment successful' };
     } else {
       order.pay_status = 'failed';
       order.order_status = 'cancelled'; // Set order status to cancelled when payment fails
+      order.vnpay_expiry_time = null; // Clear expiry time on failed payment
+      order.vnpay_payment_url = ''; // Clear payment URL
       await order.save();
       return { code: rspCode, message: 'Payment failed or cancelled' };
     }
@@ -189,11 +204,15 @@ exports.handleIpn = async (vnp_Params) => {
 
     if (rspCode === "00") {
       order.pay_status = 'paid';
+      order.vnpay_expiry_time = null; // Clear expiry time on successful payment
+      order.vnpay_payment_url = ''; // Clear payment URL
       await order.save();
       return { RspCode: '00', Message: 'Success' };
     } else {
       order.pay_status = 'failed';
       order.order_status = 'cancelled'; // Set order status to cancelled when payment fails
+      order.vnpay_expiry_time = null; // Clear expiry time on failed payment
+      order.vnpay_payment_url = ''; // Clear payment URL
       await order.save();
       return { RspCode: '00', Message: 'Payment failed' };
     }
