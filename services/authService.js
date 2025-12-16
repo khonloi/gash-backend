@@ -23,7 +23,7 @@ exports.register = async (data) => {
     phone,
     address,
     password,
-    image: image || 'http://localhost:4000/default-pfp.jpg',
+    image: image || 'https://i.redd.it/1to4yvt3i88c1.png',
     role: 'user',
     acc_status: 'active'
   });
@@ -169,7 +169,7 @@ exports.googleLogin = async (data) => {
       username,
       name: name || username,
       email,
-      image: picture || 'http://localhost:4000/default-pfp.jpg',
+      image: picture || 'https://i.redd.it/1to4yvt3i88c1.png',
       googleId,
       password: randomPassword,
       role: 'user',

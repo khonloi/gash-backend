@@ -74,9 +74,9 @@ exports.searchAccountsService = async (queryParams) => {
     query.acc_status = acc_status;
   }
   if (hasImage === "true") {
-    query.image = { $ne: "http://localhost:4000/default-pfp.jpg" };
+    query.image = { $ne: "https://i.redd.it/1to4yvt3i88c1.png" };
   } else if (hasImage === "false") {
-    query.image = "http://localhost:4000/default-pfp.jpg";
+    query.image = "https://i.redd.it/1to4yvt3i88c1.png";
   }
   if (dateFrom || dateTo) {
     query.createdAt = {};
