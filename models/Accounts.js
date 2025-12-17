@@ -93,6 +93,10 @@ const accountSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  preferences: {
+    email: { type: Boolean, default: true },
+    web: { type: Boolean, default: true },
+  },
 }, {
   timestamps: true
 });

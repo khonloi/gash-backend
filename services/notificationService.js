@@ -17,7 +17,8 @@ exports.createNotificationService = async (data) => {
     if (!foundUser) throw new Error("User not found");
     targets = [foundUser._id];
   } else if (recipientType === "all") {
-    const users = await Accounts.find({}, "_id");
+    // Only include users who have web notifications enabled (or not explicitly disabled)
+    const users = await Accounts.find({ "preferences.web": { $ne: false } }, "_id");
     targets = users.map((u) => u._id);
   } else if (recipientType === "multiple" && Array.isArray(userIds)) {
     const foundUsers = [];
@@ -61,12 +62,7 @@ exports.getUserPreferences = async (userId) => {
   const account = await Accounts.findById(userId);
   if (!account) throw new Error("User not found");
 
-  if (!account.preferences) {
-    account.preferences = { email: true, web: true };
-    await account.save();
-  }
-
-  return account.preferences;
+  return account.preferences || { email: true, web: true };
 };
 
 exports.updateUserPreferences = async (userId, prefs) => {
@@ -74,9 +70,8 @@ exports.updateUserPreferences = async (userId, prefs) => {
   if (!account) throw new Error("User not found");
 
   account.preferences = {
-    ...account.preferences,
-    email: prefs.email ?? account.preferences.email,
-    web: prefs.web ?? account.preferences.web,
+    email: prefs.email ?? account.preferences?.email ?? true,
+    web: prefs.web ?? account.preferences?.web ?? true,
   };
 
   await account.save();
