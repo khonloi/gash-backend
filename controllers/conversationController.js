@@ -18,24 +18,13 @@ exports.getList = async (req, res) => {
     
     if (accountId) filter.accountId = accountId;
     
-    // If isAdmin is true, show all conversations (no staff filtering)
-    // Otherwise, if staffId is provided, only show conversations assigned to this staff or unassigned (open)
+    // CHANGED: Removed staff-specific filtering to allow all staff to view all conversations
+    // Previously, non-admins with staffId only saw their assigned or open conversations
+    // Now, if isAdmin or staffId provided, show all (admins and staff see everything)
+    // If neither, still applies general filter, but in practice, staff provide staffId
     if (isAdmin === 'true' || isAdmin === true) {
       // Admin can see all conversations - no staff filtering needed
-    } else if (staffId) {
-      const statusFilter = status ? { status } : { status: { $ne: 'closed' } };
-      filter.$and = [
-        {
-          $or: [
-            { staffId: staffId }, // Assigned to this staff
-            { staffId: null, status: 'open' } // Unassigned open conversations
-          ]
-        },
-        statusFilter
-      ];
-      // Remove the separate status filter since it's now in $and
-      delete filter.status;
-    }
+    } // Removed else if (staffId) block that added restrictive $or filter
 
     // ---- ONLY CONVERSATIONS THAT HAVE AT LEAST ONE MESSAGE ----
     const conversationsWithMsg = await Messages.distinct('conversationId');
@@ -91,19 +80,12 @@ exports.getDetail = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
-    const convoStaffId = conversation.staffId?._id?.toString() || conversation.staffId?.toString();
-    if (convoStaffId && convoStaffId !== staffId) {
-      return res.status(403).json({ success: false, message: 'Unauthorized to access this conversation' });
-    }
+    // CHANGED: Removed authorization check to allow any staff to access any conversation
+    // Previously: if (convoStaffId && convoStaffId !== staffId) { forbid }
 
-    if (!convoStaffId && conversation.status === 'open') {
-      conversation = await Conversations.findByIdAndUpdate(
-        req.params.id,
-        { staffId, status: 'pending' },
-        { new: true }
-      ).populate('accountId', 'username email')
-       .populate('staffId', 'username email');
-    }
+    // CHANGED: Removed auto-assignment for open conversations
+    // Previously: if open and no staff, assign to this staff and set to pending
+    // Now: No auto-assignment; any staff can view without claiming
 
     const messages = await Messages.find({ conversationId: req.params.id }).sort({ createdAt: 1 });
     res.json({ success: true, conversation, messages });
@@ -126,10 +108,8 @@ exports.close = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
-    const convoStaffId = conversation.staffId?._id?.toString() || conversation.staffId?.toString();
-    if (convoStaffId !== staffId) {
-      return res.status(403).json({ success: false, message: 'Unauthorized to close this conversation' });
-    }
+    // CHANGED: Removed authorization check to allow any staff to close any conversation
+    // Previously: if (convoStaffId !== staffId) { forbid }
 
     const updatedConversation = await Conversations.findByIdAndUpdate(
       req.params.id,
