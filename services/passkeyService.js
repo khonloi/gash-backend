@@ -42,7 +42,7 @@ exports.generateRegistrationOptions = async (userId) => {
     // Use the MongoDB ObjectId as bytes directly
     const userIDBuffer = Buffer.from(account._id.toString(), 'utf8');
     
-    // Build registration options for device biometrics (Touch ID, Face ID, Windows Hello)
+    // Build registration options for device passkeys (Touch ID, Face ID, Windows Hello)
     const registrationOptions = {
       rpName,
       rpID,
@@ -52,10 +52,10 @@ exports.generateRegistrationOptions = async (userId) => {
       timeout: 60000,
       attestationType: 'none',
       authenticatorSelection: {
-        // Use 'platform' for device biometrics (Touch ID, Face ID, Windows Hello)
+        // Use 'platform' for device passkeys (Touch ID, Face ID, Windows Hello)
         // Use 'cross-platform' for security keys (YubiKey, etc.)
-        authenticatorAttachment: 'platform', // Changed to 'platform' for device biometrics
-        userVerification: 'required', // Required for biometrics
+        authenticatorAttachment: 'platform', // Changed to 'platform' for device passkeys
+        userVerification: 'required', // Required for passkeys
         requireResidentKey: true, // Required for passkeys
       },
       supportedAlgorithmIDs: [-7, -257],
@@ -237,7 +237,7 @@ exports.verifyRegistration = async (userId, body, requestOrigin = null) => {
         expectedChallenge: expectedChallenge,
         expectedOrigin: expectedOrigin,
         expectedRPID: rpID,
-        requireUserVerification: true, // Required for biometrics
+        requireUserVerification: true, // Required for passkeys
       });
       
       console.log('Verification result:', {
@@ -448,7 +448,7 @@ exports.generateAuthenticationOptions = async (username) => {
       rpID,
       timeout: 60000,
       allowCredentials,
-      userVerification: 'required', // Required for biometrics
+      userVerification: 'required', // Required for passkeys
     });
 
     return {
@@ -545,7 +545,7 @@ exports.verifyAuthentication = async (username, body, requestOrigin = null) => {
           publicKey: credentialPublicKeyBuffer,  // Note: property name is 'publicKey', not 'credentialPublicKey'
           counter: passkey.counter || 0,
         },
-        requireUserVerification: true, // Required for biometrics
+        requireUserVerification: true, // Required for passkeys
       });
     } catch (error) {
       console.error('Verification error:', error);

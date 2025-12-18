@@ -1,4 +1,5 @@
 const livestreamService = require('../services/livestreamService');
+const notificationService = require('../services/notificationService');
 
 // Start livestream (Admin)
 exports.startLivestream = async (req, res) => {
@@ -27,6 +28,52 @@ exports.startLivestream = async (req, res) => {
                     count: count
                 });
             }
+
+            // 🔔 Create notification for all users about livestream start
+            try {
+                const livestreamId = result.data?.livestreamId;
+                const notificationTitle = 'Livestream Started!';
+                const notificationMessage = `A new livestream "${title}" has just started. Join now to watch!`;
+                
+                // Create notifications with livestreamId
+                const Notification = require('../models/Notification');
+                const Accounts = require('../models/Accounts');
+                
+                // Get all users
+                const users = await Accounts.find({}, '_id');
+                const notifications = await Promise.all(
+                    users.map(async (user) => {
+                        const noti = new Notification({
+                            title: notificationTitle,
+                            message: notificationMessage,
+                            userId: user._id,
+                            type: 'livestream',
+                            livestreamId: livestreamId,
+                            createdAt: new Date(),
+                            isTemplate: false,
+                        });
+                        return await noti.save();
+                    })
+                );
+
+                // Emit notifications via Socket.IO
+                if (io && notifications?.length) {
+                    for (const n of notifications) {
+                        if (n.userId) {
+                            const targetId = n.userId.toString();
+                            io.to(targetId).emit('newNotification', n);
+                        } else {
+                            // Global notification - emit to all
+                            io.emit('newNotification', n);
+                        }
+                    }
+                    console.log(`📢 Sent ${notifications.length} livestream start notification(s) via Socket.IO`);
+                }
+            } catch (notifError) {
+                // Log error but don't fail the livestream start
+                console.error('Error creating livestream start notification:', notifError);
+            }
+
             res.status(200).json(result);
         } else {
             res.status(400).json(result);

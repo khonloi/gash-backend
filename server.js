@@ -11,6 +11,7 @@ const orderSocket = require('./sockets/orderSocket');
 
 // ===== LiveKit Service (SIMPLE) =====
 const livestreamService = require('./services/livestreamService');
+const vnpayExpiryService = require('./services/vnpayExpiryService');
 
 // Tạo HTTP server với timeout cho upload nhiều file
 const server = http.createServer(app);
@@ -36,12 +37,15 @@ const io = new Server(server, {
 app.set('io', io);
 
 // Kết nối MongoDB
-const mongoURI = 'mongodb+srv://ngquocbao99_db_user:DpapCfopxxebv6zF@ngquocbao99.emt1il1.mongodb.net/gash-db?retryWrites=true&w=majority&appName=ngquocbao99';
-mongoose.connect(mongoURI)
-  .then(() => console.log('MongoDB connected'))
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log('MongoDB connected');
+    // Start VNPay expiry checker
+    vnpayExpiryService.startExpiryChecker();
+  })
   .catch(err => console.error('MongoDB error:', err.message));
 
-// Socket chat
+// Socket cha
 chatSocket(io);
 // Socket product
 productSocket(io);
@@ -49,7 +53,6 @@ productSocket(io);
 notificationSocket(io);
 // 📦 Socket order
 orderSocket(io);
-
 
 // ===== Initialize LiveKit Service (SIMPLE) =====
 console.log('🚀 LiveKit service ready');
@@ -60,19 +63,19 @@ const gracefulShutdown = (signal) => {
 
   // Close server
   server.close(() => {
-    console.log('✅ HTTP server closed');
+    console.log('HTTP server closed');
     process.exit(0);
   });
 };
 
 // Error handlers
 process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
+  console.error('Uncaught Exception:', error);
   gracefulShutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   gracefulShutdown('unhandledRejection');
 });
 

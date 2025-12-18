@@ -185,7 +185,9 @@ exports.updateCategoryService = async (id, { cat_name }) => {
     // 1.1 Category name validation
     if (cat_name) {
       const trimmedName = cat_name.trim();
-      const categoryNamePattern = /^[a-zA-ZÀ-ỹ0-9\-]+$/;
+      const categoryNamePattern =
+        /^[a-zA-ZÀ-ỹ0-9\-]+(?:[ -][a-zA-ZÀ-ỹ0-9\-]+)*$/;
+
       const hasLetter = /[a-zA-ZÀ-ỹ]/.test(trimmedName);
       if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName) || !hasLetter) {
         return {

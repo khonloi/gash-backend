@@ -15,20 +15,35 @@ exports.createNotification = async (req, res) => {
     const io = req.app.get("io");
 
     if (io && notifications?.length) {
-      // Emit each notification to its specific user room
-      // The service already creates individual notifications for each recipient
+      // Emit each notification to its specific user room, but only if user has web notifications enabled
       for (const n of notifications) {
         if (n.userId) {
           const targetId = n.userId.toString();
-          io.to(targetId).emit("newNotification", n);
-          console.log("🎯 Sent to user room:", targetId);
+          
+          // Check user's web preference
+          try {
+            const account = await User.findById(targetId);
+            const prefs = account?.preferences || { email: true, web: true };
+            
+            if (prefs.web) {
+              io.to(targetId).emit("newNotification", n);
+              console.log("🎯 Sent web notification to user room:", targetId);
+            } else {
+              console.log("🚫 Skipped web notification for user (disabled):", targetId);
+            }
+          } catch (err) {
+            console.error("Error checking user preferences for web notification:", err);
+            // Default to sending if we can't check preferences
+            io.to(targetId).emit("newNotification", n);
+            console.log("🎯 Sent web notification to user room (default):", targetId);
+          }
         } else {
           // If userId is null, it's a global notification - emit to all
           io.emit("newNotification", n);
           console.log("📢 Sent to ALL users (global notification)");
         }
       }
-      console.log(`✅ Emitted ${notifications.length} notification(s) via Socket.IO`);
+      console.log(`Emitted ${notifications.length} notification(s) via Socket.IO`);
     }
 
     return res.status(201).json({
@@ -37,7 +52,7 @@ exports.createNotification = async (req, res) => {
       notifications,
     });
   } catch (error) {
-    console.error("❌ Error in createNotification:", error);
+    console.error("Error in createNotification:", error);
     return res
       .status(400)
       .json({ error: error.message || "Failed to send notification." });
@@ -48,28 +63,17 @@ exports.createNotification = async (req, res) => {
 exports.getUserPreferences = async (req, res) => {
   try {
     const { userId } = req.params;
-    let pref = await Notification.findOne({
-      userId,
-      type: "preference",
-      isTemplate: false,
-    });
-
-    if (!pref) {
-      pref = await Notification.create({
-        userId,
-        title: "User Preferences",
-        message: "Notification preferences record",
-        type: "preference",
-        isTemplate: false,
-        preferences: { email: true, web: true },
-      });
+    const account = await User.findById(userId);
+    if (!account) {
+      return res.status(404).json({ error: "User not found" });
     }
 
+    const prefs = account.preferences || { email: true, web: true };
     res.json({
-      preferences: pref.preferences || { email: true, web: true },
+      preferences: prefs,
     });
   } catch (error) {
-    console.error("❌ getUserPreferences:", error);
+    console.error("getUserPreferences:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -79,24 +83,24 @@ exports.updateUserPreferences = async (req, res) => {
     const { userId } = req.params;
     const { email, web } = req.body;
 
-    const updated = await Notification.findOneAndUpdate(
-      { userId, type: "preference", isTemplate: false },
-      {
-        preferences: { email, web },
-        title: "User Preferences",
-        message: "Notification preferences updated",
-        type: "preference",
-        isTemplate: false,
-      },
-      { new: true, upsert: true }
-    );
+    const account = await User.findById(userId);
+    if (!account) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    account.preferences = {
+      email: email ?? account.preferences?.email ?? true,
+      web: web ?? account.preferences?.web ?? true,
+    };
+
+    await account.save();
 
     res.json({
       message: "Preferences updated successfully",
-      preferences: updated.preferences,
+      preferences: account.preferences,
     });
   } catch (error) {
-    console.error("❌ updateUserPreferences:", error);
+    console.error("updateUserPreferences:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -274,7 +278,7 @@ exports.deleteUserNotification = async (req, res) => {
 
     return res.json({ message: "Deleted successfully" });
   } catch (error) {
-    console.error("❌ Error in deleteUserNotification:", error);
+    console.error("Error in deleteUserNotification:", error);
     res.status(500).json({ error: error.message });
   }
 };

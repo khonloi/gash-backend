@@ -74,9 +74,9 @@ exports.searchAccountsService = async (queryParams) => {
     query.acc_status = acc_status;
   }
   if (hasImage === "true") {
-    query.image = { $ne: "http://localhost:4000/default-pfp.jpg" };
+    query.image = { $ne: "https://i.redd.it/1to4yvt3i88c1.png" };
   } else if (hasImage === "false") {
-    query.image = "http://localhost:4000/default-pfp.jpg";
+    query.image = "https://i.redd.it/1to4yvt3i88c1.png";
   }
   if (dateFrom || dateTo) {
     query.createdAt = {};
@@ -141,7 +141,7 @@ exports.updateAccount = async (id, data, user) => {
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot update a deleted account" },
@@ -187,7 +187,7 @@ exports.updateProfile = async (id, data, user) => {
     return { status: 404, response: { message: "Account not found" } };
   }
 
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot update a deleted account" },
@@ -221,7 +221,7 @@ exports.updateProfile = async (id, data, user) => {
   const { password: _, ...accountObj } = account.toObject();
   return {
     status: 200,
-    response: { message: "Profile updated successfully", account: accountObj },
+    response: { message: "Profile edit successfully", account: accountObj },
   };
 };
 
@@ -230,7 +230,7 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
     return {
       status: 403,
-      response: { message: "Access denied: Can only update own password" },
+      response: { message: "Access denied: Can only edit own password" },
     };
   }
 
@@ -239,10 +239,10 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
     return { status: 404, response: { message: "Account not found" } };
   }
 
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
-      response: { message: "Cannot update a deleted account" },
+      response: { message: "Cannot edit a deleted account" },
     };
   }
 
@@ -262,7 +262,7 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
 
   return {
     status: 200,
-    response: { message: "Password updated successfully" },
+    response: { message: "Password edited successfully" },
   };
 };
 
@@ -270,26 +270,25 @@ exports.softDeleteAccount = async (id, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
     return {
       status: 403,
-      response: { message: "Access denied: Can only soft delete own account" },
+      response: { message: "Access denied: Can only delete own account" },
     };
   }
   const account = await Accounts.findById(id);
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
-      response: { message: "Account is already soft-deleted" },
+      response: { message: "Account is already deleted" },
     };
   }
-  account.is_deleted = true;
   account.role = "user";
-  account.acc_status = "deleted";
+  account.acc_status = "inactive";
   await account.save();
   return {
     status: 200,
-    response: { message: "Account soft deleted successfully" },
+    response: { message: "Account deleted successfully" },
   };
 };
 
@@ -329,7 +328,7 @@ exports.deleteAccount = async (id, user) => {
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.acc_status === "deleted" && account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot hard delete a soft-deleted account" },
@@ -366,7 +365,7 @@ exports.editStaffInformation = async (id, data, user) => {
     };
   }
 
-  if (account.is_deleted === true) {
+  if (account.acc_status === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot edit information of a deleted account" },
