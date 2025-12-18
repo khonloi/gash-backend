@@ -123,10 +123,14 @@ async function getOrderByIdService(id, user) {
       populate: {
         path: 'variant_id',
         select: 'productId productColorId productSizeId variantImage',
+        // Include all variants (discontinued, inactive, etc.) so customers can view their order history
+        match: {}, // No filter - include all variants regardless of status
         populate: [
           {
             path: 'productId',
-            select: 'productName'
+            select: 'productName',
+            // Include all products (discontinued, inactive, etc.) so customers can view their order history
+            match: {} // No filter - include all products regardless of status
           },
           {
             path: 'productColorId',
@@ -374,10 +378,14 @@ async function getUserOrdersService(acc_id) {
       populate: {
         path: 'variant_id',
         select: 'productId productColorId productSizeId variantImage',
+        // Include all variants (discontinued, inactive, etc.) so customers can view their order history
+        match: {}, // No filter - include all variants regardless of status
         populate: [
           {
             path: 'productId',
-            select: 'productName'
+            select: 'productName',
+            // Include all products (discontinued, inactive, etc.) so customers can view their order history
+            match: {} // No filter - include all products regardless of status
           },
           {
             path: 'productColorId',
