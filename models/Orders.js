@@ -94,6 +94,17 @@ const OrdersSchema = new mongoose.Schema(
           ],
         },
 
+    // VNPay payment tracking
+    vnpay_payment_url: {
+      type: String,
+      default: '',
+    },
+
+    vnpay_expiry_time: {
+      type: Date,
+      default: null,
+    },
+
     orderDetails: [
       {
         type: mongoose.Schema.Types.ObjectId,

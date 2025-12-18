@@ -46,7 +46,7 @@ exports.getList = async (req, res) => {
       .populate('staffId', 'username email')
       .sort({ updatedAt: -1 });
 
-    // ✅ Gộp mỗi accountId chỉ 1 cuộc trò chuyện
+    // Gộp mỗi accountId chỉ 1 cuộc trò chuyện
     const uniqueMap = new Map();
     for (const convo of conversations) {
       const accId = convo.accountId?._id?.toString() || convo.accountId?.toString();
@@ -151,7 +151,7 @@ exports.create = async (req, res) => {
       return res.status(400).json({ success: false, message: 'accountId is required' });
     }
 
-    // ✅ Tìm hội thoại cũ còn mở hoặc pending
+    // Tìm hội thoại cũ còn mở hoặc pending
     let conversation = await Conversations.findOne({
       accountId,
       status: { $in: ['open', 'pending'] },

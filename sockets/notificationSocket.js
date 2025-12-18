@@ -22,7 +22,7 @@ module.exports = (io) => {
       socket.join(userIdStr);
       socket.join(`user_${userIdStr}`);
       
-      console.log(`✅ User ${userIdStr} joined notification rooms: ${userIdStr}, user_${userIdStr}`);
+      console.log(`User ${userIdStr} joined notification rooms: ${userIdStr}, user_${userIdStr}`);
     });
 
     /**
@@ -33,7 +33,7 @@ module.exports = (io) => {
       const userIdStr = userId.toString();
       socket.join(userIdStr);
       socket.join(`user_${userIdStr}`);
-      console.log(`✅ User ${userIdStr} joined notification rooms via joinRoom`);
+      console.log(`User ${userIdStr} joined notification rooms via joinRoom`);
     });
 
     /**
@@ -44,11 +44,11 @@ module.exports = (io) => {
       for (const [userId, sockId] of connectedUsers.entries()) {
         if (sockId === socket.id) {
           connectedUsers.delete(userId);
-          console.log(`❌ User disconnected from notifications: ${userId}`);
+          console.log(`User disconnected from notifications: ${userId}`);
           break;
         }
       }
-      console.log(`❌ Notification socket disconnected: ${socket.id}`);
+      console.log(`Notification socket disconnected: ${socket.id}`);
     });
   });
 };

@@ -83,7 +83,7 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
   currentWeekEnd.setDate(now.getDate() - now.getDay() + 6);
   currentWeekEnd.setHours(23, 59, 59, 999);
 
-  // ✅ Query ALL data once with daily grouping
+  // Query ALL data once with daily grouping
   const dailyRevenue = await Orders.aggregate([
     {
       $match: {
@@ -286,7 +286,7 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
   const endDate = new Date(endYear, endMonth + 1, 0);
   endDate.setHours(23, 59, 59, 999);
 
-  // ✅ Query ALL data once with monthly grouping
+  // Query ALL data once with monthly grouping
   const monthlyRevenue = await Orders.aggregate([
     {
       $match: {
@@ -496,7 +496,7 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   const extendedStartDate = new Date(startDate.getTime() - (7 * 24 * 60 * 60 * 1000));
   extendedStartDate.setHours(0, 0, 0, 0);
 
-  // ✅ Query ALL data once with daily grouping (including 7 days before for comparison)
+  // Query ALL data once with daily grouping (including 7 days before for comparison)
   const dailyRevenue = await Orders.aggregate([
     {
       $match: {
@@ -731,7 +731,7 @@ exports.getRevenueByYear = async (numYears = 3) => {
   const endDate = new Date(now.getFullYear(), 11, 31);
   endDate.setHours(23, 59, 59, 999);
 
-  // ✅ Query ALL data once with yearly grouping
+  // Query ALL data once with yearly grouping
   const yearlyRevenue = await Orders.aggregate([
     {
       $match: {

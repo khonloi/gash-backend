@@ -11,6 +11,7 @@ const orderSocket = require('./sockets/orderSocket');
 
 // ===== LiveKit Service (SIMPLE) =====
 const livestreamService = require('./services/livestreamService');
+const vnpayExpiryService = require('./services/vnpayExpiryService');
 
 // Tạo HTTP server với timeout cho upload nhiều file
 const server = http.createServer(app);
@@ -37,7 +38,11 @@ app.set('io', io);
 
 // Kết nối MongoDB
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB connected'))
+  .then(() => {
+    console.log('MongoDB connected');
+    // Start VNPay expiry checker
+    vnpayExpiryService.startExpiryChecker();
+  })
   .catch(err => console.error('MongoDB error:', err.message));
 
 // Socket cha
@@ -58,19 +63,19 @@ const gracefulShutdown = (signal) => {
 
   // Close server
   server.close(() => {
-    console.log('✅ HTTP server closed');
+    console.log('HTTP server closed');
     process.exit(0);
   });
 };
 
 // Error handlers
 process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
+  console.error('Uncaught Exception:', error);
   gracefulShutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   gracefulShutdown('unhandledRejection');
 });
 

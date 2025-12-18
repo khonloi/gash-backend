@@ -45,9 +45,9 @@ async function testOrderPaymentStatus() {
     console.log('Final order state:', finalOrder);
     
     if (finalOrder.pay_status === 'failed' && finalOrder.order_status === 'cancelled') {
-      console.log('✅ Test PASSED: Order status was automatically set to cancelled when payment failed');
+      console.log('Test PASSED: Order status was automatically set to cancelled when payment failed');
     } else {
-      console.log('❌ Test FAILED: Order status was not updated correctly');
+      console.log('Test FAILED: Order status was not updated correctly');
       console.log('pay_status:', finalOrder.pay_status);
       console.log('order_status:', finalOrder.order_status);
     }

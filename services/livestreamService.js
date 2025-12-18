@@ -1,4 +1,4 @@
-const { generateAccessToken, createRoom, deleteRoom, roomService } = require('../config/livekit');
+const { generateAccessToken, createRoom, deleteRoom, roomService, LIVEKIT_CONFIG } = require('../config/livekit');
 const Livestream = require('../models/Livestream');
 const LiveProduct = require('../models/liveProduct');
 const LiveComment = require('../models/liveComment');
@@ -392,6 +392,7 @@ exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user
                 livestreamId: livestream._id,
                 roomName: livestream.roomName,
                 viewerToken: viewerToken,
+                serverUrl: LIVEKIT_CONFIG.serverUrl,
                 userId: userId,
                 userName: userName,
                 title: livestream.title,

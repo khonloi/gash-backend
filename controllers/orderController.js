@@ -31,6 +31,8 @@ exports.getOrderById = async (req, res) => {
       refund_status: order.refund_status,
       refund_proof: order.refund_proof,
       cancelReason: order.cancelReason, // Added cancelReason to response
+      vnpay_payment_url: order.vnpay_payment_url,
+      vnpay_expiry_time: order.vnpay_expiry_time,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
 
@@ -80,14 +82,14 @@ exports.getOrderById = async (req, res) => {
         totalPrice: detail.UnitPrice * detail.Quantity,
         feedback: detail.feedback ? {
           rating: detail.feedback.rating,
-          content: detail.feedback.is_deleted 
-            ? 'This feedback has been deleted by staff/admin' 
+          content: detail.feedback.is_deleted
+            ? 'This feedback has been deleted by staff/admin'
             : detail.feedback.content,
           created_at: detail.feedback.created_at,
           updated_at: detail.feedback.updated_at,
           is_deleted: detail.feedback.is_deleted,
           has_rating: detail.feedback.rating !== null && detail.feedback.rating !== undefined,
-          has_content: detail.feedback.is_deleted 
+          has_content: detail.feedback.is_deleted
             ? true  // Show content flag as true so the deletion message displays
             : (detail.feedback.content && detail.feedback.content.trim() !== '')
         } : null
@@ -155,6 +157,25 @@ exports.updateOrderByAdmin = async (req, res) => {
     const oldOrderStatus = oldOrder?.order_status;
     const oldPayStatus = oldOrder?.pay_status;
 
+    // If order status is being changed to 'cancelled' and it wasn't cancelled before, restore stock
+    if (order_status === 'cancelled' && oldOrderStatus !== 'cancelled') {
+      const newProductVariants = require("../models/newProductVariant");
+      if (oldOrder.orderDetails && oldOrder.orderDetails.length > 0) {
+        for (const orderDetail of oldOrder.orderDetails) {
+          if (orderDetail.variant_id) {
+            const variant = await newProductVariants.findById(orderDetail.variant_id);
+            if (variant) {
+              // Restore stock quantity
+              variant.stockQuantity += orderDetail.Quantity;
+              // Auto-update variantStatus based on stockQuantity
+              variant.variantStatus = variant.stockQuantity > 0 ? "active" : "inactive";
+              await variant.save();
+            }
+          }
+        }
+      }
+    }
+
     const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
     const io = req.app.get('io');
     if (io && updatedOrder && updatedOrder.acc_id) {
@@ -205,7 +226,7 @@ exports.updateOrderByAdmin = async (req, res) => {
           emitOrderNotification(io, notification, userId);
         }, 100);
       } catch (notifError) {
-        console.error('❌ Error creating order update notification:', notifError);
+        console.error('Error creating order update notification:', notifError);
       }
     }
     res.status(200).json({
@@ -318,7 +339,7 @@ exports.vnpayReturn = async (req, res) => {
             emitOrderNotification(io, notification, userId);
           }, 100);
         } catch (notifError) {
-          console.error('❌ Error creating payment notification:', notifError);
+          console.error('Error creating payment notification:', notifError);
         }
       }
     }
@@ -411,7 +432,7 @@ exports.vnpayIpn = async (req, res) => {
             emitOrderNotification(io, notification, userId);
           }, 100);
         } catch (notifError) {
-          console.error('❌ Error creating payment notification:', notifError);
+          console.error('Error creating payment notification:', notifError);
         }
       }
     }
@@ -559,6 +580,8 @@ exports.checkout = async (req, res) => {
       const variant = await newProductVariants.findById(variant_id);
       if (variant) {
         variant.stockQuantity -= Quantity;
+        // Auto-update variantStatus based on stockQuantity
+        variant.variantStatus = variant.stockQuantity > 0 ? "active" : "inactive";
         await variant.save();
       }
     }
@@ -631,7 +654,7 @@ exports.checkout = async (req, res) => {
         // Emit notification immediately
         emitOrderNotification(io, notification, userId.toString());
       } catch (notifError) {
-        console.error('❌ Error creating order creation notification:', notifError);
+        console.error('Error creating order creation notification:', notifError);
       }
     }
 
@@ -766,6 +789,8 @@ exports.cancelOrder = async (req, res) => {
           if (variant) {
             // Cộng lại số lượng đã mua vào stock
             variant.stockQuantity += orderDetail.Quantity;
+            // Auto-update variantStatus based on stockQuantity
+            variant.variantStatus = variant.stockQuantity > 0 ? "active" : "inactive";
             await variant.save();
           }
         }
@@ -819,7 +844,7 @@ exports.cancelOrder = async (req, res) => {
           emitOrderNotification(io, notification, userId);
         }, 100);
       } catch (notifError) {
-        console.error('❌ Error creating order cancellation notification:', notifError);
+        console.error('Error creating order cancellation notification:', notifError);
       }
     }
 
@@ -1337,14 +1362,14 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       } : null,
       feedback: {
         rating: feedback.feedback.rating,
-        content: feedback.feedback.is_deleted 
-          ? 'This feedback has been deleted by staff/admin' 
+        content: feedback.feedback.is_deleted
+          ? 'This feedback has been deleted by staff/admin'
           : feedback.feedback.content,
         created_at: feedback.feedback.created_at,
         updated_at: feedback.feedback.updated_at,
         is_deleted: feedback.feedback.is_deleted,
         has_rating: feedback.feedback.rating !== null,
-        has_content: feedback.feedback.is_deleted 
+        has_content: feedback.feedback.is_deleted
           ? true  // Show content flag as true so the deletion message displays
           : (feedback.feedback.content && feedback.feedback.content.trim() !== '')
       },
@@ -1396,6 +1421,78 @@ exports.getAllOrderForAdmin = async (req, res) => {
     res.status(error.status || 500).json({
       success: false,
       message: error.message || 'Error retrieving all orders for admin'
+    });
+  }
+};
+
+exports.cancelOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cancelReason } = req.body;
+    const user = req.user;
+
+    // Validate order ID
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid order ID' });
+    }
+
+    const order = await Orders.findById(id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Check authorization: only admin/manager or the order owner can cancel
+    if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id.toString() !== user.id) {
+      return res.status(403).json({ message: 'Access denied: Can only cancel own order' });
+    }
+
+    // Check if order can be cancelled
+    if (order.order_status === 'cancelled') {
+      return res.status(400).json({ message: 'Order is already cancelled' });
+    }
+
+    if (order.order_status === 'delivered') {
+      return res.status(400).json({ message: 'Cannot cancel delivered order' });
+    }
+
+    if (order.pay_status === 'paid' && order.order_status !== 'pending') {
+      return res.status(400).json({ message: 'Cannot cancel paid order that is being processed' });
+    }
+
+    // Validate cancel reason
+    if (!cancelReason || cancelReason.trim().length === 0) {
+      return res.status(400).json({ message: 'Cancel reason is required' });
+    }
+
+    if (cancelReason.length > 500) {
+      return res.status(400).json({ message: 'Cancel reason cannot exceed 500 characters' });
+    }
+
+    // Update order
+    order.order_status = 'cancelled';
+    order.cancelReason = cancelReason.trim();
+
+    // Clear VNPay payment data if it exists
+    if (order.payment_method === 'VNPAY') {
+      order.vnpay_payment_url = '';
+      order.vnpay_expiry_time = null;
+    }
+
+    await order.save();
+
+    // Create notification for order cancellation
+    await createOrderNotification(order._id, 'cancelled', order.acc_id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Order cancelled successfully',
+      data: order
+    });
+  } catch (error) {
+    console.error('Cancel order error:', error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || 'Error cancelling order'
     });
   }
 };
