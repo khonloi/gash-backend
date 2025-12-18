@@ -19,6 +19,27 @@ const Notification = require('../models/Notification');
  */
 async function createOrderNotification({ userId, orderId, orderStatus, payStatus, messageType = 'status_changed' }) {
   try {
+    // Validate required parameters
+    if (!userId) {
+      throw new Error('Invalid userId: userId is required');
+    }
+    
+    if (!orderId) {
+      throw new Error('Invalid orderId: orderId is required');
+    }
+    
+    // Convert to strings if needed
+    const userIdStr = typeof userId === 'string' ? userId : userId.toString();
+    const orderIdStr = typeof orderId === 'string' ? orderId : orderId.toString();
+    
+    if (!userIdStr || userIdStr.length === 0) {
+      throw new Error('Invalid userId: userId must be a non-empty string');
+    }
+    
+    if (!orderIdStr || orderIdStr.length === 0) {
+      throw new Error('Invalid orderId: orderId must be a non-empty string');
+    }
+
     // Map order status to user-friendly messages
     const statusMessages = {
       pending: 'is pending confirmation',
@@ -40,40 +61,40 @@ async function createOrderNotification({ userId, orderId, orderStatus, payStatus
     switch (messageType) {
       case 'created':
         title = 'New Order Created';
-        message = `Your order #${orderId.slice(-8)} has been successfully created and ${statusMessages[orderStatus] || 'is being processed'}.`;
+        message = `Your order #${orderIdStr.slice(-8)} has been successfully created and ${statusMessages[orderStatus] || 'is being processed'}.`;
         break;
 
       case 'status_changed':
         title = 'Order Status Updated';
-        message = `Your order #${orderId.slice(-8)} ${statusMessages[orderStatus] || 'status has been updated'}.`;
+        message = `Your order #${orderIdStr.slice(-8)} ${statusMessages[orderStatus] || 'status has been updated'}.`;
         break;
 
       case 'payment_changed':
         title = 'Payment Status Updated';
         const paymentMsg = paymentMessages[payStatus] || `payment status is ${payStatus}`;
-        message = `Your order #${orderId.slice(-8)} ${paymentMsg}.`;
+        message = `Your order #${orderIdStr.slice(-8)} ${paymentMsg}.`;
         break;
 
       case 'cancelled':
         title = 'Order Cancelled';
-        message = `Your order #${orderId.slice(-8)} has been cancelled.`;
+        message = `Your order #${orderIdStr.slice(-8)} has been cancelled.`;
         break;
 
       case 'delivered':
         title = 'Order Delivered';
-        message = `Great news! Your order #${orderId.slice(-8)} has been delivered. Thank you for shopping with us!`;
+        message = `Great news! Your order #${orderIdStr.slice(-8)} has been delivered. Thank you for shopping with us!`;
         break;
 
       default:
         title = 'Order Update';
-        message = `Your order #${orderId.slice(-8)} has been updated.`;
+        message = `Your order #${orderIdStr.slice(-8)} has been updated.`;
     }
 
     // Create notification
     const notification = new Notification({
       title,
       message,
-      userId,
+      userId: userIdStr,
       type: 'order',
       isRead: false,
       isTemplate: false,
