@@ -82,14 +82,14 @@ exports.getOrderById = async (req, res) => {
         totalPrice: detail.UnitPrice * detail.Quantity,
         feedback: detail.feedback ? {
           rating: detail.feedback.rating,
-          content: detail.feedback.is_deleted 
-            ? 'This feedback has been deleted by staff/admin' 
+          content: detail.feedback.is_deleted
+            ? 'This feedback has been deleted by staff/admin'
             : detail.feedback.content,
           created_at: detail.feedback.created_at,
           updated_at: detail.feedback.updated_at,
           is_deleted: detail.feedback.is_deleted,
           has_rating: detail.feedback.rating !== null && detail.feedback.rating !== undefined,
-          has_content: detail.feedback.is_deleted 
+          has_content: detail.feedback.is_deleted
             ? true  // Show content flag as true so the deletion message displays
             : (detail.feedback.content && detail.feedback.content.trim() !== '')
         } : null
@@ -561,6 +561,10 @@ exports.checkout = async (req, res) => {
       const variant = await newProductVariants.findById(variant_id);
       if (variant) {
         variant.stockQuantity -= Quantity;
+        // Nếu stockQuantity = 0 thì set variantStatus = inactive
+        if (variant.stockQuantity === 0) {
+          variant.variantStatus = 'inactive';
+        }
         await variant.save();
       }
     }
@@ -766,8 +770,14 @@ exports.cancelOrder = async (req, res) => {
         if (orderDetail.variant_id) {
           const variant = await newProductVariants.findById(orderDetail.variant_id);
           if (variant) {
+            // Lưu stockQuantity trước khi hoàn lại để kiểm tra
+            const oldStockQuantity = variant.stockQuantity;
             // Cộng lại số lượng đã mua vào stock
             variant.stockQuantity += orderDetail.Quantity;
+            // Nếu từ 0 chuyển sang > 0 thì set variantStatus = active
+            if (oldStockQuantity === 0 && variant.stockQuantity > 0) {
+              variant.variantStatus = 'active';
+            }
             await variant.save();
           }
         }
@@ -1339,14 +1349,14 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       } : null,
       feedback: {
         rating: feedback.feedback.rating,
-        content: feedback.feedback.is_deleted 
-          ? 'This feedback has been deleted by staff/admin' 
+        content: feedback.feedback.is_deleted
+          ? 'This feedback has been deleted by staff/admin'
           : feedback.feedback.content,
         created_at: feedback.feedback.created_at,
         updated_at: feedback.feedback.updated_at,
         is_deleted: feedback.feedback.is_deleted,
         has_rating: feedback.feedback.rating !== null,
-        has_content: feedback.feedback.is_deleted 
+        has_content: feedback.feedback.is_deleted
           ? true  // Show content flag as true so the deletion message displays
           : (feedback.feedback.content && feedback.feedback.content.trim() !== '')
       },
@@ -1404,79 +1414,120 @@ exports.getAllOrderForAdmin = async (req, res) => {
 
 exports.cancelOrder = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { cancelReason } = req.body;
-    const user = req.user;
+    const orderId = req.params.id;
+    const { cancelReason } = req.body; // Added cancelReason from request body
 
-    // Validate order ID
-    if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({ message: 'Invalid order ID' });
+    // Validate cancelReason
+    if (cancelReason && (typeof cancelReason !== 'string' || cancelReason.length > 500)) {
+      return res.status(400).json({
+        message: 'Invalid cancel reason. Must be a string up to 500 characters.'
+      });
     }
 
-    const order = await Orders.findById(id);
+    // Lấy thông tin order hiện tại với voucher
+    const order = await orderService.getOrderByIdService(orderId, req.user);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Check authorization: only admin/manager or the order owner can cancel
-    if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id.toString() !== user.id) {
-      return res.status(403).json({ message: 'Access denied: Can only cancel own order' });
+    // Chỉ cho phép hủy khi trạng thái là pending
+    if (order.order_status !== 'pending') {
+      return res.status(400).json({ message: 'Only pending orders can be cancelled' });
     }
 
-    // Check if order can be cancelled
-    if (order.order_status === 'cancelled') {
-      return res.status(400).json({ message: 'Order is already cancelled' });
+    // Xử lý voucher nếu order có sử dụng voucher
+    if (order.voucher_id) {
+      const voucher = await Voucher.findById(order.voucher_id);
+      if (voucher) {
+        // Giảm usedCount của voucher (hoàn lại số lần sử dụng)
+        if (voucher.usedCount > 0) {
+          voucher.usedCount -= 1;
+          await voucher.save();
+        }
+      }
     }
 
-    if (order.order_status === 'delivered') {
-      return res.status(400).json({ message: 'Cannot cancel delivered order' });
+    // Hoàn lại số lượng sản phẩm vào kho
+    if (order.orderDetails && order.orderDetails.length > 0) {
+      for (const orderDetail of order.orderDetails) {
+        if (orderDetail.variant_id) {
+          const variant = await newProductVariants.findById(orderDetail.variant_id);
+          if (variant) {
+            // Lưu stockQuantity trước khi hoàn lại để kiểm tra
+            const oldStockQuantity = variant.stockQuantity;
+            // Cộng lại số lượng đã mua vào stock
+            variant.stockQuantity += orderDetail.Quantity;
+            // Nếu từ 0 chuyển sang > 0 thì set variantStatus = active
+            if (oldStockQuantity === 0 && variant.stockQuantity > 0) {
+              variant.variantStatus = 'active';
+            }
+            await variant.save();
+          }
+        }
+      }
     }
 
-    if (order.pay_status === 'paid' && order.order_status !== 'pending') {
-      return res.status(400).json({ message: 'Cannot cancel paid order that is being processed' });
+    // Cập nhật trạng thái sang cancelled và lưu cancelReason
+    const updatedOrder = await orderService.updateOrderService(
+      orderId,
+      { order_status: 'cancelled', cancelReason }, // Include cancelReason in update
+      req.user
+    );
+
+    // Emit Socket.IO event for order cancellation
+    const io = req.app.get('io');
+    if (io && updatedOrder && updatedOrder.acc_id) {
+      const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
+        ? updatedOrder.acc_id._id.toString()
+        : updatedOrder.acc_id.toString();
+
+      // Ensure order is properly formatted with all fields
+      const formattedOrder = {
+        ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
+        acc_id: updatedOrder.acc_id,
+        name: updatedOrder.name,
+        orderDate: updatedOrder.orderDate,
+        updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
+        createdAt: updatedOrder.createdAt,
+        cancelReason: updatedOrder.cancelReason
+      };
+
+      // Emit to specific user room for real-time updates
+      io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
+      // Also emit to admin room so dashboard gets updates
+      io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
+
+      console.log(`📦 Order ${orderId} cancelled, emitted to user_${userId} and order_admins`);
+
+      // 🔔 Create and emit order cancellation notification
+      try {
+        const notification = await createOrderNotification({
+          userId,
+          orderId: orderId.toString(),
+          orderStatus: updatedOrder.order_status,
+          payStatus: updatedOrder.pay_status,
+          messageType: 'cancelled'
+        });
+
+        // Small delay to ensure socket connection is established
+        setTimeout(() => {
+          emitOrderNotification(io, notification, userId);
+        }, 100);
+      } catch (notifError) {
+        console.error('❌ Error creating order cancellation notification:', notifError);
+      }
     }
-
-    // Validate cancel reason
-    if (!cancelReason || cancelReason.trim().length === 0) {
-      return res.status(400).json({ message: 'Cancel reason is required' });
-    }
-
-    if (cancelReason.length > 500) {
-      return res.status(400).json({ message: 'Cancel reason cannot exceed 500 characters' });
-    }
-
-    // Update order
-    order.order_status = 'cancelled';
-    order.cancelReason = cancelReason.trim();
-
-    // Clear VNPay payment data if it exists
-    if (order.payment_method === 'VNPAY') {
-      order.vnpay_payment_url = '';
-      order.vnpay_expiry_time = null;
-    }
-
-    await order.save();
-
-    // Create notification for order cancellation
-    await createOrderNotification({
-      userId: order.acc_id.toString(),
-      orderId: order._id.toString(),
-      orderStatus: 'cancelled',
-      payStatus: order.pay_status,
-      messageType: 'cancelled'
-    });
 
     res.status(200).json({
-      success: true,
       message: 'Order cancelled successfully',
-      data: order
+      order: updatedOrder,
+      voucherRefunded: order.voucher_id ? true : false,
+      stockRestored: order.orderDetails ? order.orderDetails.length : 0
     });
   } catch (error) {
-    console.error('Cancel order error:', error);
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Error cancelling order'
-    });
+    res
+      .status(error.status || 500)
+      .json({ message: error.message || 'Error cancelling order' });
   }
 };
 
