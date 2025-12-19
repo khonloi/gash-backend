@@ -4,6 +4,7 @@ const newProduct = require("../models/newProduct");
 const newProductVariant = require("../models/newProductVariant");
 const OrderDetails = require("../models/OrderDetails");
 const Categories = require("../models/Categories");
+const { updateProductStatusBasedOnVariants } = require("./newProductVariantService");
 
 // Create a new product with validation
 const createProduct = async (productData) => {
@@ -113,6 +114,8 @@ const createProduct = async (productData) => {
       );
     }
 
+    await updateProductStatusBasedOnVariants(savedProduct._id);
+
     return await newProduct
       .findById(savedProduct._id)
       .populate("categoryId")
@@ -165,11 +168,11 @@ const getAllProducts = async (filters = {}, userRole = "customer") => {
         if (!product.categoryId || product.categoryId.isDeleted) {
           return false;
         }
-        // Check if product has at least one active/inactive variant
-        const activeVariants = product.productVariantIds?.filter(v =>
-          v && (v.variantStatus === "active" || v.variantStatus === "inactive")
-        ) || [];
-        return activeVariants.length > 0;
+        // Check if product has at least one active variant
+        const hasActiveVariant = product.productVariantIds?.some(v =>
+          v && v.variantStatus === "active"
+        ) || false;
+        return hasActiveVariant;
       });
     }
     return products;
@@ -221,11 +224,11 @@ const searchProducts = async (searchParams = {}, userRole = "customer") => {
         if (!product.categoryId || product.categoryId.isDeleted) {
           return false;
         }
-        // Check if product has at least one active/inactive variant
-        const activeVariants = product.productVariantIds?.filter(v =>
-          v && (v.variantStatus === "active" || v.variantStatus === "inactive")
-        ) || [];
-        return activeVariants.length > 0;
+        // Check if product has at least one active variant
+        const hasActiveVariant = product.productVariantIds?.some(v =>
+          v && v.variantStatus === "active"
+        ) || false;
+        return hasActiveVariant;
       });
     }
     return products;
@@ -269,10 +272,10 @@ const getProductById = async (productId, userRole = "customer") => {
         throw new Error("Access denied: product category is not active");
       }
       // BR-11: Check if product has at least one active variant
-      const activeVariants = product.productVariantIds?.filter(v =>
-        v && (v.variantStatus === "active" || v.variantStatus === "inactive")
-      ) || [];
-      if (activeVariants.length === 0) {
+      const hasActiveVariant = product.productVariantIds?.some(v =>
+        v && v.variantStatus === "active"
+      ) || false;
+      if (!hasActiveVariant) {
         throw new Error("Access denied: product has no active variants");
       }
     }
@@ -459,6 +462,9 @@ const updateProduct = async (productId, updateData) => {
     if (!product) {
       throw new Error("Product not found");
     }
+
+    await updateProductStatusBasedOnVariants(productId);
+
     return product;
   } catch (error) {
     throw new Error(`Failed to update product: ${error.message}`);

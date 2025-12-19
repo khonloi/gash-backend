@@ -11,7 +11,7 @@ const Orders = require("../models/Orders");
 const updateProductStatusBasedOnVariants = async (productId) => {
   try {
     // Find all non-deleted variants (exclude discontinued)
-    const variants = await newProductVariant.find({
+    const nonDiscontinuedVariants = await newProductVariant.find({
       productId,
       variantStatus: { $ne: "discontinued" }
     });
@@ -22,30 +22,30 @@ const updateProductStatusBasedOnVariants = async (productId) => {
       return;
     }
 
-    // If no variants exist
-    if (variants.length === 0) {
-      // If product was previously active (had variants), set to "inactive"
-      if (currentProduct.productStatus === "active") {
-        await newProduct.findByIdAndUpdate(
-          productId,
-          { productStatus: "inactive", updatedAt: Date.now() },
-          { new: true }
-        );
-      } else {
-        // If product was never active (new product), keep as "pending"
-        await newProduct.findByIdAndUpdate(
-          productId,
-          { productStatus: "pending", updatedAt: Date.now() },
-          { new: true }
-        );
-      }
+    if (currentProduct.productStatus === "discontinued") {
       return;
     }
 
-    // If at least 1 variant exists, set status to "active"
+    if (nonDiscontinuedVariants.length === 0) {
+      // If no variants exist
+      // If product was previously active (had variants), set to "inactive"
+      let newStatus = currentProduct.productStatus === "active" ? "inactive" : "pending";
+
+      await newProduct.findByIdAndUpdate(
+        productId,
+        { productStatus: newStatus, updatedAt: Date.now() },
+        { new: true }
+      );
+      return;
+    }
+
+    // If some non-discontinued variants exist, check if any are active
+    const hasActive = nonDiscontinuedVariants.some(v => v.variantStatus === "active");
+    let newStatus = hasActive ? "active" : "inactive";
+
     await newProduct.findByIdAndUpdate(
       productId,
-      { productStatus: "active", updatedAt: Date.now() },
+      { productStatus: newStatus, updatedAt: Date.now() },
       { new: true }
     );
   } catch (error) {
@@ -516,4 +516,5 @@ module.exports = {
   updateProductVariant,
   deleteProductVariant,
   bulkCreateProductVariants,
+  updateProductStatusBasedOnVariants,
 };
