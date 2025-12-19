@@ -333,19 +333,30 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Invalid variant ID");
     }
 
-    const orderDetails = await OrderDetails.find({ variant_id: variantId }).populate({
+    // IMPORTANT: Only check OrderDetails for THIS specific variant (variantId)
+    // This query ONLY finds OrderDetails where variant_id matches the variant we want to delete
+    // It does NOT check other variants of the same product
+    const orderDetails = await OrderDetails.find({
+      variant_id: variantId  // Only this variant, not other variants of the same product
+    }).populate({
       path: "order_id",
       select: "order_status",
     });
 
-    // Only prevent deletion if there are orders that are pending, confirmed, or shipping
-    // Allow deletion if all orders are delivered or cancelled
-    // This prevents deletion of variants that are part of active orders
+    // Only prevent deletion if THIS variant has orders that are pending, confirmed, or shipping
+    // Allow deletion if all orders for THIS variant are delivered or cancelled
+    // NOTE: Other variants of the same product are NOT checked - they can be deleted independently
     const hasActiveOrders = orderDetails.some(
       (detail) => {
         // Skip if order_id is null or not populated
         if (!detail.order_id) {
           return false;
+        }
+        // Double-check: ensure this order detail belongs to the variant we're checking
+        // This should always be true due to the query filter, but adding for safety
+        const detailVariantId = detail.variant_id?.toString ? detail.variant_id.toString() : String(detail.variant_id);
+        if (detailVariantId && detailVariantId !== variantId.toString()) {
+          return false; // This shouldn't happen, but safety check
         }
         const status = detail.order_id.order_status;
         return status === "pending" || status === "confirmed" || status === "shipping";
