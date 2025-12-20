@@ -785,9 +785,19 @@ exports.cancelOrder = async (req, res) => {
     }
 
     // Cập nhật trạng thái sang cancelled và lưu cancelReason
+    let updateData = {
+      order_status: 'cancelled',
+      cancelReason
+    };
+
+    // If it's a paid VNPAY order, automatically start refund process
+    if (order.payment_method === 'VNPAY' && order.pay_status === 'paid') {
+      updateData.refund_status = 'pending_refund';
+    }
+
     const updatedOrder = await orderService.updateOrderService(
       orderId,
-      { order_status: 'cancelled', cancelReason }, // Include cancelReason in update
+      updateData,
       req.user
     );
 
@@ -1468,12 +1478,21 @@ exports.cancelOrder = async (req, res) => {
     }
 
     // Cập nhật trạng thái sang cancelled và lưu cancelReason
+    let updateData = {
+      order_status: 'cancelled',
+      cancelReason
+    };
+
+    // If it's a paid VNPAY order, automatically start refund process
+    if (order.payment_method === 'VNPAY' && order.pay_status === 'paid') {
+      updateData.refund_status = 'pending_refund';
+    }
+
     const updatedOrder = await orderService.updateOrderService(
       orderId,
-      { order_status: 'cancelled', cancelReason }, // Include cancelReason in update
+      updateData,
       req.user
     );
-
     // Emit Socket.IO event for order cancellation
     const io = req.app.get('io');
     if (io && updatedOrder && updatedOrder.acc_id) {
