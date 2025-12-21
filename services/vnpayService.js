@@ -77,7 +77,13 @@ exports.createPaymentUrl = async (orderId, bankCode, language, user, req) => {
     const secretKey = config.get('vnp_HashSecret');
     let vnpUrl = config.get('vnp_Url');
     const returnUrl = config.get('vnp_ReturnUrl');
-    const amount = Math.round(order.totalPrice); // Ensure amount is rounded
+    const amountToPay = order.finalPrice > 0 ? order.finalPrice : order.totalPrice;
+    const amount = Math.round(amountToPay);
+    if (amount <= 0) {
+      const error = new Error('Invalid payment amount');
+      error.status = 400;
+      throw error;
+    }
     const orderRef = orderId;
 
     let vnp_Params = {
@@ -141,8 +147,9 @@ exports.handleReturn = async (vnp_Params) => {
 
     // Validate amount
     const amount = parseInt(vnp_Params['vnp_Amount'], 10) / 100;
-    if (Math.round(order.totalPrice) !== Math.round(amount)) {
-      const error = new Error('Amount mismatch');
+    const expectedAmount = order.finalPrice > 0 ? order.finalPrice : order.totalPrice;
+    if (Math.round(expectedAmount) !== Math.round(amount)) {
+      const error = new Error(`Amount mismatch: expected ${expectedAmount}, received ${amount}`);
       error.status = 400;
       throw error;
     }
