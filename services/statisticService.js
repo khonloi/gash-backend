@@ -22,9 +22,9 @@ const getMonthName = (monthNumber) => {
 
 exports.getCustomerStats = async () => {
   const totalCustomers = await Accounts.countDocuments();
-  const activeCustomers = await Accounts.countDocuments({ acc_status: 'active' });
-  const inactiveCustomers = await Accounts.countDocuments({ acc_status: 'inactive' });
-  const suspendedCustomers = await Accounts.countDocuments({ acc_status: 'suspended' });
+  const activeCustomers = await Accounts.countDocuments({ accountStatus: 'active' });
+  const inactiveCustomers = await Accounts.countDocuments({ accountStatus: 'inactive' });
+  const suspendedCustomers = await Accounts.countDocuments({ accountStatus: 'suspended' });
   const roleCounts = await Accounts.aggregate([
     { $group: { _id: '$role', count: { $sum: 1 } } }
   ]);
@@ -39,11 +39,11 @@ exports.getCustomerStats = async () => {
 
 exports.getRevenueStats = async () => {
   const totalRevenue = await Orders.aggregate([
-    { $match: { pay_status: 'paid' } },
+    { $match: { payStatus: 'paid' } },
     { $group: { _id: null, total: { $sum: '$totalPrice' } } }
   ]);
   const averageOrderValue = await Orders.aggregate([
-    { $match: { pay_status: 'paid' } },
+    { $match: { payStatus: 'paid' } },
     { $group: { _id: null, avg: { $avg: '$totalPrice' } } }
   ]);
   return {
@@ -55,10 +55,10 @@ exports.getRevenueStats = async () => {
 exports.getOrderStats = async () => {
   const totalOrders = await Orders.countDocuments();
   const statusCounts = await Orders.aggregate([
-    { $group: { _id: '$order_status', count: { $sum: 1 } } }
+    { $group: { _id: '$orderStatus', count: { $sum: 1 } } }
   ]);
   const payStatusCounts = await Orders.aggregate([
-    { $group: { _id: '$pay_status', count: { $sum: 1 } } }
+    { $group: { _id: '$payStatus', count: { $sum: 1 } } }
   ]);
   const shippingStatusCounts = await Orders.aggregate([
     { $group: { _id: '$shipping_status', count: { $sum: 1 } } }
@@ -87,7 +87,7 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
   const dailyRevenue = await Orders.aggregate([
     {
       $match: {
-        pay_status: 'paid',
+        payStatus: 'paid',
         orderDate: { $gte: oldestWeekStart, $lte: currentWeekEnd }
       }
     },
@@ -290,7 +290,7 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
   const monthlyRevenue = await Orders.aggregate([
     {
       $match: {
-        pay_status: 'paid',
+        payStatus: 'paid',
         orderDate: { $gte: startDate, $lte: endDate }
       }
     },
@@ -500,7 +500,7 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   const dailyRevenue = await Orders.aggregate([
     {
       $match: {
-        pay_status: 'paid',
+        payStatus: 'paid',
         orderDate: { $gte: extendedStartDate, $lte: endDate }
       }
     },
@@ -735,7 +735,7 @@ exports.getRevenueByYear = async (numYears = 3) => {
   const yearlyRevenue = await Orders.aggregate([
     {
       $match: {
-        pay_status: 'paid',
+        payStatus: 'paid',
         orderDate: { $gte: startDate, $lte: endDate }
       }
     },

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const CategoriesSchema = new mongoose.Schema({
-  cat_name: {
+  categoryName: {
     type: String,
     required: [true, 'Category name is required'],
     minlength: [3, 'Category name must be at least 3 characters'],
@@ -17,7 +17,7 @@ const CategoriesSchema = new mongoose.Schema({
 
 // Compound unique index: chỉ unique khi isDeleted: false
 // Cho phép tạo lại category với tên đã bị xóa
-CategoriesSchema.index({ cat_name: 1, isDeleted: 1 }, {
+CategoriesSchema.index({ categoryName: 1, isDeleted: 1 }, {
   unique: true,
   partialFilterExpression: { isDeleted: false }
 });

@@ -1,12 +1,12 @@
 const mongoose = require("mongoose");
 
 const FavoritesSchema = new mongoose.Schema({
-  acc_id: {
+  accountId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Accounts",
     required: [true, "Account ID is required"],
   },
-  pro_id: {
+  productId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "newProducts",
     required: [true, "Product ID is required"],

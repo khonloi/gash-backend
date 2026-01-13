@@ -13,13 +13,13 @@ exports.searchOrderDetails = async (req, res) => {
 
 exports.createOrderDetail = async (req, res) => {
   try {
-    const { order_id, variant_id, UnitPrice, Quantity, feedback } = req.body;
+    const { orderId, variantId, unitPrice, Quantity, feedback } = req.body;
 
     // Validate required fields
-    if (!order_id || !variant_id || !UnitPrice || !Quantity) {
+    if (!orderId || !variantId || !unitPrice || !Quantity) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
-    if (UnitPrice < 0) {
+    if (unitPrice < 0) {
       return res.status(400).json({ message: 'Unit price cannot be negative' });
     }
     if (Quantity < 1) {
@@ -63,7 +63,7 @@ exports.getOrderDetailById = async (req, res) => {
     if (
       req.user.role !== 'admin' &&
       req.user.role !== 'manager' &&
-      result.order_id.acc_id._id.toString() !== req.user.id
+      result.orderId.accountId._id.toString() !== req.user.id
     ) {
       return res.status(403).json({ message: 'Access denied: Can only view own order detail' });
     }
@@ -75,10 +75,10 @@ exports.getOrderDetailById = async (req, res) => {
 
 exports.updateOrderDetail = async (req, res) => {
   try {
-    const { UnitPrice, Quantity, feedback } = req.body;
+    const { unitPrice, Quantity, feedback } = req.body;
 
     // Validate fields
-    if (UnitPrice !== undefined && UnitPrice < 0) {
+    if (unitPrice !== undefined && unitPrice < 0) {
       return res.status(400).json({ message: 'Unit price cannot be negative' });
     }
     if (Quantity !== undefined && Quantity < 1) {

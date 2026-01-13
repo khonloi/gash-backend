@@ -141,7 +141,7 @@ async function getOrderStatistics(req, res) {
       { $match: baseMatch },
       {
         $group: {
-          _id: "$order_status",
+          _id: "$orderStatus",
           count: { $sum: 1 },
         },
       },
@@ -175,7 +175,7 @@ async function getOrderStatistics(req, res) {
     const processingTimes = await Orders.aggregate([
       { 
         $match: { 
-          order_status: "delivered",
+          orderStatus: "delivered",
           orderDate: { $gte: startDate, $lte: endDate }
         } 
       },
@@ -198,7 +198,7 @@ async function getOrderStatistics(req, res) {
 
     // Refund / Return Rate (% of refunded orders within period)
     const totalRefunded = await Orders.countDocuments({
-      refund_status: "refunded",
+      refundStatus: "refunded",
       ...baseMatch
     });
     const refundRate =
@@ -209,7 +209,7 @@ async function getOrderStatistics(req, res) {
       { $match: baseMatch },
       {
         $group: {
-          _id: "$payment_method",
+          _id: "$paymentMethod",
           count: { $sum: 1 },
         },
       },
@@ -242,7 +242,7 @@ async function getOrderStatistics(req, res) {
     });
     
     // Get all unique users who placed orders within the period
-    const usersWithOrdersInPeriod = await Orders.distinct("acc_id", baseMatch);
+    const usersWithOrdersInPeriod = await Orders.distinct("accountId", baseMatch);
     
     // Convert both to strings for proper comparison (ObjectId comparison can be tricky)
     const usersWithOrdersSet = new Set(

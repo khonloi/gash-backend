@@ -16,7 +16,7 @@ const authenticateJWT = async (req, res, next) => {
     if (!account) {
       return res.status(401).json({ message: 'Invalid token: Account not found' });
     }
-    if (account.acc_status !== 'active') {
+    if (account.accountStatus !== 'active') {
       return res.status(403).json({ message: 'Account is inactive or suspended' });
     }
     req.user = { id: account._id.toString(), username: account.username, role: account.role }; // Convert ObjectId to string
@@ -59,7 +59,7 @@ const authenticateLiveKit = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid LiveKit token: Account not found' });
     }
 
-    if (account.acc_status !== 'active') {
+    if (account.accountStatus !== 'active') {
       return res.status(403).json({ message: 'Account is inactive for LiveKit access' });
     }
 
@@ -99,7 +99,7 @@ const authenticateLivestream = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid livestream token: Account not found' });
     }
 
-    if (account.acc_status !== 'active') {
+    if (account.accountStatus !== 'active') {
       return res.status(403).json({ message: 'Account is inactive for livestream access' });
     }
 

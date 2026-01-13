@@ -11,7 +11,7 @@ const Accounts = require('../models/Accounts');
 exports.getAllFeedback = async (req, res) => {
   try {
     const {
-      sortBy = 'created_at',
+      sortBy = 'createdAt',
       sortOrder = 'desc',
       rating,
       hasContent,
@@ -48,13 +48,13 @@ exports.getAllFeedback = async (req, res) => {
 
     if (isDeleted !== undefined) {
       if (isDeleted === 'true') {
-        query['feedback.is_deleted'] = true;
+        query['feedback.isDeleted'] = true;
       } else if (isDeleted === 'false') {
         query.$and = [
           {
             $or: [
-              { 'feedback.is_deleted': { $exists: false } },
-              { 'feedback.is_deleted': false }
+              { 'feedback.isDeleted': { $exists: false } },
+              { 'feedback.isDeleted': false }
             ]
           }
         ];
@@ -64,25 +64,25 @@ exports.getAllFeedback = async (req, res) => {
     if (productId && mongoose.isValidObjectId(productId)) {
       const variants = await newProductVariants.find({ productId }).select('_id');
       const variantIds = variants.map(v => v._id);
-      query.variant_id = { $in: variantIds };
+      query.variantId = { $in: variantIds };
     }
 
     if (variantId && mongoose.isValidObjectId(variantId)) {
-      query.variant_id = variantId;
+      query.variantId = variantId;
     }
 
     if (userId && mongoose.isValidObjectId(userId)) {
-      const orders = await Orders.find({ acc_id: userId }).select('_id');
+      const orders = await Orders.find({ accountId: userId }).select('_id');
       const orderIds = orders.map(o => o._id);
-      query.order_id = { $in: orderIds };
+      query.orderId = { $in: orderIds };
     }
 
     if (orderStatus) {
       const validStatuses = ['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'];
       if (validStatuses.includes(orderStatus)) {
-        const orders = await Orders.find({ order_status: orderStatus }).select('_id');
+        const orders = await Orders.find({ orderStatus: orderStatus }).select('_id');
         const orderIds = orders.map(o => o._id);
-        query.order_id = { $in: orderIds };
+        query.orderId = { $in: orderIds };
       }
     }
 
@@ -94,7 +94,7 @@ exports.getAllFeedback = async (req, res) => {
       if (dateTo) {
         dateQuery.$lte = new Date(dateTo);
       }
-      query['feedback.created_at'] = dateQuery;
+      query['feedback.createdAt'] = dateQuery;
     }
 
     if (search && search.trim()) {
@@ -131,49 +131,49 @@ exports.getAllFeedback = async (req, res) => {
     }
 
     const sortObj = {};
-    const validSortFields = ['created_at', 'updated_at', 'rating', 'orderDate'];
-    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
+    const validSortFields = ['createdAt', 'updatedAt', 'rating', 'orderDate'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
     const sortDirection = sortOrder === 'asc' ? 1 : -1;
 
     if (sortField === 'orderDate') {
-      sortObj['feedback.created_at'] = sortDirection;
+      sortObj['feedback.createdAt'] = sortDirection;
     } else {
       sortObj[`feedback.${sortField}`] = sortDirection;
     }
 
     const feedbacks = await OrderDetails.find(query)
       .populate({
-        path: 'order_id',
-        select: 'orderDate order_status acc_id',
+        path: 'orderId',
+        select: 'orderDate orderStatus accountId',
         populate: {
-          path: 'acc_id',
+          path: 'accountId',
           select: 'username name email phone image'
         }
       })
       .populate({
-        path: 'variant_id',
+        path: 'variantId',
         select: 'productId productColorId productSizeId variantImage variantPrice',
         populate: [
           { path: 'productId', select: 'productName categoryId productStatus' },
-          { path: 'productColorId', select: 'color_name' },
-          { path: 'productSizeId', select: 'size_name' }
+          { path: 'productColorId', select: 'productColorName' },
+          { path: 'productSizeId', select: 'productSizeName' }
         ]
       })
       .sort(sortObj);
 
     // Log problematic documents
     feedbacks.forEach(feedback => {
-      if (!feedback.order_id) {
-        console.warn(`OrderDetails document _id: ${feedback._id} has missing order_id`);
+      if (!feedback.orderId) {
+        console.warn(`OrderDetails document _id: ${feedback._id} has missing orderId`);
       }
-      if (feedback.order_id && !feedback.order_id.acc_id) {
-        console.warn(`OrderDetails document _id: ${feedback._id} has missing acc_id for order_id ${feedback.order_id._id}`);
+      if (feedback.orderId && !feedback.orderId.accountId) {
+        console.warn(`OrderDetails document _id: ${feedback._id} has missing accountId for orderId ${feedback.orderId._id}`);
       }
-      if (!feedback.variant_id) {
-        console.warn(`OrderDetails document _id: ${feedback._id} has missing variant_id`);
+      if (!feedback.variantId) {
+        console.warn(`OrderDetails document _id: ${feedback._id} has missing variantId`);
       }
-      if (feedback.variant_id && !feedback.variant_id.productId) {
-        console.warn(`OrderDetails document _id: ${feedback._id} has missing productId for variant_id ${feedback.variant_id._id}`);
+      if (feedback.variantId && !feedback.variantId.productId) {
+        console.warn(`OrderDetails document _id: ${feedback._id} has missing productId for variantId ${feedback.variantId._id}`);
       }
     });
 
@@ -182,25 +182,25 @@ exports.getAllFeedback = async (req, res) => {
         // Filter out feedbacks with no rating and no content
         const hasRating = feedback.feedback?.rating !== null && feedback.feedback?.rating !== undefined && feedback.feedback.rating >= 1 && feedback.feedback.rating <= 5;
         const hasContent = feedback.feedback?.content && feedback.feedback.content.trim() !== '';
-        return feedback.order_id && feedback.variant_id && (hasRating || hasContent);
+        return feedback.orderId && feedback.variantId && (hasRating || hasContent);
       })
       .map(feedback => ({
         _id: feedback._id || null,
-        order: feedback.order_id
+        order: feedback.orderId
           ? {
-            _id: feedback.order_id._id || null,
-            orderDate: feedback.order_id.orderDate || null,
-            order_status: feedback.order_id.order_status || null
+            _id: feedback.orderId._id || null,
+            orderDate: feedback.orderId.orderDate || null,
+            orderStatus: feedback.orderId.orderStatus || null
           }
-          : { _id: null, orderDate: null, order_status: null },
-        customer: feedback.order_id?.acc_id
+          : { _id: null, orderDate: null, orderStatus: null },
+        customer: feedback.orderId?.accountId
           ? {
-            _id: feedback.order_id.acc_id._id || null,
-            username: feedback.order_id.acc_id.username || null,
-            name: feedback.order_id.acc_id.name || null,
-            email: feedback.order_id.acc_id.email || null,
-            phone: feedback.order_id.acc_id.phone || null,
-            image: feedback.order_id.acc_id.image || null
+            _id: feedback.orderId.accountId._id || null,
+            username: feedback.orderId.accountId.username || null,
+            name: feedback.orderId.accountId.name || null,
+            email: feedback.orderId.accountId.email || null,
+            phone: feedback.orderId.accountId.phone || null,
+            image: feedback.orderId.accountId.image || null
           }
           : {
             _id: null,
@@ -210,24 +210,24 @@ exports.getAllFeedback = async (req, res) => {
             phone: null,
             image: null
           },
-        product: feedback.variant_id?.productId
+        product: feedback.variantId?.productId
           ? {
-            product_id: feedback.variant_id.productId._id || null,
-            product_name: feedback.variant_id.productId.productName || null,
-            category_id: feedback.variant_id.productId.categoryId || null,
-            product_status: feedback.variant_id.productId.productStatus || null
+            product_id: feedback.variantId.productId._id || null,
+            product_name: feedback.variantId.productId.productName || null,
+            category_id: feedback.variantId.productId.categoryId || null,
+            product_status: feedback.variantId.productId.productStatus || null
           }
           : { product_id: null, product_name: null, category_id: null, product_status: null },
-        variant: feedback.variant_id
+        variant: feedback.variantId
           ? {
-            variant_id: feedback.variant_id._id || null,
-            color: feedback.variant_id.productColorId ? feedback.variant_id.productColorId.color_name : null,
-            size: feedback.variant_id.productSizeId ? feedback.variant_id.productSizeId.size_name : null,
-            image: feedback.variant_id.variantImage || null,
-            price: feedback.variant_id.variantPrice || null
+            variantId: feedback.variantId._id || null,
+            color: feedback.variantId.productColorId ? feedback.variantId.productColorId.productColorName : null,
+            size: feedback.variantId.productSizeId ? feedback.variantId.productSizeId.productSizeName : null,
+            image: feedback.variantId.variantImage || null,
+            price: feedback.variantId.variantPrice || null
           }
           : {
-            variant_id: null,
+            variantId: null,
             color: null,
             size: null,
             image: null,
@@ -236,9 +236,9 @@ exports.getAllFeedback = async (req, res) => {
         feedback: {
           rating: feedback.feedback.rating || null,
           content: feedback.feedback.content || null,
-          created_at: feedback.feedback.created_at || null,
-          updated_at: feedback.feedback.updated_at || null,
-          is_deleted: feedback.feedback.is_deleted || false,
+          createdAt: feedback.feedback.createdAt || null,
+          updatedAt: feedback.feedback.updatedAt || null,
+          isDeleted: feedback.feedback.isDeleted || false,
           has_rating: feedback.feedback.rating !== null && feedback.feedback.rating !== undefined,
           has_content: feedback.feedback.content && feedback.feedback.content.trim() !== ''
         }
@@ -300,15 +300,15 @@ exports.getFeedbackById = async (req, res) => {
 
     const feedback = await OrderDetails.findById(feedbackId)
       .populate({
-        path: 'order_id',
-        select: 'orderDate order_status acc_id finalPrice',
+        path: 'orderId',
+        select: 'orderDate orderStatus accountId finalPrice',
         populate: {
-          path: 'acc_id',
+          path: 'accountId',
           select: 'username name email phone image'
         }
       })
       .populate({
-        path: 'variant_id',
+        path: 'variantId',
         select: 'productId productColorId productSizeId variantImage variantPrice',
         populate: [
           {
@@ -317,11 +317,11 @@ exports.getFeedbackById = async (req, res) => {
           },
           {
             path: 'productColorId',
-            select: 'color_name'
+            select: 'productColorName'
           },
           {
             path: 'productSizeId',
-            select: 'size_name'
+            select: 'productSizeName'
           }
         ]
       });
@@ -337,37 +337,37 @@ exports.getFeedbackById = async (req, res) => {
     const formattedFeedback = {
       _id: feedback._id,
       order: {
-        _id: feedback.order_id._id,
-        orderDate: feedback.order_id.orderDate,
-        order_status: feedback.order_id.order_status,
-        finalPrice: feedback.order_id.finalPrice || null
+        _id: feedback.orderId._id,
+        orderDate: feedback.orderId.orderDate,
+        orderStatus: feedback.orderId.orderStatus,
+        finalPrice: feedback.orderId.finalPrice || null
       },
       customer: {
-        _id: feedback.order_id.acc_id._id,
-        username: feedback.order_id.acc_id.username,
-        name: feedback.order_id.acc_id.name,
-        email: feedback.order_id.acc_id.email,
-        phone: feedback.order_id.acc_id.phone,
-        image: feedback.order_id.acc_id.image
+        _id: feedback.orderId.accountId._id,
+        username: feedback.orderId.accountId.username,
+        name: feedback.orderId.accountId.name,
+        email: feedback.orderId.accountId.email,
+        phone: feedback.orderId.accountId.phone,
+        image: feedback.orderId.accountId.image
       },
       product: {
-        product_id: feedback.variant_id.productId._id,
-        product_name: feedback.variant_id.productId.productName,
-        category_id: feedback.variant_id.productId.categoryId
+        product_id: feedback.variantId.productId._id,
+        product_name: feedback.variantId.productId.productName,
+        category_id: feedback.variantId.productId.categoryId
       },
       variant: {
-        variant_id: feedback.variant_id._id,
-        color: feedback.variant_id.productColorId ? feedback.variant_id.productColorId.color_name : null,
-        size: feedback.variant_id.productSizeId ? feedback.variant_id.productSizeId.size_name : null,
-        image: feedback.variant_id.variantImage || null,
-        price: feedback.variant_id.variantPrice
+        variantId: feedback.variantId._id,
+        color: feedback.variantId.productColorId ? feedback.variantId.productColorId.productColorName : null,
+        size: feedback.variantId.productSizeId ? feedback.variantId.productSizeId.productSizeName : null,
+        image: feedback.variantId.variantImage || null,
+        price: feedback.variantId.variantPrice
       },
       feedback: {
         rating: feedback.feedback.rating,
         content: feedback.feedback.content,
-        created_at: feedback.feedback.created_at,
-        updated_at: feedback.feedback.updated_at,
-        is_deleted: feedback.feedback.is_deleted,
+        createdAt: feedback.feedback.createdAt,
+        updatedAt: feedback.feedback.updatedAt,
+        isDeleted: feedback.feedback.isDeleted,
         has_rating: feedback.feedback.rating !== null && feedback.feedback.rating !== undefined,
         has_content: feedback.feedback.content && feedback.feedback.content.trim() !== ''
       }
@@ -405,14 +405,14 @@ exports.getFeedbackStatistics = async (req, res) => {
       if (dateTo) {
         dateQuery.$lte = new Date(dateTo);
       }
-      baseQuery['feedback.created_at'] = dateQuery;
+      baseQuery['feedback.createdAt'] = dateQuery;
     }
 
     // Filter by product
     if (productId && mongoose.isValidObjectId(productId)) {
       const variants = await newProductVariants.find({ productId }).select('_id');
       const variantIds = variants.map(v => v._id);
-      baseQuery.variant_id = { $in: variantIds };
+      baseQuery.variantId = { $in: variantIds };
     }
 
     // Get all feedbacks for statistics
@@ -422,8 +422,8 @@ exports.getFeedbackStatistics = async (req, res) => {
     const stats = {
       overview: {
         total_feedbacks: allFeedbacks.length,
-        active_feedbacks: allFeedbacks.filter(f => !f.feedback.is_deleted).length,
-        deleted_feedbacks: allFeedbacks.filter(f => f.feedback.is_deleted).length,
+        active_feedbacks: allFeedbacks.filter(f => !f.feedback.isDeleted).length,
+        deleted_feedbacks: allFeedbacks.filter(f => f.feedback.isDeleted).length,
         with_rating: allFeedbacks.filter(f => f.feedback.rating !== null).length,
         with_content: allFeedbacks.filter(f => f.feedback.content && f.feedback.content.trim() !== '').length,
         rating_only: allFeedbacks.filter(f => f.feedback.rating !== null && (!f.feedback.content || f.feedback.content.trim() === '')).length,
@@ -466,9 +466,9 @@ exports.getFeedbackStatistics = async (req, res) => {
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const last90Days = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-    stats.recent_activity.last_7_days = allFeedbacks.filter(f => f.feedback.created_at && f.feedback.created_at >= last7Days).length;
-    stats.recent_activity.last_30_days = allFeedbacks.filter(f => f.feedback.created_at && f.feedback.created_at >= last30Days).length;
-    stats.recent_activity.last_90_days = allFeedbacks.filter(f => f.feedback.created_at && f.feedback.created_at >= last90Days).length;
+    stats.recent_activity.last_7_days = allFeedbacks.filter(f => f.feedback.createdAt && f.feedback.createdAt >= last7Days).length;
+    stats.recent_activity.last_30_days = allFeedbacks.filter(f => f.feedback.createdAt && f.feedback.createdAt >= last30Days).length;
+    stats.recent_activity.last_90_days = allFeedbacks.filter(f => f.feedback.createdAt && f.feedback.createdAt >= last90Days).length;
 
     res.status(200).json({
       success: true,
@@ -514,8 +514,8 @@ exports.deleteFeedback = async (req, res) => {
     }
 
     // Soft delete
-    feedback.feedback.is_deleted = true;
-    feedback.feedback.updated_at = new Date();
+    feedback.feedback.isDeleted = true;
+    feedback.feedback.updatedAt = new Date();
     await feedback.save();
 
     res.status(200).json({
@@ -523,8 +523,8 @@ exports.deleteFeedback = async (req, res) => {
       message: 'Feedback deleted successfully',
       data: {
         feedback_id: feedback._id,
-        is_deleted: true,
-        deleted_at: feedback.feedback.updated_at
+        isDeleted: true,
+        deleted_at: feedback.feedback.updatedAt
       }
     });
 
@@ -558,8 +558,8 @@ exports.restoreFeedback = async (req, res) => {
     }
 
     // Restore
-    feedback.feedback.is_deleted = false;
-    feedback.feedback.updated_at = new Date();
+    feedback.feedback.isDeleted = false;
+    feedback.feedback.updatedAt = new Date();
     await feedback.save();
 
     res.status(200).json({
@@ -567,8 +567,8 @@ exports.restoreFeedback = async (req, res) => {
       message: 'Feedback restored successfully',
       data: {
         feedback_id: feedback._id,
-        is_deleted: false,
-        restored_at: feedback.feedback.updated_at
+        isDeleted: false,
+        restored_at: feedback.feedback.updatedAt
       }
     });
 

@@ -23,11 +23,11 @@ exports.exportBill = async (req, res) => {
         // Lấy thông tin order với populate
         const order = await Orders.findById(orderId)
             .populate({
-                path: 'acc_id',
+                path: 'accountId',
                 select: 'username name email phone address'
             })
             .populate({
-                path: 'voucher_id',
+                path: 'voucherId',
                 select: 'code voucher_name discountType discountValue discount_percentage discount_amount minOrderValue maxDiscountAmount usedCount usageLimit startDate endDate isActive'
             });
 
@@ -40,7 +40,7 @@ exports.exportBill = async (req, res) => {
 
         // Check quyền: admin/staff có thể xem tất cả, user chỉ xem được bill của mình
         if (req.user.role !== 'admin' && req.user.role !== 'manager' &&
-            order.acc_id._id.toString() !== req.user.id) {
+            order.accountId._id.toString() !== req.user.id) {
             return res.status(403).json({
                 success: false,
                 message: 'Access denied. You can only view your own order bills.'
@@ -49,9 +49,9 @@ exports.exportBill = async (req, res) => {
 
 
         // Lấy tất cả order details của order này
-        const orderDetails = await OrderDetails.find({ order_id: orderId })
+        const orderDetails = await OrderDetails.find({ orderId: orderId })
             .populate({
-                path: 'variant_id',
+                path: 'variantId',
                 select: 'productId productColorId productSizeId variantImage',
                 populate: [
                     {
@@ -60,11 +60,11 @@ exports.exportBill = async (req, res) => {
                     },
                     {
                         path: 'productColorId',
-                        select: 'color_name'
+                        select: 'productColorName'
                     },
                     {
                         path: 'productSizeId',
-                        select: 'size_name'
+                        select: 'productSizeName'
                     }
                 ]
             });
@@ -75,50 +75,50 @@ exports.exportBill = async (req, res) => {
             order: {
                 orderId: order._id,
                 orderDate: order.orderDate,
-                orderStatus: order.order_status,
+                orderStatus: order.orderStatus,
                 totalPrice: order.totalPrice,
                 finalPrice: order.finalPrice,
-                paymentMethod: order.payment_method,
-                paymentStatus: order.pay_status,
+                paymentMethod: order.paymentMethod,
+                paymentStatus: order.payStatus,
                 shippingAddress: order.addressReceive
             },
 
             // Thông tin khách hàng
             customer: {
                 name: order.name, // Recipient's name from order
-                email: order.acc_id.email,
+                email: order.accountId.email,
                 phone: order.phone, // Phone from order (delivery contact)
                 address: order.addressReceive // Delivery address from order
             },
 
             // Chi tiết sản phẩm
             items: orderDetails.map(detail => ({
-                productName: detail.variant_id?.productId?.productName || 'N/A',
-                color: detail.variant_id?.productColorId?.color_name || 'N/A',
-                size: detail.variant_id?.productSizeId?.size_name || 'N/A',
-                image: detail.variant_id?.variantImage || null,
-                unitPrice: detail.UnitPrice,
+                productName: detail.variantId?.productId?.productName || 'N/A',
+                color: detail.variantId?.productColorId?.productColorName || 'N/A',
+                size: detail.variantId?.productSizeId?.productSizeName || 'N/A',
+                image: detail.variantId?.variantImage || null,
+                unitPrice: detail.unitPrice,
                 quantity: detail.Quantity,
-                totalPrice: detail.UnitPrice * detail.Quantity
+                totalPrice: detail.unitPrice * detail.Quantity
             })),
 
             // Thông tin giảm giá
-            discount: order.voucher_id ? {
+            discount: order.voucherId ? {
                 voucher: {
-                    _id: order.voucher_id._id,
-                    code: order.voucher_id.code,
-                    voucher_name: order.voucher_id.voucher_name,
-                    discountType: order.voucher_id.discountType,
-                    discountValue: order.voucher_id.discountValue,
-                    discount_percentage: order.voucher_id.discount_percentage,
-                    discount_amount: order.voucher_id.discount_amount,
-                    minOrderValue: order.voucher_id.minOrderValue,
-                    maxDiscountAmount: order.voucher_id.maxDiscountAmount,
-                    usedCount: order.voucher_id.usedCount,
-                    usageLimit: order.voucher_id.usageLimit,
-                    startDate: order.voucher_id.startDate,
-                    endDate: order.voucher_id.endDate,
-                    isActive: order.voucher_id.isActive
+                    _id: order.voucherId._id,
+                    code: order.voucherId.code,
+                    voucher_name: order.voucherId.voucher_name,
+                    discountType: order.voucherId.discountType,
+                    discountValue: order.voucherId.discountValue,
+                    discount_percentage: order.voucherId.discount_percentage,
+                    discount_amount: order.voucherId.discount_amount,
+                    minOrderValue: order.voucherId.minOrderValue,
+                    maxDiscountAmount: order.voucherId.maxDiscountAmount,
+                    usedCount: order.voucherId.usedCount,
+                    usageLimit: order.voucherId.usageLimit,
+                    startDate: order.voucherId.startDate,
+                    endDate: order.voucherId.endDate,
+                    isActive: order.voucherId.isActive
                 },
                 appliedDiscount: order.discountAmount || 0
             } : {
@@ -128,7 +128,7 @@ exports.exportBill = async (req, res) => {
 
             // Tổng kết
             summary: {
-                subtotal: orderDetails.reduce((sum, detail) => sum + (detail.UnitPrice * detail.Quantity), 0),
+                subtotal: orderDetails.reduce((sum, detail) => sum + (detail.unitPrice * detail.Quantity), 0),
                 discount: order.discountAmount || 0,
                 totalAmount: order.finalPrice
             }

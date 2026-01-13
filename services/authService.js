@@ -25,7 +25,7 @@ exports.register = async (data) => {
     password,
     image: image || 'https://i.redd.it/1to4yvt3i88c1.png',
     role: 'user',
-    acc_status: 'active'
+    accountStatus: 'active'
   });
   const savedAccount = await account.save();
   const token = jwt.sign(
@@ -47,7 +47,7 @@ exports.register = async (data) => {
         address: savedAccount.address,
         image: savedAccount.image,
         role: savedAccount.role,
-        acc_status: savedAccount.acc_status
+        accountStatus: savedAccount.accountStatus
       }
     }
   };
@@ -125,7 +125,7 @@ exports.login = async (data) => {
   if (!isMatch) {
     return { status: 401, response: { message: 'Invalid username or password' } };
   }
-  if (account.acc_status !== 'active') {
+  if (account.accountStatus !== 'active') {
     return { status: 403, response: { message: 'Account is inactive or suspended' } };
   }
   const token = jwt.sign(
@@ -147,7 +147,7 @@ exports.login = async (data) => {
         address: account.address,
         image: account.image,
         role: account.role,
-        acc_status: account.acc_status
+        accountStatus: account.accountStatus
       }
     }
   };
@@ -173,14 +173,14 @@ exports.googleLogin = async (data) => {
       googleId,
       password: randomPassword,
       role: 'user',
-      acc_status: 'active'
+      accountStatus: 'active'
     });
     await account.save();
   } else if (!account.googleId) {
     account.googleId = googleId;
     await account.save();
   }
-  if (account.acc_status !== 'active') {
+  if (account.accountStatus !== 'active') {
     return { status: 403, response: { message: 'Account is inactive or suspended' } };
   }
   const jwtToken = jwt.sign(
@@ -202,7 +202,7 @@ exports.googleLogin = async (data) => {
         address: account.address,
         image: account.image,
         role: account.role,
-        acc_status: account.acc_status
+        accountStatus: account.accountStatus
       }
     }
   };

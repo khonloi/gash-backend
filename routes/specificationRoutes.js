@@ -27,7 +27,7 @@ const {
 // --- Product Images Routes ---
 // router.post("/create-image", authenticateJWT, authorizeRole(["admin", "manager"]), createProductImage);
 // router.get("/get-all-images", getAllProductImages);
-// router.get("/get-images-by-product/:pro_id", getProductImagesByProductId);
+// router.get("/get-images-by-product/:productId", getProductImagesByProductId);
 // router.get("/get-image-detail/:id", getProductImageById);
 // router.put("/update-image/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductImage);
 // router.delete("/delete-image/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductImage);

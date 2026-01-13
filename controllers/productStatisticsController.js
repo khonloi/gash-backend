@@ -15,7 +15,7 @@ exports.getProductStatistics = async (req, res) => {
 
     // --- Lọc theo danh mục ---
     if (category !== "all") {
-      const foundCat = await Category.findOne({ cat_name: category });
+      const foundCat = await Category.findOne({ categoryName: category });
       if (foundCat) filter.categoryId = foundCat._id;
     }
 
@@ -104,7 +104,7 @@ exports.getCategoryDistribution = async (req, res) => {
       {
         $group: {
           _id: {
-            $ifNull: ["$categoryInfo.cat_name", "Unknown"], // đúng field cat_name
+            $ifNull: ["$categoryInfo.categoryName", "Unknown"], // đúng field categoryName
           },
           value: { $sum: 1 },
         },
@@ -184,7 +184,7 @@ exports.exportProductStatistics = async (req, res) => {
       worksheet.addRow({
         productName: p.productName,
         productStatus: p.productStatus,
-        category: p.categoryId?.cat_name || "N/A",
+        category: p.categoryId?.categoryName || "N/A",
         price: p.price || 0,
         createdAt: new Date(p.createdAt).toLocaleDateString(),
       });

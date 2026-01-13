@@ -295,8 +295,8 @@ const bulkGenerateOrders = async (count) => {
         variantStatus: "active",
       })
       .populate("productId", "productName")
-      .populate("productColorId", "color_name")
-      .populate("productSizeId", "size_name");
+      .populate("productColorId", "productColorName")
+      .populate("productSizeId", "productSizeName");
 
     if (variants.length === 0) {
       throw new Error("No active product variants found. Please create product variants first.");
@@ -350,8 +350,8 @@ const bulkGenerateOrders = async (count) => {
         totalPrice += itemTotal;
 
         orderDetailsData.push({
-          variant_id: variant._id,
-          UnitPrice: unitPrice,
+          variantId: variant._id,
+          unitPrice: unitPrice,
           Quantity: quantity,
         });
       }
@@ -383,10 +383,10 @@ const bulkGenerateOrders = async (count) => {
       const finalPrice = Math.max(0, totalPrice - discountAmount);
 
       // Generate order status
-      const order_status = generateRandomOrderStatus();
-      const pay_status = generatePaymentStatus(order_status);
-      const payment_method = generatePaymentMethod();
-      const refund_status = generateRefundStatus(order_status, pay_status);
+      const orderStatus = generateRandomOrderStatus();
+      const payStatus = generatePaymentStatus(orderStatus);
+      const paymentMethod = generatePaymentMethod();
+      const refundStatus = generateRefundStatus(orderStatus, payStatus);
 
       // Use account info or generate random
       const name = account.name || SAMPLE_NAMES[Math.floor(Math.random() * SAMPLE_NAMES.length)];
@@ -395,8 +395,8 @@ const bulkGenerateOrders = async (count) => {
 
       // Create order
       const orderData = {
-        acc_id: account._id,
-        voucher_id: voucher ? voucher._id : null,
+        accountId: account._id,
+        voucherId: voucher ? voucher._id : null,
         orderDate,
         addressReceive,
         name,
@@ -404,12 +404,12 @@ const bulkGenerateOrders = async (count) => {
         totalPrice,
         discountAmount,
         finalPrice,
-        order_status,
-        pay_status,
-        payment_method,
-        refund_status,
-        refund_proof: refund_status === "refunded" ? "https://example.com/refund-proof.jpg" : "",
-        cancelReason: order_status === "cancelled" ? generateCancelReason() : "",
+        orderStatus,
+        payStatus,
+        paymentMethod,
+        refundStatus,
+        refundProof: refundStatus === "refunded" ? "https://example.com/refund-proof.jpg" : "",
+        cancelReason: orderStatus === "cancelled" ? generateCancelReason() : "",
         orderDetails: [],
       };
 
@@ -421,30 +421,30 @@ const bulkGenerateOrders = async (count) => {
       for (const detailData of orderDetailsData) {
         const orderDetailData = {
           ...detailData,
-          order_id: order._id,
+          orderId: order._id,
         };
 
         // Add feedback for delivered orders (70% chance)
         // Feedback should only exist for delivered orders
-        if (order_status === "delivered" && Math.random() > 0.3) {
+        if (orderStatus === "delivered" && Math.random() > 0.3) {
           const rating = generateFeedbackRating();
-          const feedbackDate = generateFeedbackDate(orderDate, order_status);
+          const feedbackDate = generateFeedbackDate(orderDate, orderStatus);
           
           orderDetailData.feedback = {
             rating: rating,
             content: generateFeedbackContent(rating),
-            created_at: feedbackDate,
-            updated_at: feedbackDate,
-            is_deleted: false,
+            createdAt: feedbackDate,
+            updatedAt: feedbackDate,
+            isDeleted: false,
           };
         } else {
           // No feedback for non-delivered orders
           orderDetailData.feedback = {
             rating: null,
             content: "",
-            created_at: null,
-            updated_at: null,
-            is_deleted: false,
+            createdAt: null,
+            updatedAt: null,
+            isDeleted: false,
           };
         }
 
@@ -464,8 +464,8 @@ const bulkGenerateOrders = async (count) => {
         totalPrice,
         discountAmount,
         finalPrice,
-        order_status,
-        pay_status,
+        orderStatus,
+        payStatus,
       });
     }
 

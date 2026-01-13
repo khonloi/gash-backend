@@ -22,6 +22,6 @@ router.put("/update-order-detail/:id", authenticateJWT, orderDetailController.up
 router.delete("/delete-order-detail/:id", authenticateJWT, orderDetailController.deleteOrderDetail);
 
 // Get all order details for a product with non-empty feedback
-router.get("/get-order-details-by-product/:pro_id", orderDetailController.getOrderDetailsByProduct);
+router.get("/get-order-details-by-product/:productId", orderDetailController.getOrderDetailsByProduct);
 
 module.exports = router;

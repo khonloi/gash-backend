@@ -25,11 +25,11 @@ exports.getOrderById = async (req, res) => {
       totalPrice: order.totalPrice,
       discountAmount: order.discountAmount,
       finalPrice: order.finalPrice,
-      order_status: order.order_status,
-      pay_status: order.pay_status,
-      payment_method: order.payment_method,
-      refund_status: order.refund_status,
-      refund_proof: order.refund_proof,
+      orderStatus: order.orderStatus,
+      payStatus: order.payStatus,
+      paymentMethod: order.paymentMethod,
+      refundStatus: order.refundStatus,
+      refundProof: order.refundProof,
       cancelReason: order.cancelReason, // Added cancelReason to response
       vnpay_payment_url: order.vnpay_payment_url,
       vnpay_expiry_time: order.vnpay_expiry_time,
@@ -38,58 +38,58 @@ exports.getOrderById = async (req, res) => {
 
       // Customer information
       customer: {
-        _id: order.acc_id._id,
-        username: order.acc_id.username,
-        name: order.acc_id.name,
-        email: order.acc_id.email,
-        phone: order.acc_id.phone,
-        address: order.acc_id.address,
-        image: order.acc_id.image
+        _id: order.accountId._id,
+        username: order.accountId.username,
+        name: order.accountId.name,
+        email: order.accountId.email,
+        phone: order.accountId.phone,
+        address: order.accountId.address,
+        image: order.accountId.image
       },
 
       // Voucher information (if exists)
-      voucher: order.voucher_id ? {
-        _id: order.voucher_id._id,
-        code: order.voucher_id.code,
-        voucher_name: order.voucher_id.voucher_name,
-        discountType: order.voucher_id.discountType,
-        discountValue: order.voucher_id.discountValue,
-        discount_percentage: order.voucher_id.discount_percentage,
-        discount_amount: order.voucher_id.discount_amount,
+      voucher: order.voucherId ? {
+        _id: order.voucherId._id,
+        code: order.voucherId.code,
+        voucher_name: order.voucherId.voucher_name,
+        discountType: order.voucherId.discountType,
+        discountValue: order.voucherId.discountValue,
+        discount_percentage: order.voucherId.discount_percentage,
+        discount_amount: order.voucherId.discount_amount,
       } : null,
 
       // Order details with product information
       orderDetails: order.orderDetails ? order.orderDetails.map(detail => ({
         _id: detail._id,
-        variant: detail.variant_id ? {
-          _id: detail.variant_id._id,
-          product: detail.variant_id.productId ? {
-            _id: detail.variant_id.productId._id,
-            name: detail.variant_id.productId.productName
+        variant: detail.variantId ? {
+          _id: detail.variantId._id,
+          product: detail.variantId.productId ? {
+            _id: detail.variantId.productId._id,
+            name: detail.variantId.productId.productName
           } : null,
-          color: detail.variant_id.productColorId ? {
-            _id: detail.variant_id.productColorId._id,
-            name: detail.variant_id.productColorId.color_name
+          color: detail.variantId.productColorId ? {
+            _id: detail.variantId.productColorId._id,
+            name: detail.variantId.productColorId.productColorName
           } : null,
-          size: detail.variant_id.productSizeId ? {
-            _id: detail.variant_id.productSizeId._id,
-            name: detail.variant_id.productSizeId.size_name
+          size: detail.variantId.productSizeId ? {
+            _id: detail.variantId.productSizeId._id,
+            name: detail.variantId.productSizeId.productSizeName
           } : null,
-          image: detail.variant_id.variantImage || null
+          image: detail.variantId.variantImage || null
         } : null,
-        unitPrice: detail.UnitPrice,
+        unitPrice: detail.unitPrice,
         quantity: detail.Quantity,
-        totalPrice: detail.UnitPrice * detail.Quantity,
+        totalPrice: detail.unitPrice * detail.Quantity,
         feedback: detail.feedback ? {
           rating: detail.feedback.rating,
-          content: detail.feedback.is_deleted
+          content: detail.feedback.isDeleted
             ? 'This feedback has been deleted by staff/admin'
             : detail.feedback.content,
-          created_at: detail.feedback.created_at,
-          updated_at: detail.feedback.updated_at,
-          is_deleted: detail.feedback.is_deleted,
+          createdAt: detail.feedback.createdAt,
+          updatedAt: detail.feedback.updatedAt,
+          isDeleted: detail.feedback.isDeleted,
           has_rating: detail.feedback.rating !== null && detail.feedback.rating !== undefined,
-          has_content: detail.feedback.is_deleted
+          has_content: detail.feedback.isDeleted
             ? true  // Show content flag as true so the deletion message displays
             : (detail.feedback.content && detail.feedback.content.trim() !== '')
         } : null
@@ -99,7 +99,7 @@ exports.getOrderById = async (req, res) => {
       summary: {
         totalItems: order.orderDetails ? order.orderDetails.length : 0,
         totalQuantity: order.orderDetails ? order.orderDetails.reduce((sum, detail) => sum + detail.Quantity, 0) : 0,
-        hasVoucher: !!order.voucher_id,
+        hasVoucher: !!order.voucherId,
         hasFeedback: false
       }
     };
@@ -130,16 +130,16 @@ exports.updateOrderByAdmin = async (req, res) => {
       return res.status(400).json({ message: 'Invalid order ID format' });
     }
 
-    const { order_status, pay_status, refund_status, refund_proof, cancelReason } = req.body;
+    const { orderStatus, payStatus, refundStatus, refundProof, cancelReason } = req.body;
 
     // Validate enums
-    if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
+    if (orderStatus && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(orderStatus)) {
       return res.status(400).json({ message: 'Invalid order status' });
     }
-    if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
+    if (payStatus && !['unpaid', 'paid'].includes(payStatus)) {
       return res.status(400).json({ message: 'Invalid pay status' });
     }
-    if (refund_status && !['not_applicable', 'pending_refund', 'refunded'].includes(refund_status)) {
+    if (refundStatus && !['not_applicable', 'pending_refund', 'refunded'].includes(refundStatus)) {
       return res.status(400).json({ message: 'Invalid refund status' });
     }
     if (cancelReason && typeof cancelReason === 'string' && cancelReason.length > 500) {
@@ -147,27 +147,27 @@ exports.updateOrderByAdmin = async (req, res) => {
     }
 
     // Chỉ cho phép cập nhật các trường cơ bản, không bao gồm feedback
-    const allowedFields = { order_status, pay_status, refund_status, refund_proof, cancelReason };
+    const allowedFields = { orderStatus, payStatus, refundStatus, refundProof, cancelReason };
     const filteredData = Object.fromEntries(
       Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
     );
 
     // Get old order status before update for notification logic
     const oldOrder = await orderService.getOrderByIdService(orderId, req.user);
-    const oldOrderStatus = oldOrder?.order_status;
-    const oldPayStatus = oldOrder?.pay_status;
+    const oldOrderStatus = oldOrder?.orderStatus;
+    const oldPayStatus = oldOrder?.payStatus;
 
     const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
     const io = req.app.get('io');
-    if (io && updatedOrder && updatedOrder.acc_id) {
-      const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
-        ? updatedOrder.acc_id._id.toString()
-        : updatedOrder.acc_id.toString();
+    if (io && updatedOrder && updatedOrder.accountId) {
+      const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
+        ? updatedOrder.accountId._id.toString()
+        : updatedOrder.accountId.toString();
 
       // Ensure order is properly formatted with all fields
       const formattedOrder = {
         ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
-        acc_id: updatedOrder.acc_id,
+        accountId: updatedOrder.accountId,
         name: updatedOrder.name,
         orderDate: updatedOrder.orderDate,
         updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
@@ -183,8 +183,8 @@ exports.updateOrderByAdmin = async (req, res) => {
 
       // 🔔 Create and emit order update notification
       try {
-        const newOrderStatus = updatedOrder.order_status;
-        const newPayStatus = updatedOrder.pay_status;
+        const newOrderStatus = updatedOrder.orderStatus;
+        const newPayStatus = updatedOrder.payStatus;
 
         // Determine notification type based on what changed
         let messageType = 'status_changed';
@@ -281,13 +281,13 @@ exports.vnpayReturn = async (req, res) => {
     const io = req.app.get('io');
     if (io && orderId) {
       const updatedOrder = await Orders.findById(orderId)
-        .populate('acc_id', 'username name email phone')
+        .populate('accountId', 'username name email phone')
         .lean();
 
-      if (updatedOrder && updatedOrder.acc_id) {
-        const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
-          ? updatedOrder.acc_id._id.toString()
-          : updatedOrder.acc_id.toString();
+      if (updatedOrder && updatedOrder.accountId) {
+        const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
+          ? updatedOrder.accountId._id.toString()
+          : updatedOrder.accountId.toString();
 
         // Ensure order is properly formatted with all fields
         const formattedOrder = {
@@ -310,8 +310,8 @@ exports.vnpayReturn = async (req, res) => {
           const notification = await createOrderNotification({
             userId,
             orderId: orderId.toString(),
-            orderStatus: formattedOrder.order_status,
-            payStatus: formattedOrder.pay_status,
+            orderStatus: formattedOrder.orderStatus,
+            payStatus: formattedOrder.payStatus,
             messageType: 'payment_changed'
           });
 
@@ -374,13 +374,13 @@ exports.vnpayIpn = async (req, res) => {
     if (io && req.query.vnp_TxnRef) {
       const orderId = req.query.vnp_TxnRef;
       const updatedOrder = await Orders.findById(orderId)
-        .populate('acc_id', 'username name email phone')
+        .populate('accountId', 'username name email phone')
         .lean();
 
-      if (updatedOrder && updatedOrder.acc_id) {
-        const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
-          ? updatedOrder.acc_id._id.toString()
-          : updatedOrder.acc_id.toString();
+      if (updatedOrder && updatedOrder.accountId) {
+        const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
+          ? updatedOrder.accountId._id.toString()
+          : updatedOrder.accountId.toString();
 
         // Ensure order is properly formatted with all fields
         const formattedOrder = {
@@ -403,8 +403,8 @@ exports.vnpayIpn = async (req, res) => {
           const notification = await createOrderNotification({
             userId,
             orderId: orderId.toString(),
-            orderStatus: formattedOrder.order_status,
-            payStatus: formattedOrder.pay_status,
+            orderStatus: formattedOrder.orderStatus,
+            payStatus: formattedOrder.payStatus,
             messageType: 'payment_changed'
           });
 
@@ -444,13 +444,13 @@ const { applyVoucher } = require('./voucherController');
 exports.checkout = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { name, addressReceive, phone, totalPrice, payment_method, voucherCode, items } = req.body;
+    const { name, addressReceive, phone, totalPrice, paymentMethod, voucherCode, items } = req.body;
 
     // validate input - name is the recipient's name (who will receive the order)
-    if (!name || !addressReceive || !phone || !totalPrice || !payment_method || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Missing required fields: name, addressReceive, phone, totalPrice, payment_method, items' });
+    if (!name || !addressReceive || !phone || !totalPrice || !paymentMethod || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Missing required fields: name, addressReceive, phone, totalPrice, paymentMethod, items' });
     }
-    if (!['COD', 'VNPAY'].includes(payment_method)) {
+    if (!['COD', 'VNPAY'].includes(paymentMethod)) {
       return res.status(400).json({ success: false, message: 'Invalid payment method' });
     }
 
@@ -482,17 +482,17 @@ exports.checkout = async (req, res) => {
 
     // tạo order
     const newOrder = new Orders({
-      acc_id: userId,
+      accountId: userId,
       name,
       addressReceive,
       phone,
       totalPrice,
-      voucher_id: voucher ? voucher._id : null,
+      voucherId: voucher ? voucher._id : null,
       discountAmount,
       finalPrice,
-      order_status: 'pending',
-      pay_status: 'unpaid',
-      payment_method,
+      orderStatus: 'pending',
+      payStatus: 'unpaid',
+      paymentMethod,
     });
 
     const savedOrder = await newOrder.save();
@@ -507,13 +507,13 @@ exports.checkout = async (req, res) => {
     const orderDetailsToSave = [];
     const boughtVariantIds = [];
     for (const item of items) {
-      const { variant_id, UnitPrice, Quantity, feedback_details } = item;
+      const { variantId, unitPrice, Quantity, feedback_details } = item;
 
       // validate item
-      if (!variant_id || !UnitPrice || !Quantity) {
+      if (!variantId || !unitPrice || !Quantity) {
         return res.status(400).json({ success: false, message: 'Invalid item in order details' });
       }
-      if (UnitPrice < 0) {
+      if (unitPrice < 0) {
         return res.status(400).json({ success: false, message: 'Unit price cannot be negative' });
       }
       if (Quantity < 1) {
@@ -523,29 +523,29 @@ exports.checkout = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
       }
 
-      const variant = await newProductVariants.findById(variant_id);
+      const variant = await newProductVariants.findById(variantId);
       if (!variant) {
-        return res.status(404).json({ success: false, message: `Product variant not found: ${variant_id}` });
+        return res.status(404).json({ success: false, message: `Product variant not found: ${variantId}` });
       }
 
       // Kiểm tra số lượng tồn kho
       if (variant.stockQuantity < Quantity) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock for variant ${variant_id}. Available: ${variant.stockQuantity}, Requested: ${Quantity}`
+          message: `Insufficient stock for variant ${variantId}. Available: ${variant.stockQuantity}, Requested: ${Quantity}`
         });
       }
 
       const orderDetail = new OrderDetails({
-        order_id: savedOrder._id,
-        variant_id,
-        UnitPrice,
+        orderId: savedOrder._id,
+        variantId,
+        unitPrice,
         Quantity,
         feedback_details: feedback_details || '',
       });
       const savedDetail = await orderDetail.save();
       orderDetailsToSave.push(savedDetail);
-      boughtVariantIds.push(variant_id.toString());
+      boughtVariantIds.push(variantId.toString());
     }
 
     // Lấy orderDetailsId từ saved order details
@@ -557,8 +557,8 @@ exports.checkout = async (req, res) => {
 
     // Trừ số lượng sản phẩm khỏi kho
     for (const item of items) {
-      const { variant_id, Quantity } = item;
-      const variant = await newProductVariants.findById(variant_id);
+      const { variantId, Quantity } = item;
+      const variant = await newProductVariants.findById(variantId);
       if (variant) {
         variant.stockQuantity -= Quantity;
         // Nếu stockQuantity = 0 thì set variantStatus = inactive
@@ -589,23 +589,23 @@ exports.checkout = async (req, res) => {
 
       // Populate order with user details for Socket.IO emission
       const populatedOrder = await Orders.findById(savedOrder._id)
-        .populate('acc_id', 'username name email phone')
+        .populate('accountId', 'username name email phone')
         .lean();
 
       // Emit new order creation for real-time updates with populated data
       const formattedOrderForSocket = {
         _id: populatedOrder._id,
-        acc_id: populatedOrder.acc_id,
+        accountId: populatedOrder.accountId,
         name: populatedOrder.name,
         addressReceive: populatedOrder.addressReceive,
         phone: populatedOrder.phone,
         totalPrice: populatedOrder.totalPrice,
-        voucher_id: populatedOrder.voucher_id,
+        voucherId: populatedOrder.voucherId,
         discountAmount: populatedOrder.discountAmount,
         finalPrice: populatedOrder.finalPrice,
-        order_status: populatedOrder.order_status,
-        pay_status: populatedOrder.pay_status,
-        payment_method: populatedOrder.payment_method,
+        orderStatus: populatedOrder.orderStatus,
+        payStatus: populatedOrder.payStatus,
+        paymentMethod: populatedOrder.paymentMethod,
         orderDate: populatedOrder.orderDate,
         createdAt: populatedOrder.createdAt,
         updatedAt: populatedOrder.updatedAt || populatedOrder.createdAt,
@@ -629,8 +629,8 @@ exports.checkout = async (req, res) => {
         const notification = await createOrderNotification({
           userId: userId.toString(),
           orderId: savedOrder._id.toString(),
-          orderStatus: savedOrder.order_status,
-          payStatus: savedOrder.pay_status,
+          orderStatus: savedOrder.orderStatus,
+          payStatus: savedOrder.payStatus,
           messageType: 'created'
         });
 
@@ -647,24 +647,24 @@ exports.checkout = async (req, res) => {
       data: {
         order: {
           _id: savedOrder._id,
-          acc_id: savedOrder.acc_id,
+          accountId: savedOrder.accountId,
           addressReceive: savedOrder.addressReceive,
           phone: savedOrder.phone,
           totalPrice: savedOrder.totalPrice,
-          voucher_id: savedOrder.voucher_id,
+          voucherId: savedOrder.voucherId,
           discountAmount: savedOrder.discountAmount,
           finalPrice: savedOrder.finalPrice,
-          order_status: savedOrder.order_status,
-          pay_status: savedOrder.pay_status,
-          payment_method: savedOrder.payment_method,
+          orderStatus: savedOrder.orderStatus,
+          payStatus: savedOrder.payStatus,
+          paymentMethod: savedOrder.paymentMethod,
           orderDate: savedOrder.orderDate,
           orderDetails: orderDetailsIds
         },
         orderDetails: orderDetailsToSave.map(detail => ({
           _id: detail._id,
-          order_id: detail.order_id,
-          variant_id: detail.variant_id,
-          UnitPrice: detail.UnitPrice,
+          orderId: detail.orderId,
+          variantId: detail.variantId,
+          unitPrice: detail.unitPrice,
           Quantity: detail.Quantity,
           feedback: detail.feedback
         })),
@@ -711,15 +711,15 @@ exports.getOrderByIdForUser = async (req, res) => {
     }
 
     const order = await Orders.findById(orderId)
-      .populate('acc_id', 'username name')
-      .populate('voucher_id', 'code discountType discountValue');
+      .populate('accountId', 'username name')
+      .populate('voucherId', 'code discountType discountValue');
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
     // Kiểm tra quyền
-    if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id._id.toString() !== user.id) {
+    if (user.role !== 'admin' && user.role !== 'manager' && order.accountId._id.toString() !== user.id) {
       return res.status(403).json({ success: false, message: 'Access denied: Can only view own order' });
     }
 
@@ -748,13 +748,13 @@ exports.cancelOrder = async (req, res) => {
     }
 
     // Chỉ cho phép hủy khi trạng thái là pending
-    if (order.order_status !== 'pending') {
+    if (order.orderStatus !== 'pending') {
       return res.status(400).json({ message: 'Only pending orders can be cancelled' });
     }
 
     // Xử lý voucher nếu order có sử dụng voucher
-    if (order.voucher_id) {
-      const voucher = await Voucher.findById(order.voucher_id);
+    if (order.voucherId) {
+      const voucher = await Voucher.findById(order.voucherId);
       if (voucher) {
         // Giảm usedCount của voucher (hoàn lại số lần sử dụng)
         if (voucher.usedCount > 0) {
@@ -767,8 +767,8 @@ exports.cancelOrder = async (req, res) => {
     // Hoàn lại số lượng sản phẩm vào kho
     if (order.orderDetails && order.orderDetails.length > 0) {
       for (const orderDetail of order.orderDetails) {
-        if (orderDetail.variant_id) {
-          const variant = await newProductVariants.findById(orderDetail.variant_id);
+        if (orderDetail.variantId) {
+          const variant = await newProductVariants.findById(orderDetail.variantId);
           if (variant) {
             // Lưu stockQuantity trước khi hoàn lại để kiểm tra
             const oldStockQuantity = variant.stockQuantity;
@@ -786,13 +786,13 @@ exports.cancelOrder = async (req, res) => {
 
     // Cập nhật trạng thái sang cancelled và lưu cancelReason
     let updateData = {
-      order_status: 'cancelled',
+      orderStatus: 'cancelled',
       cancelReason
     };
 
     // If it's a paid VNPAY order, automatically start refund process
-    if (order.payment_method === 'VNPAY' && order.pay_status === 'paid') {
-      updateData.refund_status = 'pending_refund';
+    if (order.paymentMethod === 'VNPAY' && order.payStatus === 'paid') {
+      updateData.refundStatus = 'pending_refund';
     }
 
     const updatedOrder = await orderService.updateOrderService(
@@ -803,15 +803,15 @@ exports.cancelOrder = async (req, res) => {
 
     // Emit Socket.IO event for order cancellation
     const io = req.app.get('io');
-    if (io && updatedOrder && updatedOrder.acc_id) {
-      const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
-        ? updatedOrder.acc_id._id.toString()
-        : updatedOrder.acc_id.toString();
+    if (io && updatedOrder && updatedOrder.accountId) {
+      const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
+        ? updatedOrder.accountId._id.toString()
+        : updatedOrder.accountId.toString();
 
       // Ensure order is properly formatted with all fields
       const formattedOrder = {
         ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
-        acc_id: updatedOrder.acc_id,
+        accountId: updatedOrder.accountId,
         name: updatedOrder.name,
         orderDate: updatedOrder.orderDate,
         updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
@@ -831,8 +831,8 @@ exports.cancelOrder = async (req, res) => {
         const notification = await createOrderNotification({
           userId,
           orderId: orderId.toString(),
-          orderStatus: updatedOrder.order_status,
-          payStatus: updatedOrder.pay_status,
+          orderStatus: updatedOrder.orderStatus,
+          payStatus: updatedOrder.payStatus,
           messageType: 'cancelled'
         });
 
@@ -848,7 +848,7 @@ exports.cancelOrder = async (req, res) => {
     res.status(200).json({
       message: 'Order cancelled successfully',
       order: updatedOrder,
-      voucherRefunded: order.voucher_id ? true : false,
+      voucherRefunded: order.voucherId ? true : false,
       stockRestored: order.orderDetails ? order.orderDetails.length : 0
     });
   } catch (error) {
@@ -903,7 +903,7 @@ exports.addFeedbackProduct = async (req, res) => {
     }
 
     // Chỉ cho phép feedback khi đơn hàng đã giao
-    if (order.order_status !== 'delivered') {
+    if (order.orderStatus !== 'delivered') {
       return res.status(400).json({
         success: false,
         message: 'Feedback can only be added when the order is delivered',
@@ -912,8 +912,8 @@ exports.addFeedbackProduct = async (req, res) => {
 
     // Tìm chi tiết sản phẩm trong đơn hàng
     const orderDetail = await OrderDetails.findOne({
-      order_id: orderId,
-      variant_id: variantId,
+      orderId: orderId,
+      variantId: variantId,
     });
 
     if (!orderDetail) {
@@ -931,10 +931,10 @@ exports.addFeedbackProduct = async (req, res) => {
     if (content !== undefined) {
       updateData['feedback.content'] = content === null ? null : content.trim();
     }
-    // Reset is_deleted và set timestamps khi tạo feedback mới
-    updateData['feedback.is_deleted'] = false;
-    updateData['feedback.created_at'] = new Date();
-    updateData['feedback.updated_at'] = new Date();
+    // Reset isDeleted và set timestamps khi tạo feedback mới
+    updateData['feedback.isDeleted'] = false;
+    updateData['feedback.createdAt'] = new Date();
+    updateData['feedback.updatedAt'] = new Date();
 
     // Cập nhật trực tiếp vào database
     const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
@@ -959,8 +959,8 @@ exports.addFeedbackProduct = async (req, res) => {
       feedback: savedOrderDetail.feedback,
       orderDetail: {
         _id: savedOrderDetail._id,
-        order_id: savedOrderDetail.order_id,
-        variant_id: savedOrderDetail.variant_id,
+        orderId: savedOrderDetail.orderId,
+        variantId: savedOrderDetail.variantId,
         feedback: savedOrderDetail.feedback
       },
       order: {
@@ -1020,7 +1020,7 @@ exports.editFeedbackProduct = async (req, res) => {
     }
 
     // Chỉ cho phép edit feedback khi đơn hàng đã giao
-    if (order.order_status !== 'delivered') {
+    if (order.orderStatus !== 'delivered') {
       return res.status(400).json({
         success: false,
         message: 'Feedback can only be edited when the order is delivered',
@@ -1029,8 +1029,8 @@ exports.editFeedbackProduct = async (req, res) => {
 
     // Tìm chi tiết sản phẩm trong đơn hàng
     const orderDetail = await OrderDetails.findOne({
-      order_id: orderId,
-      variant_id: variantId,
+      orderId: orderId,
+      variantId: variantId,
     });
 
     if (!orderDetail) {
@@ -1041,7 +1041,7 @@ exports.editFeedbackProduct = async (req, res) => {
     }
 
     // Kiểm tra feedback có bị xóa không
-    if (orderDetail.feedback && orderDetail.feedback.is_deleted === true) {
+    if (orderDetail.feedback && orderDetail.feedback.isDeleted === true) {
       return res.status(404).json({
         success: false,
         message: 'Feedback has been deleted',
@@ -1069,8 +1069,8 @@ exports.editFeedbackProduct = async (req, res) => {
     if (content !== undefined) {
       updateData['feedback.content'] = content === null ? null : content.trim();
     }
-    // Cập nhật updated_at khi edit
-    updateData['feedback.updated_at'] = new Date();
+    // Cập nhật updatedAt khi edit
+    updateData['feedback.updatedAt'] = new Date();
 
     // Cập nhật trực tiếp vào database
     const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
@@ -1092,8 +1092,8 @@ exports.editFeedbackProduct = async (req, res) => {
       feedback: savedOrderDetail.feedback,
       orderDetail: {
         _id: savedOrderDetail._id,
-        order_id: savedOrderDetail.order_id,
-        variant_id: savedOrderDetail.variant_id,
+        orderId: savedOrderDetail.orderId,
+        variantId: savedOrderDetail.variantId,
         feedback: savedOrderDetail.feedback
       }
     });
@@ -1122,7 +1122,7 @@ exports.deleteFeedbackProduct = async (req, res) => {
     }
 
     // Chỉ cho phép xóa feedback khi đơn hàng đã giao
-    if (order.order_status !== 'delivered') {
+    if (order.orderStatus !== 'delivered') {
       return res.status(400).json({
         success: false,
         message: 'Feedback can only be deleted when the order is delivered',
@@ -1131,8 +1131,8 @@ exports.deleteFeedbackProduct = async (req, res) => {
 
     // Tìm chi tiết sản phẩm trong đơn hàng
     const orderDetail = await OrderDetails.findOne({
-      order_id: orderId,
-      variant_id: variantId,
+      orderId: orderId,
+      variantId: variantId,
     });
 
     if (!orderDetail) {
@@ -1143,7 +1143,7 @@ exports.deleteFeedbackProduct = async (req, res) => {
     }
 
     // Kiểm tra feedback có bị xóa không
-    if (orderDetail.feedback && orderDetail.feedback.is_deleted === true) {
+    if (orderDetail.feedback && orderDetail.feedback.isDeleted === true) {
       return res.status(404).json({
         success: false,
         message: 'Feedback has been deleted',
@@ -1163,19 +1163,19 @@ exports.deleteFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Soft delete feedback (set is_deleted = true)
+    // Soft delete feedback (set isDeleted = true)
     console.log('Deleting feedback for orderDetail:', orderDetail._id);
     const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
       orderDetail._id,
       {
         $set: {
-          'feedback.is_deleted': true,
-          'feedback.updated_at': new Date()
+          'feedback.isDeleted': true,
+          'feedback.updatedAt': new Date()
         }
       },
       { new: true, runValidators: true }
     );
-    console.log('Feedback deleted, is_deleted:', savedOrderDetail.feedback.is_deleted);
+    console.log('Feedback deleted, isDeleted:', savedOrderDetail.feedback.isDeleted);
 
     if (!savedOrderDetail) {
       return res.status(500).json({
@@ -1190,20 +1190,20 @@ exports.deleteFeedbackProduct = async (req, res) => {
       feedback: {
         rating: savedOrderDetail.feedback.rating,
         content: savedOrderDetail.feedback.content,
-        created_at: savedOrderDetail.feedback.created_at,
-        updated_at: savedOrderDetail.feedback.updated_at,
-        is_deleted: true
+        createdAt: savedOrderDetail.feedback.createdAt,
+        updatedAt: savedOrderDetail.feedback.updatedAt,
+        isDeleted: true
       },
       orderDetail: {
         _id: savedOrderDetail._id,
-        order_id: savedOrderDetail.order_id,
-        variant_id: savedOrderDetail.variant_id,
+        orderId: savedOrderDetail.orderId,
+        variantId: savedOrderDetail.variantId,
         feedback: {
           rating: savedOrderDetail.feedback.rating,
           content: savedOrderDetail.feedback.content,
-          created_at: savedOrderDetail.feedback.created_at,
-          updated_at: savedOrderDetail.feedback.updated_at,
-          is_deleted: true
+          createdAt: savedOrderDetail.feedback.createdAt,
+          updatedAt: savedOrderDetail.feedback.updatedAt,
+          isDeleted: true
         }
       }
     });
@@ -1255,7 +1255,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     // Tìm tất cả feedback của tất cả variants thuộc product này
     // Include deleted feedbacks so they can be shown to users with deletion message
     const query = {
-      variant_id: { $in: variantIds },
+      variantId: { $in: variantIds },
       $or: [
         { 'feedback.rating': { $exists: true, $ne: null } },
         { 'feedback.content': { $exists: true, $ne: '' } }
@@ -1265,37 +1265,37 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     // Lấy tất cả feedback trước để sắp xếp custom
     const allFeedbacks = await OrderDetails.find(query)
       .populate({
-        path: 'order_id',
-        select: 'orderDate order_status acc_id',
+        path: 'orderId',
+        select: 'orderDate orderStatus accountId',
         populate: {
-          path: 'acc_id',
+          path: 'accountId',
           select: 'username name image email phone'
         }
       })
       .populate({
-        path: 'variant_id',
+        path: 'variantId',
         select: 'productColorId productSizeId variantImage',
         populate: [
           {
             path: 'productColorId',
-            select: 'color_name'
+            select: 'productColorName'
           },
           {
             path: 'productSizeId',
-            select: 'size_name'
+            select: 'productSizeName'
           }
         ]
       })
-      .sort({ 'order_id.orderDate': -1 }); // Sắp xếp theo thời gian trước
+      .sort({ 'orderId.orderDate': -1 }); // Sắp xếp theo thời gian trước
 
     // Custom sorting: feedback của user hiện tại lên đầu, sau đó theo thời gian
     const sortedFeedbacks = allFeedbacks
-      .filter(feedback => feedback.order_id?.acc_id?._id) // Skip entries with null/undefined order_id, acc_id, or _id
+      .filter(feedback => feedback.orderId?.accountId?._id) // Skip entries with null/undefined orderId, accountId, or _id
       .sort((a, b) => {
         // Nếu có user hiện tại đăng nhập
         if (currentUserId) {
-          const aIsCurrentUser = a.order_id?.acc_id?._id?.toString() === currentUserId || false;
-          const bIsCurrentUser = b.order_id?.acc_id?._id?.toString() === currentUserId || false;
+          const aIsCurrentUser = a.orderId?.accountId?._id?.toString() === currentUserId || false;
+          const bIsCurrentUser = b.orderId?.accountId?._id?.toString() === currentUserId || false;
 
           // Ưu tiên 1: Feedback của user hiện tại lên đầu tiên
           if (aIsCurrentUser && !bIsCurrentUser) return -1; // a lên đầu
@@ -1303,13 +1303,13 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
         }
 
         // Ưu tiên 2 (hoặc mặc định nếu không có user): Sắp xếp theo thời gian
-        const aDate = a.order_id?.orderDate ? new Date(a.order_id.orderDate) : new Date(0);
-        const bDate = b.order_id?.orderDate ? new Date(b.order_id.orderDate) : new Date(0);
+        const aDate = a.orderId?.orderDate ? new Date(a.orderId.orderDate) : new Date(0);
+        const bDate = b.orderId?.orderDate ? new Date(b.orderId.orderDate) : new Date(0);
         return bDate - aDate; // Mới nhất trước
       });
 
     // Lấy tổng số feedback (excluding deleted ones for statistics)
-    const activeFeedbacks = sortedFeedbacks.filter(f => !f.feedback.is_deleted);
+    const activeFeedbacks = sortedFeedbacks.filter(f => !f.feedback.isDeleted);
     const totalFeedbacks = activeFeedbacks.length;
 
     // Tính toán thống kê với rating (exclude deleted feedbacks from statistics)
@@ -1339,38 +1339,38 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     // Format response
     const formattedFeedbacks = sortedFeedbacks.map(feedback => ({
       _id: feedback._id,
-      order_id: feedback.order_id._id,
-      order_date: feedback.order_id.orderDate,
-      order_status: feedback.order_id.order_status,
+      orderId: feedback.orderId._id,
+      order_date: feedback.orderId.orderDate,
+      orderStatus: feedback.orderId.orderStatus,
       customer: {
-        user_id: feedback.order_id.acc_id._id,
-        username: feedback.order_id.acc_id.username,
-        name: feedback.order_id.acc_id.name,
-        image: feedback.order_id.acc_id.image,
-        email: feedback.order_id.acc_id.email,
-        phone: feedback.order_id.acc_id.phone,
-        is_current_user: currentUserId ? feedback.order_id.acc_id._id.toString() === currentUserId : false
+        user_id: feedback.orderId.accountId._id,
+        username: feedback.orderId.accountId.username,
+        name: feedback.orderId.accountId.name,
+        image: feedback.orderId.accountId.image,
+        email: feedback.orderId.accountId.email,
+        phone: feedback.orderId.accountId.phone,
+        is_current_user: currentUserId ? feedback.orderId.accountId._id.toString() === currentUserId : false
       },
-      variant: feedback.variant_id ? {
-        variant_id: feedback.variant_id._id,
-        color: feedback.variant_id.productColorId ? feedback.variant_id.productColorId.color_name : null,
-        size: feedback.variant_id.productSizeId ? feedback.variant_id.productSizeId.size_name : null,
-        image: feedback.variant_id.variantImage || null
+      variant: feedback.variantId ? {
+        variantId: feedback.variantId._id,
+        color: feedback.variantId.productColorId ? feedback.variantId.productColorId.productColorName : null,
+        size: feedback.variantId.productSizeId ? feedback.variantId.productSizeId.productSizeName : null,
+        image: feedback.variantId.variantImage || null
       } : null,
       feedback: {
         rating: feedback.feedback.rating,
-        content: feedback.feedback.is_deleted
+        content: feedback.feedback.isDeleted
           ? 'This feedback has been deleted by staff/admin'
           : feedback.feedback.content,
-        created_at: feedback.feedback.created_at,
-        updated_at: feedback.feedback.updated_at,
-        is_deleted: feedback.feedback.is_deleted,
+        createdAt: feedback.feedback.createdAt,
+        updatedAt: feedback.feedback.updatedAt,
+        isDeleted: feedback.feedback.isDeleted,
         has_rating: feedback.feedback.rating !== null,
-        has_content: feedback.feedback.is_deleted
+        has_content: feedback.feedback.isDeleted
           ? true  // Show content flag as true so the deletion message displays
           : (feedback.feedback.content && feedback.feedback.content.trim() !== '')
       },
-      unit_price: feedback.UnitPrice,
+      unit_price: feedback.unitPrice,
       quantity: feedback.Quantity
     }));
 
@@ -1441,13 +1441,13 @@ exports.cancelOrder = async (req, res) => {
     }
 
     // Chỉ cho phép hủy khi trạng thái là pending
-    if (order.order_status !== 'pending') {
+    if (order.orderStatus !== 'pending') {
       return res.status(400).json({ message: 'Only pending orders can be cancelled' });
     }
 
     // Xử lý voucher nếu order có sử dụng voucher
-    if (order.voucher_id) {
-      const voucher = await Voucher.findById(order.voucher_id);
+    if (order.voucherId) {
+      const voucher = await Voucher.findById(order.voucherId);
       if (voucher) {
         // Giảm usedCount của voucher (hoàn lại số lần sử dụng)
         if (voucher.usedCount > 0) {
@@ -1460,8 +1460,8 @@ exports.cancelOrder = async (req, res) => {
     // Hoàn lại số lượng sản phẩm vào kho
     if (order.orderDetails && order.orderDetails.length > 0) {
       for (const orderDetail of order.orderDetails) {
-        if (orderDetail.variant_id) {
-          const variant = await newProductVariants.findById(orderDetail.variant_id);
+        if (orderDetail.variantId) {
+          const variant = await newProductVariants.findById(orderDetail.variantId);
           if (variant) {
             // Lưu stockQuantity trước khi hoàn lại để kiểm tra
             const oldStockQuantity = variant.stockQuantity;
@@ -1479,13 +1479,13 @@ exports.cancelOrder = async (req, res) => {
 
     // Cập nhật trạng thái sang cancelled và lưu cancelReason
     let updateData = {
-      order_status: 'cancelled',
+      orderStatus: 'cancelled',
       cancelReason
     };
 
     // If it's a paid VNPAY order, automatically start refund process
-    if (order.payment_method === 'VNPAY' && order.pay_status === 'paid') {
-      updateData.refund_status = 'pending_refund';
+    if (order.paymentMethod === 'VNPAY' && order.payStatus === 'paid') {
+      updateData.refundStatus = 'pending_refund';
     }
 
     const updatedOrder = await orderService.updateOrderService(
@@ -1495,15 +1495,15 @@ exports.cancelOrder = async (req, res) => {
     );
     // Emit Socket.IO event for order cancellation
     const io = req.app.get('io');
-    if (io && updatedOrder && updatedOrder.acc_id) {
-      const userId = typeof updatedOrder.acc_id === 'object' && updatedOrder.acc_id._id
-        ? updatedOrder.acc_id._id.toString()
-        : updatedOrder.acc_id.toString();
+    if (io && updatedOrder && updatedOrder.accountId) {
+      const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
+        ? updatedOrder.accountId._id.toString()
+        : updatedOrder.accountId.toString();
 
       // Ensure order is properly formatted with all fields
       const formattedOrder = {
         ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
-        acc_id: updatedOrder.acc_id,
+        accountId: updatedOrder.accountId,
         name: updatedOrder.name,
         orderDate: updatedOrder.orderDate,
         updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
@@ -1523,8 +1523,8 @@ exports.cancelOrder = async (req, res) => {
         const notification = await createOrderNotification({
           userId,
           orderId: orderId.toString(),
-          orderStatus: updatedOrder.order_status,
-          payStatus: updatedOrder.pay_status,
+          orderStatus: updatedOrder.orderStatus,
+          payStatus: updatedOrder.payStatus,
           messageType: 'cancelled'
         });
 
@@ -1540,7 +1540,7 @@ exports.cancelOrder = async (req, res) => {
     res.status(200).json({
       message: 'Order cancelled successfully',
       order: updatedOrder,
-      voucherRefunded: order.voucher_id ? true : false,
+      voucherRefunded: order.voucherId ? true : false,
       stockRestored: order.orderDetails ? order.orderDetails.length : 0
     });
   } catch (error) {
@@ -1552,16 +1552,16 @@ exports.cancelOrder = async (req, res) => {
 
 exports.getUserOrders = async (req, res) => {
   try {
-    const { acc_id } = req.params;
+    const { accountId } = req.params;
     // Validate account ID
-    if (!mongoose.isValidObjectId(acc_id)) {
+    if (!mongoose.isValidObjectId(accountId)) {
       return res.status(400).json({ message: 'Invalid account ID' });
     }
     // Check authorization: only admin, manager, or the user themselves can access
-    if (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.id !== acc_id) {
+    if (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.id !== accountId) {
       return res.status(403).json({ message: 'Access denied: Can only view own orders' });
     }
-    const orders = await orderService.getUserOrdersService(acc_id);
+    const orders = await orderService.getUserOrdersService(accountId);
     res.status(200).json({
       success: true,
       message: 'Orders retrieved successfully',

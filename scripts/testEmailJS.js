@@ -63,7 +63,7 @@ async function testEmailJS(testEmail) {
     to_name: testEmail.split('@')[0],
     subject: 'Test Email from GASH Backend',
     message: 'This is a test email to verify EmailJS configuration. If you receive this, EmailJS is working correctly!',
-    order_id: '#TEST1234',
+    orderId: '#TEST1234',
   };
 
   console.log('📦 Template Parameters:');

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const ProductColorsSchema = new mongoose.Schema({
-  color_name: {
+  productColorName: {
     type: String,
     required: [true, 'Color name is required'],
     minlength: [2, 'Color name must be at least 2 characters'],
@@ -15,7 +15,7 @@ const ProductColorsSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Thêm index cho color_name để tăng tốc độ tìm kiếm
-ProductColorsSchema.index({ color_name: 1 });
+// Thêm index cho productColorName để tăng tốc độ tìm kiếm
+ProductColorsSchema.index({ productColorName: 1 });
 
 module.exports = mongoose.model('ProductColors', ProductColorsSchema);

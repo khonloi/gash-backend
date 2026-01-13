@@ -762,7 +762,7 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
                     populate: [
                         {
                             path: 'categoryId',
-                            select: 'cat_name'
+                            select: 'categoryName'
                         },
                         {
                             path: 'productImageIds',
@@ -774,11 +774,11 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
                             populate: [
                                 {
                                     path: 'productColorId',
-                                    select: 'color_name color_code'
+                                    select: 'productColorName color_code'
                                 },
                                 {
                                     path: 'productSizeId',
-                                    select: 'size_name'
+                                    select: 'productSizeName'
                                 }
                             ],
                             select: 'variantImage variantPrice stockQuantity variantStatus'

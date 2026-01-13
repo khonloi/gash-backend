@@ -560,7 +560,7 @@ exports.verifyAuthentication = async (username, body, requestOrigin = null) => {
       await account.save();
 
       // Check account status
-      if (account.acc_status !== 'active') {
+      if (account.accountStatus !== 'active') {
         return { status: 403, response: { message: 'Account is inactive or suspended' } };
       }
 
@@ -586,7 +586,7 @@ exports.verifyAuthentication = async (username, body, requestOrigin = null) => {
             address: account.address,
             image: account.image,
             role: account.role,
-            acc_status: account.acc_status,
+            accountStatus: account.accountStatus,
           },
         },
       };

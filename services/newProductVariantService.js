@@ -334,13 +334,13 @@ const deleteProductVariant = async (variantId) => {
     }
 
     // IMPORTANT: Only check OrderDetails for THIS specific variant (variantId)
-    // This query ONLY finds OrderDetails where variant_id matches the variant we want to delete
+    // This query ONLY finds OrderDetails where variantId matches the variant we want to delete
     // It does NOT check other variants of the same product
     const orderDetails = await OrderDetails.find({
-      variant_id: variantId  // Only this variant, not other variants of the same product
+      variantId: variantId  // Only this variant, not other variants of the same product
     }).populate({
-      path: "order_id",
-      select: "order_status",
+      path: "orderId",
+      select: "orderStatus",
     });
 
     // Only prevent deletion if THIS variant has orders that are pending, confirmed, or shipping
@@ -348,17 +348,17 @@ const deleteProductVariant = async (variantId) => {
     // NOTE: Other variants of the same product are NOT checked - they can be deleted independently
     const hasActiveOrders = orderDetails.some(
       (detail) => {
-        // Skip if order_id is null or not populated
-        if (!detail.order_id) {
+        // Skip if orderId is null or not populated
+        if (!detail.orderId) {
           return false;
         }
         // Double-check: ensure this order detail belongs to the variant we're checking
         // This should always be true due to the query filter, but adding for safety
-        const detailVariantId = detail.variant_id?.toString ? detail.variant_id.toString() : String(detail.variant_id);
+        const detailVariantId = detail.variantId?.toString ? detail.variantId.toString() : String(detail.variantId);
         if (detailVariantId && detailVariantId !== variantId.toString()) {
           return false; // This shouldn't happen, but safety check
         }
-        const status = detail.order_id.order_status;
+        const status = detail.orderId.orderStatus;
         return status === "pending" || status === "confirmed" || status === "shipping";
       }
     );
@@ -464,7 +464,7 @@ const bulkCreateProductVariants = async (bulkData) => {
 
     if (existingVariants.length > 0) {
       const existingSizes = existingVariants.map(
-        (v) => v.productSizeId?.size_name || v.productSizeId?.toString() || v.productSizeId
+        (v) => v.productSizeId?.productSizeName || v.productSizeId?.toString() || v.productSizeId
       );
       throw new Error(
         `Variants already exist for some sizes: ${existingSizes.join(", ")}`

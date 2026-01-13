@@ -47,13 +47,13 @@ exports.createPaymentUrl = async (orderId, bankCode, language, user, req) => {
       throw error;
     }
 
-    if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id.toString() !== user.id) {
+    if (user.role !== 'admin' && user.role !== 'manager' && order.accountId.toString() !== user.id) {
       const error = new Error('Access denied: Can only pay for own order');
       error.status = 403;
       throw error;
     }
 
-    if (order.pay_status === 'paid') {
+    if (order.payStatus === 'paid') {
       const error = new Error('Order already paid');
       error.status = 400;
       throw error;
@@ -155,17 +155,17 @@ exports.handleReturn = async (vnp_Params) => {
     }
 
     if (rspCode === "00") {
-      if (order.pay_status === 'paid') {
+      if (order.payStatus === 'paid') {
         return { code: "00", message: 'Payment successful' };
       }
-      order.pay_status = 'paid';
+      order.payStatus = 'paid';
       order.vnpay_expiry_time = null; // Clear expiry time on successful payment
       order.vnpay_payment_url = ''; // Clear payment URL
       await order.save();
       return { code: rspCode, message: 'Payment successful' };
     } else {
-      order.pay_status = 'failed';
-      order.order_status = 'cancelled'; // Set order status to cancelled when payment fails
+      order.payStatus = 'failed';
+      order.orderStatus = 'cancelled'; // Set order status to cancelled when payment fails
       order.vnpay_expiry_time = null; // Clear expiry time on failed payment
       order.vnpay_payment_url = ''; // Clear payment URL
       await order.save();
@@ -205,19 +205,19 @@ exports.handleIpn = async (vnp_Params) => {
       return { RspCode: '04', Message: 'Amount invalid' };
     }
 
-    if (order.pay_status === 'paid') {
+    if (order.payStatus === 'paid') {
       return { RspCode: '02', Message: 'Order already updated' };
     }
 
     if (rspCode === "00") {
-      order.pay_status = 'paid';
+      order.payStatus = 'paid';
       order.vnpay_expiry_time = null; // Clear expiry time on successful payment
       order.vnpay_payment_url = ''; // Clear payment URL
       await order.save();
       return { RspCode: '00', Message: 'Success' };
     } else {
-      order.pay_status = 'failed';
-      order.order_status = 'cancelled'; // Set order status to cancelled when payment fails
+      order.payStatus = 'failed';
+      order.orderStatus = 'cancelled'; // Set order status to cancelled when payment fails
       order.vnpay_expiry_time = null; // Clear expiry time on failed payment
       order.vnpay_payment_url = ''; // Clear payment URL
       await order.save();

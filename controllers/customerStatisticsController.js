@@ -5,8 +5,8 @@ const ExcelJS = require("exceljs");
 exports.getCustomerStatistics = async (req, res) => {
   try {
     const totalCustomers = await Account.countDocuments({ role: "user" });
-    const activeCustomers = await Account.countDocuments({ role: "user", acc_status: "active" });
-    const inactiveCustomers = await Account.countDocuments({ role: "user", acc_status: "inactive" });
+    const activeCustomers = await Account.countDocuments({ role: "user", accountStatus: "active" });
+    const inactiveCustomers = await Account.countDocuments({ role: "user", accountStatus: "inactive" });
 
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
@@ -42,7 +42,7 @@ exports.exportCustomerStatistics = async (req, res) => {
       { header: "Username", key: "username", width: 20 },
       { header: "Email", key: "email", width: 25 },
       { header: "Phone", key: "phone", width: 15 },
-      { header: "Status", key: "acc_status", width: 15 },
+      { header: "Status", key: "accountStatus", width: 15 },
       { header: "Role", key: "role", width: 10 },
       { header: "Created At", key: "createdAt", width: 20 },
     ];
@@ -52,7 +52,7 @@ exports.exportCustomerStatistics = async (req, res) => {
         username: acc.username,
         email: acc.email,
         phone: acc.phone || "",
-        acc_status: acc.acc_status,
+        accountStatus: acc.accountStatus,
         role: acc.role,
         createdAt: new Date(acc.createdAt).toLocaleDateString(),
       });

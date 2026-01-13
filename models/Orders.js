@@ -2,13 +2,13 @@ const mongoose = require('mongoose');
 
 const OrdersSchema = new mongoose.Schema(
   {
-    acc_id: {
+    accountId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Accounts',
       required: [true, 'Account ID is required'],
     },
 
-    voucher_id: {
+    voucherId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Vouchers',
       default: null,
@@ -53,31 +53,31 @@ const OrdersSchema = new mongoose.Schema(
       min: [0, 'Final price must be >= 0'],
     },
 
-    order_status: {
+    orderStatus: {
       type: String,
       enum: ['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'],
       default: 'pending',
     },
 
-    pay_status: {
+    payStatus: {
       type: String,
       enum: ['unpaid', 'paid'],
       default: 'unpaid',
     },
 
-    payment_method: {
+    paymentMethod: {
       type: String,
       enum: ['COD', 'VNPAY'],
       required: [true, 'Payment method is required'],
     },
 
-    refund_status: {
+    refundStatus: {
       type: String,
       enum: ['not_applicable', 'pending_refund', 'refunded'],
       default: 'not_applicable',
     },
 
-    refund_proof: {
+    refundProof: {
       type: String,
       default: '',
     },
@@ -88,7 +88,7 @@ const OrdersSchema = new mongoose.Schema(
           maxlength: [500, 'Cancel reason cannot exceed 500 characters'],
           required: [
             function () {
-              return this.order_status === 'cancelled';
+              return this.orderStatus === 'cancelled';
             },
             'Cancel reason is required when order is cancelled',
           ],

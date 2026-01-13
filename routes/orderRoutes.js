@@ -40,7 +40,7 @@ router.patch('/:id/cancel', authenticateJWT, cancelOrder);
 router.get('/get-order-by-id/:id', authenticateJWT, getOrderById);
 
 // api get all orders for a specific user
-router.get('/user/:acc_id', authenticateJWT, getUserOrders);
+router.get('/user/:accountId', authenticateJWT, getUserOrders);
 
 // ADMIN APIs
 // Lấy tất cả đơn hàng cho admin

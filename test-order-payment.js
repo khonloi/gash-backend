@@ -16,12 +16,12 @@ async function testOrderPaymentStatus() {
     
     // Create a test order
     const testOrder = new Orders({
-      acc_id: new mongoose.Types.ObjectId(), // This is just a placeholder
+      accountId: new mongoose.Types.ObjectId(), // This is just a placeholder
       addressReceive: 'Test Address',
       phone: '1234567890',
       totalPrice: 100,
-      order_status: 'pending',
-      pay_status: 'unpaid',
+      orderStatus: 'pending',
+      payStatus: 'unpaid',
       shipping_status: 'not_shipped'
     });
     
@@ -29,27 +29,27 @@ async function testOrderPaymentStatus() {
     console.log('Created test order:', savedOrder);
     
     // Update payment status to failed
-    savedOrder.pay_status = 'failed';
+    savedOrder.payStatus = 'failed';
     
     // This should trigger our new logic in the save middleware
     const updatedOrder = await Orders.findByIdAndUpdate(
       savedOrder._id,
-      { pay_status: 'failed' },
+      { payStatus: 'failed' },
       { new: true, runValidators: true }
     );
     
     console.log('Updated order:', updatedOrder);
     
-    // Verify that order_status is now 'cancelled'
+    // Verify that orderStatus is now 'cancelled'
     const finalOrder = await Orders.findById(savedOrder._id);
     console.log('Final order state:', finalOrder);
     
-    if (finalOrder.pay_status === 'failed' && finalOrder.order_status === 'cancelled') {
+    if (finalOrder.payStatus === 'failed' && finalOrder.orderStatus === 'cancelled') {
       console.log('Test PASSED: Order status was automatically set to cancelled when payment failed');
     } else {
       console.log('Test FAILED: Order status was not updated correctly');
-      console.log('pay_status:', finalOrder.pay_status);
-      console.log('order_status:', finalOrder.order_status);
+      console.log('payStatus:', finalOrder.payStatus);
+      console.log('orderStatus:', finalOrder.orderStatus);
     }
     
     // Clean up - delete test order

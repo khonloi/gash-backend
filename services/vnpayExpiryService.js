@@ -14,15 +14,15 @@ class VNPayExpiryService {
         // 4. Expiry time has passed
         // 5. Are not already cancelled
         const expiredOrders = await Orders.find({
-          payment_method: 'VNPAY',
-          pay_status: 'unpaid',
+          paymentMethod: 'VNPAY',
+          payStatus: 'unpaid',
           vnpay_expiry_time: { $ne: null, $lt: now },
-          order_status: { $ne: 'cancelled' }
+          orderStatus: { $ne: 'cancelled' }
         });
 
         for (const order of expiredOrders) {
           // Cancel the order due to VNPay expiry
-          order.order_status = 'cancelled';
+          order.orderStatus = 'cancelled';
           order.cancelReason = 'Payment timeout: VNPay payment not completed within 15 minutes';
           // Clear VNPay payment data
           order.vnpay_payment_url = '';

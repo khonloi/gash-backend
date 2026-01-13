@@ -46,7 +46,7 @@ exports.addProductToLive = async (liveId, productId, userId = null) => {
             populate: [
                 {
                     path: 'categoryId',
-                    select: 'cat_name'
+                    select: 'categoryName'
                 },
                 {
                     path: 'productImageIds',
@@ -65,7 +65,7 @@ exports.addProductToLive = async (liveId, productId, userId = null) => {
                 _id: liveProduct.productId._id,
                 productName: liveProduct.productId.productName,
                 categoryId: liveProduct.productId.categoryId ? {
-                    cat_name: liveProduct.productId.categoryId.cat_name
+                    categoryName: liveProduct.productId.categoryId.categoryName
                 } : null,
                 // Send full productImageIds array with isMain flag
                 productImageIds: liveProduct.productId.productImageIds || []
@@ -78,7 +78,7 @@ exports.addProductToLive = async (liveId, productId, userId = null) => {
             product: {
                 productName: liveProduct.productId.productName,
                 category: liveProduct.productId.categoryId ? {
-                    cat_name: liveProduct.productId.categoryId.cat_name
+                    categoryName: liveProduct.productId.categoryId.categoryName
                 } : null,
                 image: liveProduct.productId.productImageIds && liveProduct.productId.productImageIds.length > 0
                     ? (liveProduct.productId.productImageIds.find(img => img.isMain === true)?.imageUrl || liveProduct.productId.productImageIds[0].imageUrl)
@@ -147,7 +147,7 @@ exports.removeProductFromLive = async (liveId, productId, userId = null) => {
                 });
                 await anyProduct.populate({
                     path: 'productId.categoryId',
-                    select: 'cat_name'
+                    select: 'categoryName'
                 });
 
                 return {
@@ -199,7 +199,7 @@ exports.getActiveLiveProducts = async (liveId) => {
                 populate: [
                     {
                         path: 'categoryId',
-                        select: 'cat_name'
+                        select: 'categoryName'
                     },
                     {
                         path: 'productImageIds',
@@ -211,11 +211,11 @@ exports.getActiveLiveProducts = async (liveId) => {
                         populate: [
                             {
                                 path: 'productColorId',
-                                select: 'color_name color_code'
+                                select: 'productColorName color_code'
                             },
                             {
                                 path: 'productSizeId',
-                                select: 'size_name'
+                                select: 'productSizeName'
                             }
                         ],
                         select: 'variantImage variantPrice stockQuantity variantStatus'
@@ -252,13 +252,13 @@ exports.getAllLiveProductsForAdmin = async (liveId) => {
                 path: 'productId',
                 select: 'productName description categoryId productImageIds productVariantIds',
                 populate: [
-                    { path: 'categoryId', select: 'cat_name' },
+                    { path: 'categoryId', select: 'categoryName' },
                     { path: 'productImageIds', select: 'imageUrl isMain', limit: 5 },
                     {
                         path: 'productVariantIds',
                         populate: [
-                            { path: 'productColorId', select: 'color_name color_code' },
-                            { path: 'productSizeId', select: 'size_name' }
+                            { path: 'productColorId', select: 'productColorName color_code' },
+                            { path: 'productSizeId', select: 'productSizeName' }
                         ],
                         select: 'variantImage variantPrice stockQuantity variantStatus'
                     }
@@ -359,7 +359,7 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
             populate: [
                 {
                     path: 'categoryId',
-                    select: 'cat_name'
+                    select: 'categoryName'
                 },
                 {
                     path: 'productImageIds',
@@ -370,11 +370,11 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
                     populate: [
                         {
                             path: 'productColorId',
-                            select: 'color_name color_code'
+                            select: 'productColorName color_code'
                         },
                         {
                             path: 'productSizeId',
-                            select: 'size_name'
+                            select: 'productSizeName'
                         }
                     ],
                     select: 'variantImage variantPrice stockQuantity variantStatus'
@@ -391,7 +391,7 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
                 _id: liveProduct.productId._id,
                 productName: liveProduct.productId.productName,
                 categoryId: liveProduct.productId.categoryId ? {
-                    cat_name: liveProduct.productId.categoryId.cat_name
+                    categoryName: liveProduct.productId.categoryId.categoryName
                 } : null,
                 // Send full productImageIds array with isMain flag
                 productImageIds: liveProduct.productId.productImageIds || []
@@ -403,7 +403,7 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
             product: {
                 productName: liveProduct.productId.productName,
                 category: liveProduct.productId.categoryId ? {
-                    cat_name: liveProduct.productId.categoryId.cat_name
+                    categoryName: liveProduct.productId.categoryId.categoryName
                 } : null,
                 image: liveProduct.productId.productImageIds && liveProduct.productId.productImageIds.length > 0
                     ? (liveProduct.productId.productImageIds.find(img => img.isMain === true)?.imageUrl || liveProduct.productId.productImageIds[0].imageUrl)
@@ -482,7 +482,7 @@ exports.removePinProduct = async (productId, liveId, userId, userRole) => {
             populate: [
                 {
                     path: 'categoryId',
-                    select: 'cat_name'
+                    select: 'categoryName'
                 },
                 {
                     path: 'productImageIds',
@@ -493,11 +493,11 @@ exports.removePinProduct = async (productId, liveId, userId, userRole) => {
                     populate: [
                         {
                             path: 'productColorId',
-                            select: 'color_name color_code'
+                            select: 'productColorName color_code'
                         },
                         {
                             path: 'productSizeId',
-                            select: 'size_name'
+                            select: 'productSizeName'
                         }
                     ],
                     select: 'variantImage variantPrice stockQuantity variantStatus'

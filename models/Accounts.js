@@ -49,7 +49,7 @@ const accountSchema = new mongoose.Schema({
     enum: ['user', 'manager', 'admin'],
     default: 'user'
   },
-  acc_status: {
+  accountStatus: {
     type: String,
     enum: ['active', 'inactive', 'suspended'],
     default: 'active'
@@ -80,7 +80,7 @@ const accountSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
-  is_deleted: {
+  isDeleted: {
     type: Boolean,
     default: false,
     index: true

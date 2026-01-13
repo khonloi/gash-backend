@@ -493,10 +493,10 @@ const deleteProduct = async (productId) => {
       const variantIds = product.productVariantIds.map(v => v._id || v);
 
       const orderDetails = await OrderDetails.find({
-        variant_id: { $in: variantIds }
+        variantId: { $in: variantIds }
       }).populate({
-        path: "order_id",
-        select: "order_status",
+        path: "orderId",
+        select: "orderStatus",
       });
 
       // Only prevent deletion if there are orders that are pending, confirmed, or shipping
@@ -504,11 +504,11 @@ const deleteProduct = async (productId) => {
       // This prevents deletion of products that have variants with active orders
       const hasActiveOrders = orderDetails.some(
         (detail) => {
-          // Skip if order_id is null or not populated
-          if (!detail.order_id) {
+          // Skip if orderId is null or not populated
+          if (!detail.orderId) {
             return false;
           }
-          const status = detail.order_id.order_status;
+          const status = detail.orderId.orderStatus;
           return status === "pending" || status === "confirmed" || status === "shipping";
         }
       );

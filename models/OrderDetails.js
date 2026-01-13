@@ -1,17 +1,17 @@
 const mongoose = require('mongoose');
 
 const OrderDetailsSchema = new mongoose.Schema({
-  order_id: {
+  orderId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Orders',
     required: [true, 'Order ID is required'],
   },
-  variant_id: {
+  variantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'newProductVariants',
     required: [true, 'Variant ID is required'],
   },
-  UnitPrice: {
+  unitPrice: {
     type: Number,
     required: [true, 'Unit price is required'],
     min: [0, 'Unit price cannot be negative'],
@@ -34,15 +34,15 @@ const OrderDetailsSchema = new mongoose.Schema({
       maxlength: [500, 'Feedback cannot exceed 500 characters'],
       default: '',
     },
-    created_at: {
+    createdAt: {
       type: Date,
       default: null,
     },
-    updated_at: {
+    updatedAt: {
       type: Date,
       default: null,
     },
-    is_deleted: {
+    isDeleted: {
       type: Boolean,
       default: false,
     },

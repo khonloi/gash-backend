@@ -2,7 +2,7 @@ const favoriteService = require('../services/favoriteService');
 
 exports.addFavorite = async (req, res) => {
   try {
-    const savedFavorite = await favoriteService.addFavoriteService(req.body.pro_id, req.user.id);
+    const savedFavorite = await favoriteService.addFavoriteService(req.body.productId, req.user.id);
     
     // 🔔 Emit Socket.IO event for favorite update
     const io = req.app.get('io');
