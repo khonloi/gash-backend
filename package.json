@@ -11,6 +11,7 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^13.2.2",
     "axios": "^1.5.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.40.0",

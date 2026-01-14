@@ -23,7 +23,7 @@ exports.register = async (data) => {
     phone,
     address,
     password,
-    image: image || 'http://localhost:4000/default-pfp.jpg',
+    image: image || 'https://i.redd.it/1to4yvt3i88c1.png',
     role: 'user',
     acc_status: 'active'
   });
@@ -169,7 +169,7 @@ exports.googleLogin = async (data) => {
       username,
       name: name || username,
       email,
-      image: picture || 'http://localhost:4000/default-pfp.jpg',
+      image: picture || 'https://i.redd.it/1to4yvt3i88c1.png',
       googleId,
       password: randomPassword,
       role: 'user',
@@ -223,4 +223,53 @@ exports.requestRegisterOtp = async (data) => {
     throw new Error('Failed to store OTP');
   }
   return { status: 200, response: { message: 'OTP generated successfully', otp } };
+};
+
+// Verify password for checkout authentication
+exports.verifyPassword = async (userId, password) => {
+  try {
+    const account = await Accounts.findById(userId).select('+password');
+    if (!account) {
+      return { status: 404, response: { message: 'User not found' } };
+    }
+    
+    // Check if user has a password (not a Google-only user)
+    if (!account.password) {
+      return { status: 400, response: { message: 'Password authentication not available for this account' } };
+    }
+    
+    const isMatch = await account.comparePassword(password);
+    if (!isMatch) {
+      return { status: 401, response: { message: 'Invalid password' } };
+    }
+    
+    return { status: 200, response: { message: 'Password verified successfully', verified: true } };
+  } catch (error) {
+    console.error('Error verifying password:', error);
+    return { status: 500, response: { message: 'Error verifying password', error: error.message } };
+  }
+};
+
+// Update requireAuthForCheckout setting
+exports.updateCheckoutAuthSetting = async (userId, requireAuth) => {
+  try {
+    const account = await Accounts.findById(userId);
+    if (!account) {
+      return { status: 404, response: { message: 'User not found' } };
+    }
+    
+    account.requireAuthForCheckout = requireAuth;
+    await account.save();
+    
+    return { 
+      status: 200, 
+      response: { 
+        message: 'Checkout authentication setting updated successfully',
+        requireAuthForCheckout: account.requireAuthForCheckout
+      } 
+    };
+  } catch (error) {
+    console.error('Error updating checkout auth setting:', error);
+    return { status: 500, response: { message: 'Error updating setting', error: error.message } };
+  }
 }; 

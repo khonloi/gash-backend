@@ -25,7 +25,7 @@ exports.getCustomerStatistics = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Error fetching customer stats:", error);
+    console.error("Error fetching customer stats:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
@@ -68,7 +68,7 @@ exports.exportCustomerStatistics = async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
-    console.error("❌ Error exporting customer statistics:", error);
+    console.error("Error exporting customer statistics:", error);
     res.status(500).json({ success: false, message: "Error exporting Excel" });
   }
 };
@@ -105,7 +105,7 @@ exports.getTopCustomers = async (req, res) => {
 
     res.status(200).json({ success: true, data: formatted });
   } catch (error) {
-    console.error("❌ Error fetching top customers:", error);
+    console.error("Error fetching top customers:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
@@ -154,7 +154,7 @@ exports.getCustomerSparkline = async (req, res) => {
 
     res.status(200).json({ success: true, data: MOCK_SPARK });
   } catch (error) {
-    console.error("❌ Error fetching sparkline data:", error);
+    console.error("Error fetching sparkline data:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };

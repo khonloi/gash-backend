@@ -1,5 +1,6 @@
 const livestreamCommentService = require('../services/livestreamCommentService');
 const mongoose = require('mongoose');
+const Livestream = require('../models/Livestream');
 
 // Add comment to livestream
 exports.addComment = async (req, res) => {
@@ -18,6 +19,22 @@ exports.addComment = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid liveId format'
+            });
+        }
+
+        // Check if livestream exists and is not ended
+        const livestream = await Livestream.findById(liveId);
+        if (!livestream) {
+            return res.status(404).json({
+                success: false,
+                message: 'Livestream not found'
+            });
+        }
+
+        if (livestream.status === 'ended') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot comment on ended livestream'
             });
         }
 

@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 const newProductImage = require("../models/newProductImage");
 const newProduct = require("../models/newProduct");
 const newProductVariant = require("../models/newProductVariant");
+const OrderDetails = require("../models/OrderDetails");
+const Categories = require("../models/Categories");
+const { updateProductStatusBasedOnVariants } = require("./newProductVariantService");
 
 // Create a new product with validation
 const createProduct = async (productData) => {
@@ -111,6 +114,8 @@ const createProduct = async (productData) => {
       );
     }
 
+    await updateProductStatusBasedOnVariants(savedProduct._id);
+
     return await newProduct
       .findById(savedProduct._id)
       .populate("categoryId")
@@ -139,17 +144,38 @@ const getAllProducts = async (filters = {}, userRole = "customer") => {
     }
 
     if (userRole === "customer") {
-      query.productStatus = { $ne: "pending" };
+      // BR-11: Only show active products to customers
+      query.productStatus = "active";
     }
 
-    return await newProduct
+    const products = await newProduct
       .find(query)
-      .populate("categoryId")
+      .populate({
+        path: "categoryId",
+        match: { isDeleted: false }, // BR-15: Only active categories
+      })
       .populate("productImageIds")
       .populate({
         path: "productVariantIds",
+        match: { variantStatus: { $in: ["active", "inactive"] } }, // BR-11: Only active/inactive variants
         populate: [{ path: "productColorId" }, { path: "productSizeId" }],
       });
+
+    // BR-11: Filter products that have at least one active variant and active category
+    if (userRole === "customer") {
+      return products.filter(product => {
+        // Check if product has active category
+        if (!product.categoryId || product.categoryId.isDeleted) {
+          return false;
+        }
+        // Check if product has at least one active variant
+        const hasActiveVariant = product.productVariantIds?.some(v =>
+          v && v.variantStatus === "active"
+        ) || false;
+        return hasActiveVariant;
+      });
+    }
+    return products;
   } catch (error) {
     throw new Error(`Failed to fetch products: ${error.message}`);
   }
@@ -174,17 +200,38 @@ const searchProducts = async (searchParams = {}, userRole = "customer") => {
     }
 
     if (userRole === "customer") {
-      query.productStatus = { $ne: "pending" };
+      // BR-11: Only show active products to customers
+      query.productStatus = "active";
     }
 
-    return await newProduct
+    const products = await newProduct
       .find(query)
-      .populate("categoryId")
+      .populate({
+        path: "categoryId",
+        match: { isDeleted: false }, // BR-15: Only active categories
+      })
       .populate("productImageIds")
       .populate({
         path: "productVariantIds",
+        match: { variantStatus: { $in: ["active", "inactive"] } }, // BR-11: Only active/inactive variants
         populate: [{ path: "productColorId" }, { path: "productSizeId" }],
       });
+
+    // BR-11: Filter products that have at least one active variant and active category
+    if (userRole === "customer") {
+      return products.filter(product => {
+        // Check if product has active category
+        if (!product.categoryId || product.categoryId.isDeleted) {
+          return false;
+        }
+        // Check if product has at least one active variant
+        const hasActiveVariant = product.productVariantIds?.some(v =>
+          v && v.variantStatus === "active"
+        ) || false;
+        return hasActiveVariant;
+      });
+    }
+    return products;
   } catch (error) {
     throw new Error(`Failed to search products: ${error.message}`);
   }
@@ -199,18 +246,38 @@ const getProductById = async (productId, userRole = "customer") => {
 
     const product = await newProduct
       .findById(productId)
-      .populate("categoryId")
+      .populate({
+        path: "categoryId",
+        match: { isDeleted: false }, // BR-15: Only active categories
+      })
       .populate("productImageIds")
       .populate({
         path: "productVariantIds",
+        match: userRole === "customer"
+          ? { variantStatus: { $in: ["active", "inactive"] } } // BR-12: Only active/inactive variants for customers
+          : {}, // Admin can see all variants
         populate: [{ path: "productColorId" }, { path: "productSizeId" }],
       });
     if (!product) {
       throw new Error("Product not found");
     }
 
-    if (product.productStatus === "pending" && userRole === "customer") {
-      throw new Error("Access denied: product is pending approval");
+    if (userRole === "customer") {
+      // BR-11: Only show active products to customers
+      if (product.productStatus !== "active") {
+        throw new Error("Access denied: product is not active");
+      }
+      // BR-15: Check if product has active category
+      if (!product.categoryId || product.categoryId.isDeleted) {
+        throw new Error("Access denied: product category is not active");
+      }
+      // BR-11: Check if product has at least one active variant
+      const hasActiveVariant = product.productVariantIds?.some(v =>
+        v && v.variantStatus === "active"
+      ) || false;
+      if (!hasActiveVariant) {
+        throw new Error("Access denied: product has no active variants");
+      }
     }
 
     return product;
@@ -395,6 +462,9 @@ const updateProduct = async (productId, updateData) => {
     if (!product) {
       throw new Error("Product not found");
     }
+
+    await updateProductStatusBasedOnVariants(productId);
+
     return product;
   } catch (error) {
     throw new Error(`Failed to update product: ${error.message}`);
@@ -415,6 +485,37 @@ const deleteProduct = async (productId) => {
 
     if (product.productStatus === "discontinued") {
       return { message: "Product is already discontinued" };
+    }
+
+    // Check if product has variants with active orders
+    // If any variant has active orders (pending, confirmed, or shipping), prevent product deletion
+    if (product.productVariantIds && product.productVariantIds.length > 0) {
+      const variantIds = product.productVariantIds.map(v => v._id || v);
+
+      const orderDetails = await OrderDetails.find({
+        variant_id: { $in: variantIds }
+      }).populate({
+        path: "order_id",
+        select: "order_status",
+      });
+
+      // Only prevent deletion if there are orders that are pending, confirmed, or shipping
+      // Allow deletion if all orders are delivered or cancelled
+      // This prevents deletion of products that have variants with active orders
+      const hasActiveOrders = orderDetails.some(
+        (detail) => {
+          // Skip if order_id is null or not populated
+          if (!detail.order_id) {
+            return false;
+          }
+          const status = detail.order_id.order_status;
+          return status === "pending" || status === "confirmed" || status === "shipping";
+        }
+      );
+
+      if (hasActiveOrders) {
+        throw new Error("Cannot delete product because it still contains variants with active orders");
+      }
     }
 
     // Step 1: Discontinue the product

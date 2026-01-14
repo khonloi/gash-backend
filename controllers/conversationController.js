@@ -6,11 +6,25 @@ const Messages = require('../models/Message');
 // 🟢 Lấy danh sách conversation
 exports.getList = async (req, res) => {
   try {
-    const { status, accountId, staffId } = req.query;
+    const { status, accountId, staffId, isAdmin } = req.query;
     const filter = {};
-    if (status) filter.status = status;
+    
+    // Exclude closed conversations unless explicitly requested
+    if (status) {
+      filter.status = status;
+    } else {
+      filter.status = { $ne: 'closed' };
+    }
+    
     if (accountId) filter.accountId = accountId;
-    if (staffId) filter.staffId = { $in: [staffId, null] };
+    
+    // CHANGED: Removed staff-specific filtering to allow all staff to view all conversations
+    // Previously, non-admins with staffId only saw their assigned or open conversations
+    // Now, if isAdmin or staffId provided, show all (admins and staff see everything)
+    // If neither, still applies general filter, but in practice, staff provide staffId
+    if (isAdmin === 'true' || isAdmin === true) {
+      // Admin can see all conversations - no staff filtering needed
+    } // Removed else if (staffId) block that added restrictive $or filter
 
     // ---- ONLY CONVERSATIONS THAT HAVE AT LEAST ONE MESSAGE ----
     const conversationsWithMsg = await Messages.distinct('conversationId');
@@ -21,7 +35,7 @@ exports.getList = async (req, res) => {
       .populate('staffId', 'username email')
       .sort({ updatedAt: -1 });
 
-    // ✅ Gộp mỗi accountId chỉ 1 cuộc trò chuyện
+    // Gộp mỗi accountId chỉ 1 cuộc trò chuyện
     const uniqueMap = new Map();
     for (const convo of conversations) {
       const accId = convo.accountId?._id?.toString() || convo.accountId?.toString();
@@ -66,19 +80,12 @@ exports.getDetail = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
-    const convoStaffId = conversation.staffId?._id?.toString() || conversation.staffId?.toString();
-    if (convoStaffId && convoStaffId !== staffId) {
-      return res.status(403).json({ success: false, message: 'Unauthorized to access this conversation' });
-    }
+    // CHANGED: Removed authorization check to allow any staff to access any conversation
+    // Previously: if (convoStaffId && convoStaffId !== staffId) { forbid }
 
-    if (!convoStaffId && conversation.status === 'open') {
-      conversation = await Conversations.findByIdAndUpdate(
-        req.params.id,
-        { staffId, status: 'pending' },
-        { new: true }
-      ).populate('accountId', 'username email')
-       .populate('staffId', 'username email');
-    }
+    // CHANGED: Removed auto-assignment for open conversations
+    // Previously: if open and no staff, assign to this staff and set to pending
+    // Now: No auto-assignment; any staff can view without claiming
 
     const messages = await Messages.find({ conversationId: req.params.id }).sort({ createdAt: 1 });
     res.json({ success: true, conversation, messages });
@@ -101,10 +108,8 @@ exports.close = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
-    const convoStaffId = conversation.staffId?._id?.toString() || conversation.staffId?.toString();
-    if (convoStaffId !== staffId) {
-      return res.status(403).json({ success: false, message: 'Unauthorized to close this conversation' });
-    }
+    // CHANGED: Removed authorization check to allow any staff to close any conversation
+    // Previously: if (convoStaffId !== staffId) { forbid }
 
     const updatedConversation = await Conversations.findByIdAndUpdate(
       req.params.id,
@@ -126,7 +131,7 @@ exports.create = async (req, res) => {
       return res.status(400).json({ success: false, message: 'accountId is required' });
     }
 
-    // ✅ Tìm hội thoại cũ còn mở hoặc pending
+    // Tìm hội thoại cũ còn mở hoặc pending
     let conversation = await Conversations.findOne({
       accountId,
       status: { $in: ['open', 'pending'] },

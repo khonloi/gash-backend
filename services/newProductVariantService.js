@@ -11,7 +11,7 @@ const Orders = require("../models/Orders");
 const updateProductStatusBasedOnVariants = async (productId) => {
   try {
     // Find all non-deleted variants (exclude discontinued)
-    const variants = await newProductVariant.find({
+    const nonDiscontinuedVariants = await newProductVariant.find({
       productId,
       variantStatus: { $ne: "discontinued" }
     });
@@ -22,30 +22,30 @@ const updateProductStatusBasedOnVariants = async (productId) => {
       return;
     }
 
-    // If no variants exist
-    if (variants.length === 0) {
-      // If product was previously active (had variants), set to "inactive"
-      if (currentProduct.productStatus === "active") {
-        await newProduct.findByIdAndUpdate(
-          productId,
-          { productStatus: "inactive", updatedAt: Date.now() },
-          { new: true }
-        );
-      } else {
-        // If product was never active (new product), keep as "pending"
-        await newProduct.findByIdAndUpdate(
-          productId,
-          { productStatus: "pending", updatedAt: Date.now() },
-          { new: true }
-        );
-      }
+    if (currentProduct.productStatus === "discontinued") {
       return;
     }
 
-    // If at least 1 variant exists, set status to "active"
+    if (nonDiscontinuedVariants.length === 0) {
+      // If no variants exist
+      // If product was previously active (had variants), set to "inactive"
+      let newStatus = currentProduct.productStatus === "active" ? "inactive" : "pending";
+
+      await newProduct.findByIdAndUpdate(
+        productId,
+        { productStatus: newStatus, updatedAt: Date.now() },
+        { new: true }
+      );
+      return;
+    }
+
+    // If some non-discontinued variants exist, check if any are active
+    const hasActive = nonDiscontinuedVariants.some(v => v.variantStatus === "active");
+    let newStatus = hasActive ? "active" : "inactive";
+
     await newProduct.findByIdAndUpdate(
       productId,
-      { productStatus: "active", updatedAt: Date.now() },
+      { productStatus: newStatus, updatedAt: Date.now() },
       { new: true }
     );
   } catch (error) {
@@ -93,6 +93,9 @@ const createProductVariant = async (variantData) => {
     if (stockQuantity < 0) {
       throw new Error("Stock quantity cannot be negative");
     }
+    if (stockQuantity > 1000) {
+      throw new Error("The stock quantity must not exceed 1000");
+    }
 
     const product = await newProduct.findById(productId);
     if (!product) {
@@ -115,6 +118,9 @@ const createProductVariant = async (variantData) => {
       // Add stock quantity (accumulate)
       const oldStockQuantity = existingVariant.stockQuantity || 0;
       const newStockQuantity = oldStockQuantity + (stockQuantity || 0);
+      if (newStockQuantity > 1000) {
+        throw new Error("The stock quantity must not exceed 1000");
+      }
       const newVariantStatus = newStockQuantity > 0 ? "active" : "inactive";
 
       // Update existing variant with new data
@@ -260,6 +266,9 @@ const updateProductVariant = async (variantId, updateData) => {
     if (stockQuantity != null && stockQuantity < 0) {
       throw new Error("Stock quantity cannot be negative");
     }
+    if (stockQuantity != null && stockQuantity > 1000) {
+      throw new Error("The stock quantity must not exceed 1000");
+    }
 
     const existingVariant = await newProductVariant.findById(variantId);
     if (!existingVariant) {
@@ -284,6 +293,7 @@ const updateProductVariant = async (variantId, updateData) => {
         productColorId: productColorId || existingVariant.productColorId,
         productSizeId: productSizeId || existingVariant.productSizeId,
         _id: { $ne: variantId },
+        variantStatus: { $ne: "discontinued" }, // Only check with active/inactive variants
       });
       if (existingDuplicate) {
         throw new Error(
@@ -323,16 +333,37 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Invalid variant ID");
     }
 
-    const orderDetails = await OrderDetails.find({ variantId }).populate({
-      path: "orderId",
-      select: "orderStatus",
+    // IMPORTANT: Only check OrderDetails for THIS specific variant (variantId)
+    // This query ONLY finds OrderDetails where variant_id matches the variant we want to delete
+    // It does NOT check other variants of the same product
+    const orderDetails = await OrderDetails.find({
+      variant_id: variantId  // Only this variant, not other variants of the same product
+    }).populate({
+      path: "order_id",
+      select: "order_status",
     });
 
-    const hasNonCancelledOrders = orderDetails.some(
-      (detail) => detail.orderId.orderStatus !== "cancelled"
+    // Only prevent deletion if THIS variant has orders that are pending, confirmed, or shipping
+    // Allow deletion if all orders for THIS variant are delivered or cancelled
+    // NOTE: Other variants of the same product are NOT checked - they can be deleted independently
+    const hasActiveOrders = orderDetails.some(
+      (detail) => {
+        // Skip if order_id is null or not populated
+        if (!detail.order_id) {
+          return false;
+        }
+        // Double-check: ensure this order detail belongs to the variant we're checking
+        // This should always be true due to the query filter, but adding for safety
+        const detailVariantId = detail.variant_id?.toString ? detail.variant_id.toString() : String(detail.variant_id);
+        if (detailVariantId && detailVariantId !== variantId.toString()) {
+          return false; // This shouldn't happen, but safety check
+        }
+        const status = detail.order_id.order_status;
+        return status === "pending" || status === "confirmed" || status === "shipping";
+      }
     );
-    if (hasNonCancelledOrders) {
-      throw new Error("Cannot delete variant with active orders");
+    if (hasActiveOrders) {
+      throw new Error("Cannot delete variant because it still contains active orders.");
     }
 
     const variant = await newProductVariant.findByIdAndUpdate(
@@ -411,6 +442,9 @@ const bulkCreateProductVariants = async (bulkData) => {
     if (stockQuantity < 0) {
       throw new Error("Stock quantity cannot be negative");
     }
+    if (stockQuantity > 1000) {
+      throw new Error("The stock quantity must not exceed 1000");
+    }
 
     const product = await newProduct.findById(productId);
     if (!product) {
@@ -420,11 +454,12 @@ const bulkCreateProductVariants = async (bulkData) => {
       throw new Error("Cannot add variant to a discontinued product");
     }
 
-    // Check for existing variants to avoid duplicates
+    // Check for existing variants to avoid duplicates (only active/inactive, not discontinued)
     const existingVariants = await newProductVariant.find({
       productId,
       productColorId,
       productSizeId: { $in: sizeIds },
+      variantStatus: { $ne: "discontinued" }, // Only check with active/inactive variants
     }).populate("productSizeId");
 
     if (existingVariants.length > 0) {
@@ -481,4 +516,5 @@ module.exports = {
   updateProductVariant,
   deleteProductVariant,
   bulkCreateProductVariants,
+  updateProductStatusBasedOnVariants,
 };

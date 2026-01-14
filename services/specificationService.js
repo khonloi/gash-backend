@@ -169,7 +169,7 @@ exports.updateProductColorService = async (id, { color_name }) => {
         // 1.1 Color name validation
         if (color_name) {
             const trimmedName = color_name.trim();
-            const colorNamePattern = /^[a-zA-ZÀ-ỹ0-9]+$/;
+            const colorNamePattern = /^[a-zA-ZÀ-ỹ0-9]+(?: [a-zA-ZÀ-ỹ0-9]+)*$/;
             if (trimmedName.length < 2 || trimmedName.length > 30 || !colorNamePattern.test(trimmedName)) {
                 return {
                     success: false,

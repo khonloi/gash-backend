@@ -18,8 +18,15 @@ const NotificationSchema = new mongoose.Schema({
   // 🔹 Loại thông báo
   type: {
     type: String,
-    enum: ["system", "order", "promotion", "preference"],
+    enum: ["system", "order", "promotion", "preference", "livestream"],
     default: "system",
+  },
+
+  // 🔹 Livestream ID (for livestream notifications)
+  livestreamId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Livestream",
+    default: null,
   },
 
   // 🔹 Trạng thái đọc
