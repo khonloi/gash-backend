@@ -27,7 +27,8 @@ async function getFavoritesService(accountId) {
     path: 'productId',
     populate: [
       { path: 'productVariantIds', model: 'newProductVariants' },
-      { path: 'productImageIds', model: 'newProductImages' }
+      { path: 'productImageIds', model: 'newProductImages' },
+      { path: 'categoryId', model: 'Categories' }
     ]
   });
 }

@@ -659,7 +659,7 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   // Find best day in the period
   const bestDay = formattedDays.reduce((max, day) =>
     day.totalRevenue > max.totalRevenue ? day : max,
-    { totalRevenue: 0, day: 'Mon', date: '01/01/2025', fullDate: '2025-01-01' }
+    { totalRevenue: 0, day: 'Mon', date: '01/01/2026', fullDate: '2026-01-01' }
   );
 
   // Format best day display with date and revenue
