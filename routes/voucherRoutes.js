@@ -15,7 +15,7 @@ router.delete('/disable-voucher/:id', authenticateJWT, deleteVoucher);
 
 
 //get all vouchers for users
-// router.get('/get-all', getAllVouchersForUser);
+router.get('/get-all', getAllVouchersForUser);
 //preview voucher 
 router.post('/apply-voucher', previewVoucher);
 
