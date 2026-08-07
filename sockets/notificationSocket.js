@@ -13,7 +13,7 @@ module.exports = (io) => {
     socket.on('userConnected', (userId) => {
       if (!userId || !mongoose.isValidObjectId(userId.toString())) {
         if (process.env.DEBUG === 'true') {
-          console.warn('⚠️ userConnected: invalid or missing userId');
+          console.warn('userConnected: invalid or missing userId');
         }
         return;
       }
@@ -26,7 +26,7 @@ module.exports = (io) => {
       socket.join(`user_${userIdStr}`);
 
       if (process.env.DEBUG === 'true') {
-        console.log(`🔔 User ${userIdStr} joined notification rooms`);
+        console.log(`User ${userIdStr} joined notification rooms`);
       }
     });
 
@@ -45,7 +45,7 @@ module.exports = (io) => {
         if (sockId === socket.id) {
           connectedUsers.delete(userId);
           if (process.env.DEBUG === 'true') {
-            console.log(`🔔 User ${userId} disconnected from notifications`);
+            console.log(`User ${userId} disconnected from notifications`);
           }
           break;
         }

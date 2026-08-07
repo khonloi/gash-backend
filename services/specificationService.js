@@ -26,7 +26,7 @@ exports.createProductColorService = async ({ productColorName }) => {
             trimmedName.length < 2 ||
             trimmedName.length > 30 ||
             !productColorNamePattern.test(trimmedName) ||
-            /^[0-9]+$/.test(trimmedName) // không cho phép chỉ toàn số
+            /^[0-9]+$/.test(trimmedName) // do not allow numbers only
         ) {
             return {
                 success: false,
@@ -36,7 +36,7 @@ exports.createProductColorService = async ({ productColorName }) => {
         }
 
 
-        // 2. Check duplicate - chỉ check với các color chưa bị xóa (isDeleted: false)
+        // 2. Check duplicate - only check active colors (isDeleted: false)
         const existingColor = await ProductColors.findOne({ productColorName: trimmedName, isDeleted: false });
         if (existingColor) {
             return {
@@ -318,10 +318,10 @@ exports.createProductSizeService = async ({ productSizeName }) => {
             };
         }
 
-        // Nếu chỉ là số → kiểm tra giới hạn
+        // If numbers only -> check boundaries
         if (/^[0-9]+$/.test(trimmedName)) {
             const numericValue = parseInt(trimmedName, 10);
-            if (numericValue < 20 || numericValue > 60) { // ngưỡng an toàn chung
+            if (numericValue < 20 || numericValue > 60) { // general safe threshold
                 return {
                     success: false,
                     message: 'Numeric size must be between 20 and 60',
@@ -330,7 +330,7 @@ exports.createProductSizeService = async ({ productSizeName }) => {
             }
         }
 
-        // 2. Check duplicate - chỉ check với các size chưa bị xóa (isDeleted: false)
+        // 2. Check duplicate - only check active sizes (isDeleted: false)
         const existingSize = await ProductSizes.findOne({ productSizeName: trimmedName, isDeleted: false });
         if (existingSize) {
             return {

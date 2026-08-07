@@ -194,7 +194,7 @@ exports.updateProfile = async (id, data, user) => {
     };
   }
 
-  // Không cho cập nhật trực tiếp password ở đây
+  // Do not allow updating password directly here
   const { username, email, password, ...updateData } = data;
 
   if (username || email) {
@@ -225,7 +225,7 @@ exports.updateProfile = async (id, data, user) => {
   };
 };
 
-// Đổi mật khẩu
+// Change password
 exports.updatePassword = async (id, oldPassword, newPassword, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
     return {
@@ -246,7 +246,7 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
     };
   }
 
-  // Nếu không phải admin thì phải check mật khẩu cũ
+  // If not admin, check old password
   if (user.role !== "admin") {
     const isMatch = await account.comparePassword(oldPassword);
     if (!isMatch) {
@@ -257,7 +257,7 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
     }
   }
 
-  account.password = newPassword; // sẽ được hash bởi pre-save hook
+  account.password = newPassword; // Will be hashed by pre-save hook
   await account.save();
 
   return {

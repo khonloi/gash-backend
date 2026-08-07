@@ -7,11 +7,11 @@ const User = require("../models/Accounts");
 /** ====================== ADMIN ====================== */
 exports.createNotification = async (req, res) => {
   try {
-    console.log("📩 Body nhận được từ FE:", req.body);
+    console.log("Body received from FE:", req.body);
     const { recipientType } = req.body;
     const notifications = await notificationService.createNotificationService(req.body);
 
-    /** 🔔 Realtime emit qua Socket.IO */
+    /** Realtime emit via Socket.IO */
     const io = req.app.get("io");
 
     if (io && notifications?.length) {
@@ -27,20 +27,20 @@ exports.createNotification = async (req, res) => {
             
             if (prefs.web) {
               io.to(targetId).emit("newNotification", n);
-              console.log("🎯 Sent web notification to user room:", targetId);
+              console.log("Sent web notification to user room:", targetId);
             } else {
-              console.log("🚫 Skipped web notification for user (disabled):", targetId);
+              console.log("Skipped web notification for user (disabled):", targetId);
             }
           } catch (err) {
             console.error("Error checking user preferences for web notification:", err);
             // Default to sending if we can't check preferences
             io.to(targetId).emit("newNotification", n);
-            console.log("🎯 Sent web notification to user room (default):", targetId);
+            console.log("Sent web notification to user room (default):", targetId);
           }
         } else {
           // If userId is null, it's a global notification - emit to all
           io.emit("newNotification", n);
-          console.log("📢 Sent to ALL users (global notification)");
+          console.log("Sent to ALL users (global notification)");
         }
       }
       console.log(`Emitted ${notifications.length} notification(s) via Socket.IO`);
@@ -152,7 +152,7 @@ exports.deleteNotification = async (req, res) => {
     // Delete the notification
     await Notification.findByIdAndDelete(req.params.id);
 
-    // 🔔 Emit Socket.IO event to notify recipients
+    // Emit Socket.IO event to notify recipients
     const io = req.app.get("io");
     if (io) {
       const deleteEvent = { notificationId, userId };
@@ -169,14 +169,14 @@ exports.deleteNotification = async (req, res) => {
           io.to(socketId).emit("notificationDeleted", deleteEvent);
         }
         
-        console.log(`🗑️ Emitted notificationDeleted to user: ${userId}, socketId: ${socketId || 'none'}`);
+        console.log(`Emitted notificationDeleted to user: ${userId}, socketId: ${socketId || 'none'}`);
       } else {
         // Global notification - notify all users
         io.emit("notificationDeleted", deleteEvent);
-        console.log("🗑️ Emitted notificationDeleted to ALL users (global notification)");
+        console.log("Emitted notificationDeleted to ALL users (global notification)");
       }
     } else {
-      console.warn("⚠️ Socket.IO not available in deleteNotification");
+      console.warn("Socket.IO not available in deleteNotification");
     }
 
     res.json({ message: "Deleted successfully" });
@@ -204,7 +204,7 @@ exports.markAsRead = async (req, res) => {
   try {
     const notification = await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
     if (notification) {
-      // 🔔 Emit Socket.IO event for notification badge update
+      // Emit Socket.IO event for notification badge update
       const io = req.app.get('io');
       const userId = notification.userId?.toString();
       if (io && userId) {
@@ -229,7 +229,7 @@ exports.clearAll = async (req, res) => {
       $or: [{ userId }, { userId: null }],
     });
 
-    // 🔔 Emit Socket.IO event for notification badge update
+    // Emit Socket.IO event for notification badge update
     const io = req.app.get('io');
     if (io && userId) {
       io.to(userId.toString()).emit('notificationBadgeUpdate', { userId });
@@ -270,7 +270,7 @@ exports.deleteUserNotification = async (req, res) => {
 
     await Notification.findByIdAndDelete(id);
 
-    // 🔔 Emit Socket.IO event for notification badge update
+    // Emit Socket.IO event for notification badge update
     const io = req.app.get('io');
     if (io && userId) {
       io.to(userId.toString()).emit('notificationBadgeUpdate', { userId });

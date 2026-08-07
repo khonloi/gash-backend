@@ -1,44 +1,44 @@
 const mongoose = require("mongoose");
 
 const NotificationSchema = new mongoose.Schema({
-  // 🔹 Dùng cho template
+  // Template name
   name: { type: String },
 
-  // 🔹 Thông tin chính
+  // Main notification content
   title: { type: String, required: true },
   message: { type: String, required: true },
 
-  // 🔹 Người nhận (nếu null thì là thông báo chung)
+  // Recipient (if null, this is a global notification)
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Accounts",
     default: null,
   },
 
-  // 🔹 Loại thông báo
+  // Notification type
   type: {
     type: String,
     enum: ["system", "order", "promotion", "preference", "livestream"],
     default: "system",
   },
 
-  // 🔹 Livestream ID (for livestream notifications)
+  // Livestream ID (for livestream notifications)
   livestreamId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Livestream",
     default: null,
   },
 
-  // 🔹 Trạng thái đọc
+  // Read status
   isRead: { type: Boolean, default: false },
 
-  // 🔹 Là template hay không
+  // Template flag
   isTemplate: { type: Boolean, default: false },
 
-  // 🔹 Ngày tạo
+  // Creation timestamp
   createdAt: { type: Date, default: Date.now },
 
-  // ⚙️ Tuỳ chọn thông báo (email / web)
+  // Notification preferences (email / web)
   preferences: {
     email: { type: Boolean, default: true },
     web: { type: Boolean, default: true },

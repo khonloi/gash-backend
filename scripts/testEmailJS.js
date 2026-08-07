@@ -8,8 +8,8 @@
  * To test email notifications, trigger an order update and check the frontend console.
  */
 
-console.log('⚠️ This script is deprecated.');
-console.log('📧 Order notification emails are now sent from the frontend.');
+console.log('This script is deprecated.');
+console.log('Order notification emails are now sent from the frontend.');
 console.log('   To test, trigger an order update and check the browser console.\n');
 
 process.exit(0);

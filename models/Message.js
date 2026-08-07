@@ -17,20 +17,20 @@ const MessageSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // 👉 attachments: dùng để lưu link ảnh / file upload
+    // attachments: stores image/file upload links
     attachments: {
       type: String,
       default: null,
     },
 
-    // 👉 type: để phân biệt text / image / sticker / emoji
+    // type: differentiates text / image / sticker / emoji
     type: {
       type: String,
       enum: ['text', 'image', 'sticker', 'emoji'],
       default: 'text',
     },
 
-    // 👉 emoji/sticker URL (nếu có)
+    // emoji/sticker URL (if any)
     imageUrl: {
       type: String,
       default: null,
@@ -46,7 +46,7 @@ const MessageSchema = new mongoose.Schema(
   }
 );
 
-// Format JSON trả về (giữ nguyên format của bạn)
+// Format returned JSON
 MessageSchema.set('toJSON', {
   virtuals: true,
   versionKey: false,
@@ -54,7 +54,7 @@ MessageSchema.set('toJSON', {
     ret.id = ret._id.toString();
     delete ret._id;
 
-    // sắp xếp id lên đầu
+    // Order id first
     const ordered = { id: ret.id };
     Object.keys(ret).forEach((key) => {
       if (key !== 'id') ordered[key] = ret[key];

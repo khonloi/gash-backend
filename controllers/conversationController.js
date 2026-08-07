@@ -3,7 +3,7 @@
 const Conversations = require('../models/Conversation');
 const Messages = require('../models/Message');
 
-// 🟢 Lấy danh sách conversation
+// Get conversation list
 exports.getList = async (req, res) => {
   try {
     const { status, accountId, staffId, isAdmin } = req.query;
@@ -35,7 +35,7 @@ exports.getList = async (req, res) => {
       .populate('staffId', 'username email')
       .sort({ updatedAt: -1 });
 
-    // Gộp mỗi accountId chỉ 1 cuộc trò chuyện
+    // Deduplicate to keep only 1 conversation per accountId
     const uniqueMap = new Map();
     for (const convo of conversations) {
       const accId = convo.accountId?._id?.toString() || convo.accountId?.toString();
@@ -64,7 +64,7 @@ exports.getList = async (req, res) => {
   }
 };
 
-// 🟢 Lấy chi tiết + tin nhắn
+// Get details + messages
 exports.getDetail = async (req, res) => {
   try {
     const { staffId } = req.query;
@@ -95,7 +95,7 @@ exports.getDetail = async (req, res) => {
   }
 };
 
-// 🟢 Đóng conversation
+// Close conversation
 exports.close = async (req, res) => {
   try {
     const { staffId } = req.body;
@@ -123,7 +123,7 @@ exports.close = async (req, res) => {
   }
 };
 
-// 🟢 Tạo hoặc lấy lại conversation (user chat lại không bị tạo mới)
+// Create or retrieve existing conversation (prevents duplicates when user chats again)
 exports.create = async (req, res) => {
   try {
     const { accountId, staffId } = req.body;
@@ -131,18 +131,18 @@ exports.create = async (req, res) => {
       return res.status(400).json({ success: false, message: 'accountId is required' });
     }
 
-    // Tìm hội thoại cũ còn mở hoặc pending
+    // Find existing conversation that is open or pending
     let conversation = await Conversations.findOne({
       accountId,
       status: { $in: ['open', 'pending'] },
     });
 
-    // Nếu đã có, cập nhật lại thời gian cho dễ sort
+    // If existing, update timestamp for sorting
     if (conversation) {
       conversation.updatedAt = new Date();
       await conversation.save();
     } else {
-      // Chưa có -> tạo mới
+      // None exists -> create new
       conversation = await Conversations.create({
         accountId,
         staffId: staffId || null,
@@ -157,7 +157,7 @@ exports.create = async (req, res) => {
   }
 };
 
-// 🟢 Staff nhận conversation
+// Staff claim conversation
 exports.take = async (req, res) => {
   try {
     const { staffId } = req.body;
@@ -168,7 +168,7 @@ exports.take = async (req, res) => {
     );
 
     if (!convo) {
-      return res.status(400).json({ success: false, message: 'Conversation đã nhận hoặc đã đóng' });
+      return res.status(400).json({ success: false, message: 'Conversation already taken or closed' });
     }
 
     res.json({ success: true, data: convo });

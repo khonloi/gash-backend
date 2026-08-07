@@ -7,7 +7,7 @@ const ProductColors = require('../models/ProductColors');
 const ProductSizes = require('../models/ProductSizes');
 const Accounts = require('../models/Accounts');
 
-// Hàm lấy tất cả feedback cho admin và staff
+// Function to get all feedback for admin and staff
 exports.getAllFeedback = async (req, res) => {
   try {
     const {
@@ -286,7 +286,7 @@ exports.getAllFeedback = async (req, res) => {
   }
 };
 
-// Hàm lấy 1 feedback cụ thể theo ID
+// Function to get a specific feedback by ID
 exports.getFeedbackById = async (req, res) => {
   try {
     const { feedbackId } = req.params;
@@ -388,8 +388,8 @@ exports.getFeedbackById = async (req, res) => {
   }
 };
 
-// Hàm lấy thống kê feedback tổng quan
-exports.getFeedbackStatistics = async (req, res) => {
+// Function to get overall feedback statistics
+exports.getFeedbackSummary = async (req, res) => {
   try {
     const { dateFrom, dateTo, productId } = req.query;
 
@@ -493,7 +493,7 @@ exports.getFeedbackStatistics = async (req, res) => {
   }
 };
 
-// Hàm xóa feedback (soft delete) cho admin
+// Function to delete feedback (soft delete) for admin
 exports.deleteFeedback = async (req, res) => {
   try {
     const { feedbackId } = req.params;
@@ -537,7 +537,7 @@ exports.deleteFeedback = async (req, res) => {
   }
 };
 
-// Hàm khôi phục feedback đã xóa cho admin
+// Function to restore deleted feedback for admin
 exports.restoreFeedback = async (req, res) => {
   try {
     const { feedbackId } = req.params;

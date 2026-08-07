@@ -121,7 +121,7 @@ async function createOrderNotification({ userId, orderId, orderStatus, payStatus
  */
 function emitOrderNotification(io, notification, userId) {
   if (!io || !notification || !userId) {
-    console.warn('⚠️ Cannot emit notification: missing io, notification, or userId');
+    console.warn('Cannot emit notification: missing io, notification, or userId');
     return;
   }
 
@@ -139,7 +139,7 @@ function emitOrderNotification(io, notification, userId) {
     
     // Check if notification data is valid
     if (!notificationData || !notificationData._id) {
-      console.warn('⚠️ Invalid notification data:', notificationData);
+      console.warn('Invalid notification data:', notificationData);
       return;
     }
     
@@ -151,7 +151,7 @@ function emitOrderNotification(io, notification, userId) {
     io.to(`user_${userIdStr}`).emit('notificationBadgeUpdate', { userId: userIdStr });
     
     // Log for debugging
-    console.log(`🔔 Order notification emitted to user ${userIdStr} (room: user_${userIdStr})`);
+    console.log(`Order notification emitted to user ${userIdStr} (room: user_${userIdStr})`);
     console.log(`   Notification ID: ${notificationData._id}, Title: ${notificationData.title}`);
   } catch (error) {
     console.error('Error emitting order notification:', error);

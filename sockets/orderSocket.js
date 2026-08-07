@@ -26,7 +26,7 @@ function checkRateLimit(socketId) {
 const orderSocket = (io) => {
   io.on('connection', (socket) => {
     if (process.env.DEBUG === 'true') {
-      console.log(`📦 Order socket connected: ${socket.id}`);
+      console.log(`Order socket connected: ${socket.id}`);
     }
 
     /**

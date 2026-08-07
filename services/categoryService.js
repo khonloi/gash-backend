@@ -16,7 +16,7 @@ exports.createCategoryService = async ({ categoryName }) => {
 
     // 2. Category name validation
     const trimmedName = categoryName.trim();
-    // Cho phép chữ cái (có dấu tiếng Việt), số và dấu gạch ngang
+    // Allow letters (including Vietnamese accents), numbers, hyphens, and spaces
     const categoryNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9\- ]+$/;
     const hasLetter = /[a-zA-ZÀ-Ỵà-ỹ]/.test(trimmedName);
 
@@ -24,7 +24,7 @@ exports.createCategoryService = async ({ categoryName }) => {
       trimmedName.length < 2 ||
       trimmedName.length > 30 ||
       !categoryNamePattern.test(trimmedName) ||
-      !hasLetter // không cho phép chỉ toàn số
+      !hasLetter // do not allow numbers only
     ) {
       return {
         success: false,
@@ -34,7 +34,7 @@ exports.createCategoryService = async ({ categoryName }) => {
     }
 
 
-    // 3. Check duplicate - chỉ check với các category chưa bị xóa (isDeleted: false)
+    // 3. Check duplicate - only check active categories (isDeleted: false)
     const existingCategory = await Categories.findOne({ categoryName: trimmedName, isDeleted: false });
     if (existingCategory) {
       return {

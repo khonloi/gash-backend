@@ -1,31 +1,5 @@
 const statisticService = require('../services/statisticService');
 
-// exports.viewCustomerStats = async (req, res) => {
-//   try {
-//     const stats = await statisticService.getCustomerStats();
-//     res.status(200).json(stats);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error retrieving customer statistics', error: error.message });
-//   }
-// };
-
-// exports.viewRevenueStats = async (req, res) => {
-//   try {
-//     const stats = await statisticService.getRevenueStats();
-//     res.status(200).json(stats);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error retrieving revenue statistics', error: error.message });
-//   }
-// };
-
-// exports.viewOrderStats = async (req, res) => {
-//   try {
-//     const stats = await statisticService.getOrderStats();
-//     res.status(200).json(stats);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error retrieving order statistics', error: error.message });
-//   }
-// };
 
 exports.viewRevenueByWeek = async (req, res) => {
   try {
@@ -52,7 +26,7 @@ exports.viewRevenueByWeek = async (req, res) => {
 
 exports.viewRevenueByMonth = async (req, res) => {
   try {
-    const numMonths = parseInt(req.query.months) || 24; // Default 24 months (2 years), có thể truyền ?months=6
+    const numMonths = parseInt(req.query.months) || 24; // Default 24 months (2 years), can pass ?months=6
 
     // Validate numMonths
     if (numMonths < 1 || numMonths > 24) {
@@ -129,7 +103,7 @@ exports.viewRevenueByDay = async (req, res) => {
 
 exports.viewRevenueByYear = async (req, res) => {
   try {
-    const numYears = parseInt(req.query.years) || 3; // Default 3 years, có thể truyền ?years=5
+    const numYears = parseInt(req.query.years) || 3; // Default 3 years, can pass ?years=5
 
     // Validate numYears
     if (numYears < 1 || numYears > 10) {

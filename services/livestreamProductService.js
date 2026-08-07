@@ -316,9 +316,9 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
             };
         }
 
-        // QUAN TRỌNG: Chỉ cho phép 1 product được pin tại 1 thời điểm
-        // Unpin tất cả products khác trong livestream này (đảm bảo chỉ có 1 product pinned)
-        // Lấy danh sách products sẽ bị unpin để emit events
+        // IMPORTANT: Only allow 1 product to be pinned at a time
+        // Unpin all other products in this livestream (ensure only 1 product is pinned)
+        // Get list of products to be unpinned to emit events
         const productsToUnpin = await LiveProduct.find({
             liveId: liveId,
             isPinned: true,
@@ -329,14 +329,14 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
         await LiveProduct.updateMany(
             {
                 liveId: liveId,
-                isPinned: true, // Chỉ unpin các product đang được pin
+                isPinned: true, // Only unpin products currently pinned
                 _id: { $ne: productId } // Exclude the product being pinned
             },
             { isPinned: false, removeBy: userId }
         );
 
-        // Emit events cho các products bị unpin (để frontend cập nhật UI)
-        // NOTE: Pin product và pin comment hoạt động độc lập, không ảnh hưởng đến nhau
+        // Emit events for unpinned products (for frontend UI update)
+        // NOTE: Pin product and pin comment work independently, without affecting each other
         productsToUnpin.forEach(liveProductToUnpin => {
             getIO().to(`live_${liveId}`).emit('product:unpinned', {
                 liveId,

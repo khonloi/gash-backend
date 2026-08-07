@@ -7,7 +7,7 @@ const ProductColors = require('../models/ProductColors');
 const ProductSizes = require('../models/ProductSizes');
 const mongoose = require('mongoose');
 
-// Export bill cho một order cụ thể
+// Export bill for a specific order
 exports.exportBill = async (req, res) => {
     try {
         const { orderId } = req.params;
@@ -20,7 +20,7 @@ exports.exportBill = async (req, res) => {
             });
         }
 
-        // Lấy thông tin order với populate
+        // Get order details with populate
         const order = await Orders.findById(orderId)
             .populate({
                 path: 'accountId',
@@ -38,7 +38,7 @@ exports.exportBill = async (req, res) => {
             });
         }
 
-        // Check quyền: admin/staff có thể xem tất cả, user chỉ xem được bill của mình
+        // Permissions check: admin/staff can view all, user can only view their own bill
         if (req.user.role !== 'admin' && req.user.role !== 'manager' &&
             order.accountId._id.toString() !== req.user.id) {
             return res.status(403).json({
@@ -48,7 +48,7 @@ exports.exportBill = async (req, res) => {
         }
 
 
-        // Lấy tất cả order details của order này
+        // Get all order details for this order
         const orderDetails = await OrderDetails.find({ orderId: orderId })
             .populate({
                 path: 'variantId',
@@ -69,9 +69,9 @@ exports.exportBill = async (req, res) => {
                 ]
             });
 
-        // Tính toán thông tin bill cơ bản
+        // Calculate basic bill data
         const billData = {
-            // Thông tin đơn hàng
+            // Order information
             order: {
                 orderId: order._id,
                 orderDate: order.orderDate,
@@ -83,7 +83,7 @@ exports.exportBill = async (req, res) => {
                 shippingAddress: order.addressReceive
             },
 
-            // Thông tin khách hàng
+            // Customer information
             customer: {
                 name: order.name, // Recipient's name from order
                 email: order.accountId.email,
@@ -91,7 +91,7 @@ exports.exportBill = async (req, res) => {
                 address: order.addressReceive // Delivery address from order
             },
 
-            // Chi tiết sản phẩm
+            // Product details
             items: orderDetails.map(detail => ({
                 productName: detail.variantId?.productId?.productName || 'N/A',
                 color: detail.variantId?.productColorId?.productColorName || 'N/A',
@@ -102,7 +102,7 @@ exports.exportBill = async (req, res) => {
                 totalPrice: detail.unitPrice * detail.Quantity
             })),
 
-            // Thông tin giảm giá
+            // Discount information
             discount: order.voucherId ? {
                 voucher: {
                     _id: order.voucherId._id,
@@ -126,7 +126,7 @@ exports.exportBill = async (req, res) => {
                 appliedDiscount: 0
             },
 
-            // Tổng kết
+            // Summary
             summary: {
                 subtotal: orderDetails.reduce((sum, detail) => sum + (detail.unitPrice * detail.Quantity), 0),
                 discount: order.discountAmount || 0,
@@ -134,7 +134,7 @@ exports.exportBill = async (req, res) => {
             }
         };
 
-        // Trả về dữ liệu bill
+        // Return bill data
         res.status(200).json({
             success: true,
             message: 'Bill exported successfully',

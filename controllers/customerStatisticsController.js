@@ -1,7 +1,7 @@
 const Account = require("../models/Accounts");
 const ExcelJS = require("exceljs");
 
-// 📊 API lấy thống kê tổng quan
+// API get overview statistics
 exports.getCustomerStatistics = async (req, res) => {
   try {
     const totalCustomers = await Account.countDocuments({ role: "user" });
@@ -30,7 +30,7 @@ exports.getCustomerStatistics = async (req, res) => {
   }
 };
 
-// 📤 API Export Excel
+// API Export Excel
 exports.exportCustomerStatistics = async (req, res) => {
   try {
     const accounts = await Account.find({ role: "user" });
@@ -58,7 +58,7 @@ exports.exportCustomerStatistics = async (req, res) => {
       });
     });
 
-    // Thiết lập header trả về file
+    // Set response headers for file download
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -73,12 +73,12 @@ exports.exportCustomerStatistics = async (req, res) => {
   }
 };
 
-// 🏆 API Lấy top khách hàng (mock data nếu chưa có dữ liệu đơn hàng thật)
+// API Get top customers (mock data if no real order data yet)
 exports.getTopCustomers = async (req, res) => {
   try {
     const period = req.query.period || "month";
 
-    // Xác định thời gian lọc
+    // Determine filter date range
     let dateFilter = {};
     if (period === "month") {
       const startOfMonth = new Date();
@@ -94,13 +94,13 @@ exports.getTopCustomers = async (req, res) => {
       .limit(5)
       .select("username email createdAt");
 
-    // ⚠️ Nếu chưa có dữ liệu đơn hàng, dùng dữ liệu giả
+    // If no order data, use mock data
     const formatted = topCustomers.map((u) => ({
       id: u._id,
       name: u.username,
       email: u.email,
-      orders: Math.floor(Math.random() * 10) + 1, // mock số đơn
-      spent: Math.floor(Math.random() * 1000) + 200, // mock chi tiêu
+      orders: Math.floor(Math.random() * 10) + 1, // mock order count
+      spent: Math.floor(Math.random() * 1000) + 200, // mock expenditure
     }));
 
     res.status(200).json({ success: true, data: formatted });
@@ -110,7 +110,7 @@ exports.getTopCustomers = async (req, res) => {
   }
 };
 
-// 📈 API Sparkline giả (dữ liệu mô phỏng xu hướng)
+// API Sparkline (mock data simulating trend)
 exports.getCustomerSparkline = async (req, res) => {
   try {
     const MOCK_SPARK = {

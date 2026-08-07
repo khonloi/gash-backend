@@ -3,28 +3,28 @@ const Category = require("../models/Categories");
 const ExcelJS = require("exceljs");
 
 /* ======================================================
-   📊 API: Tổng quan thống kê sản phẩm (có lọc)
+   API: Product Statistics Overview (filtered)
    ====================================================== */
 exports.getProductStatistics = async (req, res) => {
   try {
-    // Lấy các tham số filter từ FE gửi lên
+    // Get filter parameters from frontend request
     const { period = "all", category = "all", status = "all" } = req.query;
 
-    // Tạo bộ lọc động cho MongoDB
+    // Create dynamic filter for MongoDB
     const filter = {};
 
-    // --- Lọc theo danh mục ---
+    // --- Filter by category ---
     if (category !== "all") {
       const foundCat = await Category.findOne({ categoryName: category });
       if (foundCat) filter.categoryId = foundCat._id;
     }
 
-    // --- Lọc theo trạng thái ---
+    // --- Filter by status ---
     if (status !== "all") {
       filter.productStatus = status;
     }
 
-    // --- Lọc theo thời gian ---
+    // --- Filter by time period ---
     if (period !== "all") {
       const now = new Date();
       let fromDate;
@@ -35,7 +35,7 @@ exports.getProductStatistics = async (req, res) => {
       if (fromDate) filter.createdAt = { $gte: fromDate };
     }
 
-    // --- Đếm dữ liệu theo filter ---
+    // --- Count data based on filter ---
     const totalProducts = await Product.countDocuments(filter);
     const activeProducts = await Product.countDocuments({
       ...filter,
@@ -54,13 +54,13 @@ exports.getProductStatistics = async (req, res) => {
       productStatus: "discontinued",
     });
 
-    // --- Sản phẩm mới trong 30 ngày ---
+    // --- New products in the last 30 days ---
     const newProducts = await Product.countDocuments({
       ...filter,
       createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
     });
 
-    // Trả về kết quả
+    // Return response
     res.status(200).json({
       success: true,
       data: {
@@ -82,14 +82,14 @@ exports.getProductStatistics = async (req, res) => {
 };
 
 /* ======================================================
-   📈 API: Thống kê theo danh mục (Category Distribution)
+   API: Category Distribution Statistics
    ====================================================== */
 exports.getCategoryDistribution = async (req, res) => {
   try {
     const data = await Product.aggregate([
       {
         $lookup: {
-          from: "categories", // đúng tên collection chứa danh mục
+          from: "categories", // collection name for categories
           localField: "categoryId",
           foreignField: "_id",
           as: "categoryInfo",
@@ -104,7 +104,7 @@ exports.getCategoryDistribution = async (req, res) => {
       {
         $group: {
           _id: {
-            $ifNull: ["$categoryInfo.categoryName", "Unknown"], // đúng field categoryName
+            $ifNull: ["$categoryInfo.categoryName", "Unknown"],
           },
           value: { $sum: 1 },
         },
@@ -133,13 +133,13 @@ exports.getCategoryDistribution = async (req, res) => {
 };
 
 /* ======================================================
-   🏆 API: Top sản phẩm bán chạy
+   API: Top Selling Products
    ====================================================== */
 exports.getTopProducts = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 6;
     const top = await Product.find()
-      .sort({ sold: -1 }) // Nếu dùng field khác, ví dụ sales hoặc quantitySold → đổi ở đây
+      .sort({ sold: -1 })
       .limit(limit)
       .select("productName sku sold stock categoryId");
 
@@ -163,7 +163,7 @@ exports.getTopProducts = async (req, res) => {
 };
 
 /* ======================================================
-   📤 API: Xuất Excel thống kê sản phẩm
+   API: Export Product Statistics to Excel
    ====================================================== */
 exports.exportProductStatistics = async (req, res) => {
   try {

@@ -17,19 +17,19 @@ async function connectDatabase() {
 
   // Log connection lifecycle events
   mongoose.connection.on('connected', () => {
-    console.log('✅ MongoDB connected');
+    console.log('MongoDB connected');
   });
 
   mongoose.connection.on('disconnected', () => {
-    console.warn('⚠️  MongoDB disconnected — attempting to reconnect...');
+    console.warn('MongoDB disconnected — attempting to reconnect...');
   });
 
   mongoose.connection.on('reconnected', () => {
-    console.log('✅ MongoDB reconnected');
+    console.log('MongoDB reconnected');
   });
 
   mongoose.connection.on('error', (err) => {
-    console.error('❌ MongoDB error:', err.message);
+    console.error('MongoDB error:', err.message);
   });
 
   try {
@@ -39,7 +39,7 @@ async function connectDatabase() {
       socketTimeoutMS: 45000,          // Close sockets after 45s of inactivity
     });
   } catch (err) {
-    console.error('❌ MongoDB initial connection failed:', err.message);
+    console.error('MongoDB initial connection failed:', err.message);
     process.exit(1);
   }
 }
@@ -51,9 +51,9 @@ async function connectDatabase() {
 async function disconnectDatabase() {
   try {
     await mongoose.connection.close();
-    console.log('✅ MongoDB connection closed gracefully');
+    console.log('MongoDB connection closed gracefully');
   } catch (err) {
-    console.error('❌ Error closing MongoDB connection:', err.message);
+    console.error('Error closing MongoDB connection:', err.message);
   }
 }
 

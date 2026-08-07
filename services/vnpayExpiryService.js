@@ -82,13 +82,13 @@ class VNPayExpiryService {
           }))
         );
 
-        console.log(`⏰ VNPay expiry: cancelled ${result.modifiedCount} order(s) and restored their stock.`);
+        console.log(`VNPay expiry: cancelled ${result.modifiedCount} order(s) and restored their stock.`);
       } catch (error) {
         console.error('Error checking expired VNPay orders:', error);
       }
     }, 60000); // Run every 60 seconds
 
-    console.log('✅ VNPay expiry checker started');
+    console.log('VNPay expiry checker started');
   }
 }
 

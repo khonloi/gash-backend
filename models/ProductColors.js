@@ -15,7 +15,7 @@ const ProductColorsSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Thêm index cho productColorName để tăng tốc độ tìm kiếm
+// Add index on productColorName for faster lookups
 ProductColorsSchema.index({ productColorName: 1 });
 
 module.exports = mongoose.model('ProductColors', ProductColorsSchema);

@@ -49,7 +49,7 @@ connectDatabase().then(() => {
 
 // ===== Graceful Shutdown =====
 const gracefulShutdown = (signal) => {
-  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
 
   server.close(async () => {
     console.log('HTTP server closed');
@@ -60,7 +60,7 @@ const gracefulShutdown = (signal) => {
 
   // Force-kill if graceful shutdown takes too long (e.g., hung connections)
   setTimeout(() => {
-    console.error('⚠️  Graceful shutdown timed out — forcing exit');
+    console.error('Graceful shutdown timed out — forcing exit');
     process.exit(1);
   }, 10_000).unref(); // .unref() prevents the timer from keeping the process alive
 };
@@ -81,5 +81,5 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 // ===== Start Server =====
 const PORT = env.PORT;
 server.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT} [${env.NODE_ENV}]`);
+  console.log(`Server running on port ${PORT} [${env.NODE_ENV}]`);
 });

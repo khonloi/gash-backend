@@ -66,7 +66,7 @@ module.exports = (io) => {
 
   io.on('connection', (socket) => {
     if (process.env.DEBUG === 'true') {
-      console.log(`⚡ Chat socket connected: ${socket.id} (auth: ${socket.isAuthenticated})`);
+      console.log(`Chat socket connected: ${socket.id} (auth: ${socket.isAuthenticated})`);
     }
 
     // ===== join_room =====

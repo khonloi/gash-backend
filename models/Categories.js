@@ -15,8 +15,8 @@ const CategoriesSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound unique index: chỉ unique khi isDeleted: false
-// Cho phép tạo lại category với tên đã bị xóa
+// Compound unique index: unique only when isDeleted: false
+// Allows recreating a category with a name that was previously deleted
 CategoriesSchema.index({ categoryName: 1, isDeleted: 1 }, {
   unique: true,
   partialFilterExpression: { isDeleted: false }

@@ -175,7 +175,7 @@ exports.verifyRegistration = async (userId, body, requestOrigin = null) => {
             console.error('  Expected:', expectedChallenge);
             console.error('  Received:', clientData.challenge);
           } else {
-            console.log('✓ Challenge matches');
+            console.log('Challenge matches');
           }
           
           // Compare origins
@@ -184,7 +184,7 @@ exports.verifyRegistration = async (userId, body, requestOrigin = null) => {
             console.error('  Expected:', expectedOrigin);
             console.error('  Received:', clientData.origin);
           } else {
-            console.log('✓ Origin matches');
+            console.log('Origin matches');
           }
         } catch (e) {
           console.error('Error parsing clientDataJSON:', e);

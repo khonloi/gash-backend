@@ -7,16 +7,16 @@ const storage = new CloudinaryStorage({
   params: {
     folder: 'gash_app',
     transformation: [{ width: 1200, crop: 'limit' }],
-    resource_type: 'image', // chỉ cho phép ảnh, chặn video/file khác
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'tif'], // Cho phép tất cả định dạng ảnh phổ biến
-    timeout: 60000, // 60 giây timeout cho mỗi file
+    resource_type: 'image', // image only, block videos and other files
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'tif'], // Allow all common image formats
+    timeout: 60000, // 60s timeout per file
   },
 });
 
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    // Cho phép tất cả định dạng ảnh
+    // Allow all image mime types
     const allowedMimeTypes = [
       'image/jpeg',
       'image/jpg',

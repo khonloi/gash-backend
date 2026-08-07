@@ -22,7 +22,7 @@ const ConversationSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// Format JSON trả về
+// Format returned JSON
 ConversationSchema.set('toJSON', {
     virtuals: true,
     versionKey: false,

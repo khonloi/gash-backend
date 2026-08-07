@@ -180,7 +180,7 @@ exports.getOrderById = async (req, res) => {
 
 exports.updateOrderByAdmin = async (req, res) => {
   try {
-    // Chỉ admin và staff mới có thể cập nhật đơn hàng
+    // Only admin and staff can update order
     if (req.user.role !== 'admin' && req.user.role !== 'manager') {
       return res.status(403).json({ message: 'Access denied: Admin/Staff role required' });
     }
@@ -207,7 +207,7 @@ exports.updateOrderByAdmin = async (req, res) => {
       return res.status(400).json({ message: 'Cancel reason cannot exceed 500 characters' });
     }
 
-    // Chỉ cho phép cập nhật các trường cơ bản, không bao gồm feedback
+    // Only allow updating basic fields, feedback not included
     const allowedFields = { orderStatus, payStatus, refundStatus, refundProof, cancelReason };
     const filteredData = Object.fromEntries(
       Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
@@ -287,13 +287,13 @@ exports.vnpayReturn = async (req, res) => {
 
     const result = await vnpayService.handleReturn(req.query);
 
-    // Lấy orderId từ VNPay (chính là vnp_TxnRef đã gửi khi tạo URL)
+    // Get orderId from VNPay (vnp_TxnRef sent when creating URL)
     const orderId = req.query.vnp_TxnRef;
 
-    // Lấy số tiền (VNPay trả về nhân 100)
+    // Get amount (VNPay returns amount multiplied by 100)
     const amount = req.query.vnp_Amount ? Number(req.query.vnp_Amount) / 100 : 0;
 
-    // Phương thức thanh toán
+    // Payment method
     const paymentMethod = "VNPay";
 
     // Emit Socket.IO event for payment status update
@@ -388,13 +388,13 @@ exports.checkout = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid payment method' });
     }
 
-    // check account tồn tại
+    // Check if account exists
     const account = await Accounts.findById(userId);
     if (!account) {
       return res.status(404).json({ success: false, message: 'Account not found' });
     }
 
-    // tính toán voucher (nếu có)
+    // Calculate voucher (if any)
     let voucher = null;
     let discountAmount = 0;
     let finalPrice = totalPrice;
@@ -402,19 +402,19 @@ exports.checkout = async (req, res) => {
     if (voucherCode) {
       try {
         const result = await applyVoucher(voucherCode, totalPrice);
-        // applyVoucher trả về { success, message, data: { voucher, discountAmount, finalPrice } }
+        // applyVoucher returns { success, message, data: { voucher, discountAmount, finalPrice } }
         if (result.success && result.data) {
           voucher = result.data.voucher;
           discountAmount = result.data.discountAmount;
           finalPrice = result.data.finalPrice;
         }
-        // Nếu không success (voucher invalid), bỏ qua voucher, giữ nguyên giá gốc
+        // If not success (invalid voucher), ignore voucher and keep original price
       } catch (err) {
-        // bỏ qua voucher, giữ nguyên giá gốc
+        // Ignore voucher, keep original price
       }
     }
 
-    // tạo order
+    // Create order
     const newOrder = new Orders({
       accountId: userId,
       name,
@@ -431,13 +431,13 @@ exports.checkout = async (req, res) => {
 
     const savedOrder = await newOrder.save();
 
-    // nếu có voucher thì tăng usedCount
+    // Increment usedCount if voucher was applied
     if (voucher) {
       voucher.usedCount += 1;
       await voucher.save();
     }
 
-    // tạo order details từ items
+    // Create order details from items
     const orderDetailsToSave = [];
     const boughtVariantIds = [];
     for (const item of items) {
@@ -518,7 +518,7 @@ exports.checkout = async (req, res) => {
       variantId: { $in: objectVariantIds },
     });
 
-    // 🔔 Emit Socket.IO events for cart update and new order
+    // Emit Socket.IO events for cart update and new order
     const io = req.app.get('io');
     if (io && userId) {
       // Emit cart update
@@ -562,9 +562,9 @@ exports.checkout = async (req, res) => {
         order: formattedOrderForSocket
       });
 
-      console.log(`📦 New order ${savedOrder._id} created, emitted to user_${userId} and order_admins`);
+      console.log(`New order ${savedOrder._id} created, emitted to user_${userId} and order_admins`);
 
-      // 🔔 Create and emit order creation notification
+      // Create and emit order creation notification
       try {
         const notification = await createOrderNotification({
           userId: userId.toString(),
@@ -658,7 +658,7 @@ exports.getOrderByIdForUser = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Kiểm tra quyền
+    // Check permissions
     if (user.role !== 'admin' && user.role !== 'manager' && order.accountId._id.toString() !== user.id) {
       return res.status(403).json({ success: false, message: 'Access denied: Can only view own order' });
     }
@@ -681,22 +681,22 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
-    // Lấy thông tin order hiện tại với voucher
+    // Get current order information with voucher
     const order = await orderService.getOrderByIdService(orderId, req.user);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Chỉ cho phép hủy khi trạng thái là pending
+    // Only allow cancelling when status is pending
     if (order.orderStatus !== 'pending') {
       return res.status(400).json({ message: 'Only pending orders can be cancelled' });
     }
 
-    // Xử lý voucher nếu order có sử dụng voucher
+    // Handle voucher if order used a voucher
     if (order.voucherId) {
       const voucher = await Voucher.findById(order.voucherId);
       if (voucher) {
-        // Giảm usedCount của voucher (hoàn lại số lần sử dụng)
+        // Decrease usedCount of voucher (restore usage count)
         if (voucher.usedCount > 0) {
           voucher.usedCount -= 1;
           await voucher.save();
@@ -704,17 +704,17 @@ exports.cancelOrder = async (req, res) => {
       }
     }
 
-    // Hoàn lại số lượng sản phẩm vào kho
+    // Restore product stock quantity to warehouse
     if (order.orderDetails && order.orderDetails.length > 0) {
       for (const orderDetail of order.orderDetails) {
         if (orderDetail.variantId) {
           const variant = await ProductVariant.findById(orderDetail.variantId);
           if (variant) {
-            // Lưu stockQuantity trước khi hoàn lại để kiểm tra
+            // Save stockQuantity before restoring for validation
             const oldStockQuantity = variant.stockQuantity;
-            // Cộng lại số lượng đã mua vào stock
+            // Add purchased quantity back to stock
             variant.stockQuantity += orderDetail.Quantity;
-            // Nếu từ 0 chuyển sang > 0 thì set variantStatus = active
+            // If transition from 0 to > 0, set variantStatus = active
             if (oldStockQuantity === 0 && variant.stockQuantity > 0) {
               variant.variantStatus = 'active';
             }
@@ -724,7 +724,7 @@ exports.cancelOrder = async (req, res) => {
       }
     }
 
-    // Cập nhật trạng thái sang cancelled và lưu cancelReason
+    // Update status to cancelled and save cancelReason
     let updateData = {
       orderStatus: 'cancelled',
       cancelReason
@@ -764,9 +764,9 @@ exports.cancelOrder = async (req, res) => {
       // Also emit to admin room so dashboard gets updates
       io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
 
-      console.log(`📦 Order ${orderId} cancelled, emitted to user_${userId} and order_admins`);
+      console.log(`Order ${orderId} cancelled, emitted to user_${userId} and order_admins`);
 
-      // 🔔 Create and emit order cancellation notification
+      // Create and emit order cancellation notification
       try {
         const notification = await createOrderNotification({
           userId,
@@ -836,13 +836,13 @@ exports.addFeedbackProduct = async (req, res) => {
       }
     }
 
-    // Kiểm tra order tồn tại và thuộc user hiện tại
+    // Check order exists and belongs to current user
     const order = await orderService.getOrderByIdService(orderId, req.user);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Chỉ cho phép feedback khi đơn hàng đã giao
+    // Only allow feedback when order is delivered
     if (order.orderStatus !== 'delivered') {
       return res.status(400).json({
         success: false,
@@ -850,7 +850,7 @@ exports.addFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Tìm chi tiết sản phẩm trong đơn hàng
+    // Find product detail in order
     const orderDetail = await OrderDetails.findOne({
       orderId: orderId,
       variantId: variantId,
@@ -863,7 +863,7 @@ exports.addFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Tạo update object
+    // Create update object
     const updateData = {};
     if (rating !== undefined) {
       updateData['feedback.rating'] = rating;
@@ -871,12 +871,12 @@ exports.addFeedbackProduct = async (req, res) => {
     if (content !== undefined) {
       updateData['feedback.content'] = content === null ? null : content.trim();
     }
-    // Reset isDeleted và set timestamps khi tạo feedback mới
+    // Reset isDeleted and set timestamps when creating new feedback
     updateData['feedback.isDeleted'] = false;
     updateData['feedback.createdAt'] = new Date();
     updateData['feedback.updatedAt'] = new Date();
 
-    // Cập nhật trực tiếp vào database
+    // Update directly in database
     const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
       orderDetail._id,
       { $set: updateData },
@@ -890,7 +890,7 @@ exports.addFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Verify từ database
+    // Verify from database
     const verifyOrderDetail = await OrderDetails.findById(orderDetail._id);
 
     res.status(200).json({
@@ -953,13 +953,13 @@ exports.editFeedbackProduct = async (req, res) => {
       }
     }
 
-    // Kiểm tra order tồn tại và thuộc user hiện tại
+    // Check order exists and belongs to current user
     const order = await orderService.getOrderByIdService(orderId, req.user);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Chỉ cho phép edit feedback khi đơn hàng đã giao
+    // Only allow edit feedback when order is delivered
     if (order.orderStatus !== 'delivered') {
       return res.status(400).json({
         success: false,
@@ -967,7 +967,7 @@ exports.editFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Tìm chi tiết sản phẩm trong đơn hàng
+    // Find product detail in order
     const orderDetail = await OrderDetails.findOne({
       orderId: orderId,
       variantId: variantId,
@@ -980,7 +980,7 @@ exports.editFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Kiểm tra feedback có bị xóa không
+    // Check if feedback is deleted
     if (orderDetail.feedback && orderDetail.feedback.isDeleted === true) {
       return res.status(404).json({
         success: false,
@@ -988,7 +988,7 @@ exports.editFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Kiểm tra xem có feedback để edit không
+    // Check if there is existing feedback to edit
     const hasExistingFeedback = orderDetail.feedback && (
       (orderDetail.feedback.rating && orderDetail.feedback.rating !== null) ||
       (orderDetail.feedback.content && orderDetail.feedback.content.trim() !== '')
@@ -1001,7 +1001,7 @@ exports.editFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Tạo update object
+    // Create update object
     const updateData = {};
     if (rating !== undefined) {
       updateData['feedback.rating'] = rating;
@@ -1009,10 +1009,10 @@ exports.editFeedbackProduct = async (req, res) => {
     if (content !== undefined) {
       updateData['feedback.content'] = content === null ? null : content.trim();
     }
-    // Cập nhật updatedAt khi edit
+    // Update updatedAt when editing
     updateData['feedback.updatedAt'] = new Date();
 
-    // Cập nhật trực tiếp vào database
+    // Update directly in database
     const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
       orderDetail._id,
       { $set: updateData },
@@ -1055,13 +1055,13 @@ exports.deleteFeedbackProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid order or variant ID' });
     }
 
-    // Kiểm tra order tồn tại và thuộc user hiện tại
+    // Check order exists and belongs to current user
     const order = await orderService.getOrderByIdService(orderId, req.user);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Chỉ cho phép xóa feedback khi đơn hàng đã giao
+    // Only allow delete feedback when order is delivered
     if (order.orderStatus !== 'delivered') {
       return res.status(400).json({
         success: false,
@@ -1069,7 +1069,7 @@ exports.deleteFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Tìm chi tiết sản phẩm trong đơn hàng
+    // Find product detail in order
     const orderDetail = await OrderDetails.findOne({
       orderId: orderId,
       variantId: variantId,
@@ -1082,7 +1082,7 @@ exports.deleteFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Kiểm tra feedback có bị xóa không
+    // Check if feedback is deleted
     if (orderDetail.feedback && orderDetail.feedback.isDeleted === true) {
       return res.status(404).json({
         success: false,
@@ -1090,7 +1090,7 @@ exports.deleteFeedbackProduct = async (req, res) => {
       });
     }
 
-    // Kiểm tra xem có feedback để xóa không
+    // Check if there is existing feedback to delete
     const hasExistingFeedback = orderDetail.feedback && (
       (orderDetail.feedback.rating && orderDetail.feedback.rating !== null) ||
       (orderDetail.feedback.content && orderDetail.feedback.content.trim() !== '')
@@ -1159,7 +1159,7 @@ exports.deleteFeedbackProduct = async (req, res) => {
 exports.getAllFeedbackOfProduct = async (req, res) => {
   try {
     const { productId } = req.params;
-    const currentUserId = req.user ? req.user.id : null; // Lấy user hiện tại nếu có
+    const currentUserId = req.user ? req.user.id : null; // Get current user if logged in
 
     // Validate product ID
     if (!productId) {
@@ -1176,7 +1176,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       });
     }
 
-    // Kiểm tra product có tồn tại không
+    // Check if product exists
     const product = await Product.findById(productId);
     if (!product) {
       return res.status(404).json({
@@ -1185,14 +1185,14 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       });
     }
 
-    // Lấy tất cả variants của product này
+    // Get all variants of this product
     const allVariantsOfProduct = await ProductVariant.find({
       productId: productId
     }).select('_id');
 
     const variantIds = allVariantsOfProduct.map(v => v._id);
 
-    // Tìm tất cả feedback của tất cả variants thuộc product này
+    // Find all feedback of all variants belonging to this product
     // Include deleted feedbacks so they can be shown to users with deletion message
     const query = {
       variantId: { $in: variantIds },
@@ -1202,7 +1202,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       ]
     };
 
-    // Lấy tất cả feedback trước để sắp xếp custom
+    // Get all feedback first for custom sorting
     const allFeedbacks = await OrderDetails.find(query)
       .populate({
         path: 'orderId',
@@ -1226,40 +1226,40 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
           }
         ]
       })
-      .sort({ 'orderId.orderDate': -1 }); // Sắp xếp theo thời gian trước
+      .sort({ 'orderId.orderDate': -1 }); // Sort by order date first
 
-    // Custom sorting: feedback của user hiện tại lên đầu, sau đó theo thời gian
+    // Custom sorting: current user's feedback on top, then by date
     const sortedFeedbacks = allFeedbacks
       .filter(feedback => feedback.orderId?.accountId?._id) // Skip entries with null/undefined orderId, accountId, or _id
       .sort((a, b) => {
-        // Nếu có user hiện tại đăng nhập
+        // If current user is logged in
         if (currentUserId) {
           const aIsCurrentUser = a.orderId?.accountId?._id?.toString() === currentUserId || false;
           const bIsCurrentUser = b.orderId?.accountId?._id?.toString() === currentUserId || false;
 
-          // Ưu tiên 1: Feedback của user hiện tại lên đầu tiên
-          if (aIsCurrentUser && !bIsCurrentUser) return -1; // a lên đầu
-          if (bIsCurrentUser && !aIsCurrentUser) return 1; // b lên đầu
+          // Priority 1: Current user's feedback first
+          if (aIsCurrentUser && !bIsCurrentUser) return -1; // a first
+          if (bIsCurrentUser && !aIsCurrentUser) return 1; // b first
         }
 
-        // Ưu tiên 2 (hoặc mặc định nếu không có user): Sắp xếp theo thời gian
+        // Priority 2 (or default): Sort by date
         const aDate = a.orderId?.orderDate ? new Date(a.orderId.orderDate) : new Date(0);
         const bDate = b.orderId?.orderDate ? new Date(b.orderId.orderDate) : new Date(0);
-        return bDate - aDate; // Mới nhất trước
+        return bDate - aDate; // Newest first
       });
 
-    // Lấy tổng số feedback (excluding deleted ones for statistics)
+    // Get total feedback count (excluding deleted ones for statistics)
     const activeFeedbacks = sortedFeedbacks.filter(f => !f.feedback.isDeleted);
     const totalFeedbacks = activeFeedbacks.length;
 
-    // Tính toán thống kê với rating (exclude deleted feedbacks from statistics)
+    // Calculate rating statistics (exclude deleted feedbacks from statistics)
     const feedbacksWithRating = activeFeedbacks.filter(f => f.feedback.rating && f.feedback.rating !== null);
     const totalRatings = feedbacksWithRating.length;
     const averageRating = totalRatings > 0
       ? feedbacksWithRating.reduce((sum, feedback) => sum + feedback.feedback.rating, 0) / totalRatings
       : 0;
 
-    // Tính % rating thay vì count
+    // Calculate % rating instead of count
     const ratingCounts = {
       5: feedbacksWithRating.filter(f => f.feedback.rating === 5).length,
       4: feedbacksWithRating.filter(f => f.feedback.rating === 4).length,
@@ -1343,7 +1343,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
 
 exports.getAllOrderForAdmin = async (req, res) => {
   try {
-    // Chỉ admin và manager mới có thể truy cập
+    // Access check
     if (req.user.role !== 'admin' && req.user.role !== 'manager') {
       return res.status(403).json({ message: 'Access denied: Admin/Manager role required' });
     }
@@ -1374,22 +1374,22 @@ exports.cancelOrder = async (req, res) => {
       });
     }
 
-    // Lấy thông tin order hiện tại với voucher
+    // Get current order information with voucher
     const order = await orderService.getOrderByIdService(orderId, req.user);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Chỉ cho phép hủy khi trạng thái là pending
+    // Only allow cancelling when status is pending
     if (order.orderStatus !== 'pending') {
       return res.status(400).json({ message: 'Only pending orders can be cancelled' });
     }
 
-    // Xử lý voucher nếu order có sử dụng voucher
+    // Handle voucher if order used a voucher
     if (order.voucherId) {
       const voucher = await Voucher.findById(order.voucherId);
       if (voucher) {
-        // Giảm usedCount của voucher (hoàn lại số lần sử dụng)
+        // Decrease usedCount of voucher (restore usage count)
         if (voucher.usedCount > 0) {
           voucher.usedCount -= 1;
           await voucher.save();
@@ -1397,17 +1397,17 @@ exports.cancelOrder = async (req, res) => {
       }
     }
 
-    // Hoàn lại số lượng sản phẩm vào kho
+    // Restore product stock quantity to warehouse
     if (order.orderDetails && order.orderDetails.length > 0) {
       for (const orderDetail of order.orderDetails) {
         if (orderDetail.variantId) {
           const variant = await ProductVariant.findById(orderDetail.variantId);
           if (variant) {
-            // Lưu stockQuantity trước khi hoàn lại để kiểm tra
+            // Save stockQuantity before restoring for validation
             const oldStockQuantity = variant.stockQuantity;
-            // Cộng lại số lượng đã mua vào stock
+            // Add purchased quantity back to stock
             variant.stockQuantity += orderDetail.Quantity;
-            // Nếu từ 0 chuyển sang > 0 thì set variantStatus = active
+            // If transition from 0 to > 0, set variantStatus = active
             if (oldStockQuantity === 0 && variant.stockQuantity > 0) {
               variant.variantStatus = 'active';
             }
@@ -1417,7 +1417,7 @@ exports.cancelOrder = async (req, res) => {
       }
     }
 
-    // Cập nhật trạng thái sang cancelled và lưu cancelReason
+    // Update status to cancelled and save cancelReason
     let updateData = {
       orderStatus: 'cancelled',
       cancelReason

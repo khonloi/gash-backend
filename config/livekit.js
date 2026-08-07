@@ -2,7 +2,7 @@ const { RoomServiceClient, AccessToken } = require('livekit-server-sdk');
 
 // LiveKit configuration
 const LIVEKIT_CONFIG = {
-    // LiveKit server URL (có thể dùng cloud hoặc self-hosted)
+    // LiveKit server URL (can use cloud or self-hosted)
     serverUrl: process.env.LIVEKIT_SERVER_URL || 'wss://your-livekit-server.com',
 
     // API credentials
@@ -19,13 +19,13 @@ const LIVEKIT_CONFIG = {
 
     // Token settings
     tokenSettings: {
-        ttl: 7200, // 2 hours - Hợp lý và phù hợp cho hầu hết use cases
-        // Lý do chọn 2 giờ:
-        // Cân bằng tốt giữa security và performance
-        // Hầu hết livestream 1-2 giờ → không cần refresh
-        // Livestream dài hơn (>2h) → chỉ cần refresh 1 lần
-        // Security tốt hơn 4 giờ (token không quá lâu)
-        // Performance tốt (refresh không quá thường xuyên)
+        ttl: 7200, // 2 hours - Suitable for most use cases
+        // Reasons for choosing 2 hours:
+        // Good balance between security and performance
+        // Most livestreams last 1-2 hours -> no refresh needed
+        // Longer livestreams (>2h) -> only need to refresh once
+        // Better security than 4 hours (token doesn't last too long)
+        // Good performance (refresh not too frequent)
         canPublish: false, // Viewers cannot publish video (only host can)
         canSubscribe: true, // Viewers can subscribe to watch
         canPublishData: true // Allow sending data messages (for comments/reactions)
@@ -38,7 +38,7 @@ const validateConfig = () => {
     const missing = requiredEnvVars.filter(varName => !process.env[varName]);
 
     if (missing.length > 0) {
-        console.warn(`⚠️  Warning: Missing LiveKit environment variables: ${missing.join(', ')}`);
+        console.warn(`Warning: Missing LiveKit environment variables: ${missing.join(', ')}`);
         console.warn('   Using default/placeholder values. This will not work in production!');
     }
 };

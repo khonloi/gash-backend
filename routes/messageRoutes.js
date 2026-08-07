@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const messageController = require('../controllers/messageController');
 
-// Lấy messages của 1 conversation
+// Get messages of a conversation
 router.get('/:conversationId/messages', messageController.getMessages);
 
-// Gửi message
+// Send message
 router.post('/:conversationId/messages', messageController.sendMessage);
 
 module.exports = router;

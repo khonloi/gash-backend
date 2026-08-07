@@ -5,12 +5,6 @@ const {
     authorizeRole,
 } = require("../middleware/authMiddleware");
 const {
-    // createProductImage,
-    // getAllProductImages,
-    // getProductImagesByProductId,
-    // getProductImageById,
-    // updateProductImage,
-    // deleteProductImage,
     createProductColor,
     getAllProductColors,
     getProductColorById,
@@ -24,13 +18,6 @@ const {
     searchSpecifications
 } = require("../controllers/specificationController");
 
-// --- Product Images Routes ---
-// router.post("/create-image", authenticateJWT, authorizeRole(["admin", "manager"]), createProductImage);
-// router.get("/get-all-images", getAllProductImages);
-// router.get("/get-images-by-product/:productId", getProductImagesByProductId);
-// router.get("/get-image-detail/:id", getProductImageById);
-// router.put("/update-image/:id", authenticateJWT, authorizeRole(["admin", "manager"]), updateProductImage);
-// router.delete("/delete-image/:id", authenticateJWT, authorizeRole(["admin", "manager"]), deleteProductImage);
 
 // --- Product Colors Routes ---
 router.post("/create-color", authenticateJWT, authorizeRole(["admin", "manager"]), createProductColor);

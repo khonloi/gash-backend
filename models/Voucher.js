@@ -76,7 +76,7 @@ const VoucherSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// Format JSON trả về
+// Format JSON returned
 VoucherSchema.set('toJSON', {
     virtuals: true,
     versionKey: false,

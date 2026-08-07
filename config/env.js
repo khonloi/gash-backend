@@ -29,7 +29,7 @@ const REQUIRED = [
 function validateEnv() {
   const missing = REQUIRED.filter((key) => !process.env[key]);
   if (missing.length > 0) {
-    console.error('\n❌ FATAL: Missing required environment variables:');
+    console.error('\nFATAL: Missing required environment variables:');
     missing.forEach((key) => console.error(`   • ${key}`));
     console.error('\nCopy .env.example to .env and fill in the values.\n');
     process.exit(1);

@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 // Get all vouchers for admin
 exports.getAllVouchersForAdmin = async (req, res) => {
     try {
-        // Check phân quyền
+        // Check authorization
         if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
@@ -31,7 +31,7 @@ exports.getAllVouchersForAdmin = async (req, res) => {
 // Create voucher for admin
 exports.createVoucher = async (req, res) => {
     try {
-        // Check phân quyền
+        // Check authorization
         if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
@@ -79,7 +79,7 @@ exports.createVoucher = async (req, res) => {
 // Update voucher for admin
 exports.updateVoucher = async (req, res) => {
     try {
-        // Check phân quyền
+        // Check authorization
         if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
@@ -136,7 +136,7 @@ exports.updateVoucher = async (req, res) => {
 // Disable voucher for admin (soft delete)
 exports.deleteVoucher = async (req, res) => {
     try {
-        // Check phân quyền
+        // Check authorization
         if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
             return res.status(403).json({
                 success: false,

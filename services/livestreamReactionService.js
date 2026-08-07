@@ -81,9 +81,9 @@ exports.addReaction = async (liveId, userId, reactionType) => {
     }
 };
 
-// Get reaction counts for a livestream (User và Admin dùng chung - vì reaction ko có xóa)
-// Trả về counts (aggregate) thay vì array đầy đủ để tối ưu performance
-// Real-time updates qua WebSocket nên không cần pagination/limit
+// Get reaction counts for a livestream (Shared by User and Admin - since reactions are not deleted)
+// Returns counts (aggregate) instead of full array for performance optimization
+// Real-time updates via WebSocket so no pagination/limit needed
 exports.getLiveReactions = async (liveId) => {
     try {
         // Get reaction counts by type (aggregate)

@@ -2,19 +2,19 @@ const express = require('express');
 const router = express.Router();
 const conversationController = require('../controllers/conversationController');
 
-// Lấy danh sách conversations (filter theo query)
+// Get list of conversations (filtered by query)
 router.get('/', conversationController.getList);
 
-// Lấy chi tiết conversation + messages
+// Get conversation details + messages
 router.get('/:id', conversationController.getDetail);
 
-// Đóng conversation
+// Close conversation
 router.put('/:id/close', conversationController.close);
 
-// Tạo conversation mới
+// Create new conversation
 router.post('/', conversationController.create);
 
-// Staff nhận conversation
+// Staff assign/take conversation
 router.put('/:id/take', conversationController.take);
 
 module.exports = router;

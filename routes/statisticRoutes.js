@@ -3,15 +3,6 @@ const router = express.Router();
 const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
 const statisticController = require('../controllers/statisticController');
 
-// View Customer Statistics (Admin/Manager only)
-// router.get('/customers', authenticateJWT, authorizeRole(['admin']), statisticController.viewCustomerStats);
-
-// View Revenue Statistics (Admin/Manager only)
-// router.get('/revenue', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueStats);
-
-// View Order Statistics (Admin/Manager only)
-// router.get('/orders', authenticateJWT, authorizeRole(['admin']), statisticController.viewOrderStats);
-
 // View Revenue by Week (Admin/Manager only)
 router.get('/revenue/revenue-by-week', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByWeek);
 
@@ -25,7 +16,7 @@ router.get('/revenue/revenue-by-year', authenticateJWT, authorizeRole(['admin'])
 router.get('/revenue/revenue-by-day', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByDay);
 
 // ========================================================================
-// 🆕 THÊM CÁC ROUTE MỚI TỪ FILE THỨ HAI (CUSTOMER + PRODUCT STATISTICS)
+// CUSTOMER + PRODUCT STATISTICS
 // ========================================================================
 const {
   getProductStatistics,
@@ -40,7 +31,7 @@ const {
 } = require('../controllers/customerStatisticsController');
 
 // ===============================
-// 🧍 CUSTOMER STATISTICS
+// CUSTOMER STATISTICS
 // ===============================
 router.get(
   '/customers',
@@ -56,7 +47,7 @@ router.get(
   exportCustomerStatistics
 );
 
-// 🏆 Top Customers
+// Top Customers
 router.get(
   '/customers/top',
   authenticateJWT,
@@ -64,7 +55,7 @@ router.get(
   require('../controllers/customerStatisticsController').getTopCustomers
 );
 
-// 📈 Sparkline Data
+// Sparkline Data
 router.get(
   '/customers/sparkline',
   authenticateJWT,
@@ -74,7 +65,7 @@ router.get(
 
 
 // ===============================
-// 📦 PRODUCT STATISTICS
+// PRODUCT STATISTICS
 // ===============================
 router.get(
   '/products',
@@ -104,5 +95,5 @@ router.get(
   exportProductStatistics
 );
 
-// Export cuối cùng (đặt sau cùng để router hoạt động đúng)
+// Export router
 module.exports = router;

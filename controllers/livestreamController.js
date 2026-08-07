@@ -17,7 +17,7 @@ exports.startLivestream = async (req, res) => {
         const result = await livestreamService.startLivestream(hostId, title, description);
 
         if (result.success) {
-            // 🔔 Emit Socket.IO event for livestream count update
+            // Emit Socket.IO event for livestream count update
             const io = req.app.get('io');
             if (io) {
                 // Get actual count (should be 1 after starting)
@@ -29,7 +29,7 @@ exports.startLivestream = async (req, res) => {
                 });
             }
 
-            // 🔔 Create notification for all users about livestream start
+            // Create notification for all users about livestream start
             try {
                 const livestreamId = result.data?.livestreamId;
                 const notificationTitle = 'Livestream Started!';
@@ -67,7 +67,7 @@ exports.startLivestream = async (req, res) => {
                             io.emit('newNotification', n);
                         }
                     }
-                    console.log(`📢 Sent ${notifications.length} livestream start notification(s) via Socket.IO`);
+                    console.log(`Sent ${notifications.length} livestream start notification(s) via Socket.IO`);
                 }
             } catch (notifError) {
                 // Log error but don't fail the livestream start
@@ -105,7 +105,7 @@ exports.endLivestream = async (req, res) => {
         const result = await livestreamService.endLivestream(livestreamId, userId, userRole);
 
         if (result.success) {
-            // 🔔 Emit Socket.IO event for livestream count update
+            // Emit Socket.IO event for livestream count update
             const io = req.app.get('io');
             if (io) {
                 // Get actual count (should be 0 after ending)
@@ -132,13 +132,13 @@ exports.endLivestream = async (req, res) => {
     }
 };
 
-// View livestream (User hoặc Staff)
+// View livestream (User or Staff)
 exports.joinLivestream = async (req, res) => {
     try {
         const { livestreamId } = req.body;
         const userId = req.user.id;
         const userName = req.user.username;
-        const userRole = req.user.role; // Lấy role để phân biệt staff vs user
+        const userRole = req.user.role; // Get role to differentiate staff vs user
 
         if (!livestreamId) {
             return res.status(400).json({

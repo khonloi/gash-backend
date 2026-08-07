@@ -93,8 +93,6 @@ const livestreamRoutes = require("./routes/livestreamRoutes");
 
 // -- Statistics --
 const statisticsRoutes = require("./routes/statisticRoutes");
-const newStatisticsRoutes = require("./routes/statRoutes");
-
 // -- Upload --
 const uploadRoutes = require("./routes/uploadRoutes");
 
@@ -153,7 +151,7 @@ app.use((err, req, res, next) => {
   const message = err.message || "Internal Server Error";
 
   if (status >= 500) {
-    console.error("🔥 Unhandled error:", err);
+    console.error("Unhandled error:", err);
   }
 
   res.status(status).json({
