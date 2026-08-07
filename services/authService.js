@@ -75,12 +75,30 @@ exports.requestForgotPasswordOtp = async (data) => {
     return { status: 404, response: { message: 'No account found with this email' } };
   }
   const otp = generateOTP();
-  const stored = storeOTP(email, otp);
-  if (!stored) {
+  const result = storeOTP(email, otp);
+  if (!result.stored) {
+    if (result.rateLimited) {
+      const retryAfterSeconds = Math.ceil((result.retryAfterMs || 0) / 1000);
+      return {
+        status: 429,
+        response: {
+          message: `Too many OTP requests. Please try again in ${retryAfterSeconds} seconds.`,
+          retryAfterSeconds,
+        },
+      };
+    }
     throw new Error('Failed to store OTP');
   }
-  return { status: 200, response: { message: 'OTP generated successfully', otp } };
+  // NOTE: Email is sent by the frontend via EmailJS.
+  // In production the OTP is NOT returned in the response — the frontend uses EmailJS to
+  // send it to the user. In development it is returned so engineers can test without email setup.
+  const responseBody = { message: 'OTP generated successfully' };
+  if (process.env.NODE_ENV !== 'production') {
+    responseBody.otp = otp; // development/testing only
+  }
+  return { status: 200, response: responseBody };
 };
+
 
 exports.verifyForgotPasswordOtp = async (data) => {
   const { email, otp } = data;
@@ -218,12 +236,30 @@ exports.requestRegisterOtp = async (data) => {
     return { status: 400, response: { message: 'Email already registered' } };
   }
   const otp = generateOTP();
-  const stored = storeOTP(email, otp);
-  if (!stored) {
+  const result = storeOTP(email, otp);
+  if (!result.stored) {
+    if (result.rateLimited) {
+      const retryAfterSeconds = Math.ceil((result.retryAfterMs || 0) / 1000);
+      return {
+        status: 429,
+        response: {
+          message: `Too many OTP requests. Please try again in ${retryAfterSeconds} seconds.`,
+          retryAfterSeconds,
+        },
+      };
+    }
     throw new Error('Failed to store OTP');
   }
-  return { status: 200, response: { message: 'OTP generated successfully', otp } };
+  // NOTE: Email is sent by the frontend via EmailJS.
+  // In production the OTP is NOT returned in the response — the frontend uses EmailJS to
+  // send it to the user. In development it is returned so engineers can test without email setup.
+  const responseBody = { message: 'OTP generated successfully' };
+  if (process.env.NODE_ENV !== 'production') {
+    responseBody.otp = otp; // development/testing only
+  }
+  return { status: 200, response: responseBody };
 };
+
 
 // Verify password for checkout authentication
 exports.verifyPassword = async (userId, password) => {

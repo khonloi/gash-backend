@@ -73,17 +73,38 @@ async function searchOrdersService(queryParams, user) {
       const endDate = new Date(year, month, day, 23, 59, 59, 999);
       query.orderDate = { $gte: startDate, $lte: endDate };
     } else {
-      const matchingDetails = await OrderDetails.find().populate({
-        path: "variantId",
-        populate: {
-          path: "productId",
-          model: "newProducts",
-          match: { productName: { $regex: trimmedQuery, $options: "i" } },
+      // FIX: Replaced full-table-scan N+1 query with a targeted aggregation pipeline.
+      // Old code: loaded ALL OrderDetails, populated variants+products in memory, then filtered in JS.
+      // New code: let MongoDB do the join and filter — only matching documents are transferred.
+      const matchingDetails = await OrderDetails.aggregate([
+        {
+          $lookup: {
+            from: 'newproductvariants',
+            localField: 'variantId',
+            foreignField: '_id',
+            as: 'variant',
+          },
         },
-      });
-      orderIdsByProduct = matchingDetails
-        .filter((d) => d.variantId && d.variantId.productId)
-        .map((d) => d.orderId.toString());
+        { $unwind: { path: '$variant', preserveNullAndEmptyArrays: false } },
+        {
+          $lookup: {
+            from: 'newproducts',
+            localField: 'variant.productId',
+            foreignField: '_id',
+            as: 'product',
+          },
+        },
+        { $unwind: { path: '$product', preserveNullAndEmptyArrays: false } },
+        {
+          $match: {
+            'product.productName': { $regex: trimmedQuery, $options: 'i' },
+          },
+        },
+        { $project: { orderId: 1 } },
+      ]);
+
+      orderIdsByProduct = matchingDetails.map((d) => d.orderId);
+
       query.$or = [
         { orderStatus: { $regex: trimmedQuery, $options: "i" } },
         { payStatus: { $regex: trimmedQuery, $options: "i" } },
@@ -94,11 +115,12 @@ async function searchOrdersService(queryParams, user) {
         query.$or.push({ _id: new mongoose.Types.ObjectId(trimmedQuery) });
       }
       if (orderIdsByProduct.length > 0) {
-        query.$or.push({ _id: { $in: orderIdsByProduct.map(id => new mongoose.Types.ObjectId(id)) } });
+        query.$or.push({ _id: { $in: orderIdsByProduct } });
       }
     }
   }
   return await Orders.find(query).populate("accountId", "username name");
+
 }
 
 async function getOrderByIdService(id, user) {

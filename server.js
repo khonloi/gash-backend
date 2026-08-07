@@ -1,7 +1,11 @@
+// Load and validate environment variables first — before any other imports.
+require('dotenv').config();
+const env = require('./config/env');
+env.validate();
+
 const http = require('http');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
-require('dotenv').config();
 
 const app = require('./app');
 const chatSocket = require('./sockets/chat');
@@ -57,16 +61,23 @@ orderSocket(io);
 // ===== Initialize LiveKit Service (SIMPLE) =====
 console.log('🚀 LiveKit service ready');
 
-// ===== Graceful Shutdown (SIMPLE) =====
+// ===== Graceful Shutdown =====
 const gracefulShutdown = (signal) => {
   console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
 
-  // Close server
-  server.close(() => {
+  server.close(async () => {
     console.log('HTTP server closed');
+    try {
+      io.close();
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed');
+    } catch (err) {
+      console.error('Error during shutdown:', err.message);
+    }
     process.exit(0);
   });
 };
+
 
 // Error handlers
 process.on('uncaughtException', (error) => {
@@ -83,8 +94,8 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = env.PORT;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT} [${env.NODE_ENV}]`);
   console.log(`🚀 LiveKit livestream: READY`);
-});
+});
