@@ -115,4 +115,20 @@ const OrdersSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Orders', OrdersSchema);
+// ===== Indexes =====
+// Per-user order list, sorted by newest first (getUserOrders, order history page)
+OrdersSchema.index({ accountId: 1, orderDate: -1 });
+
+// Admin dashboard filters by order status
+OrdersSchema.index({ orderStatus: 1 });
+
+// Admin/reporting filters by payment status
+OrdersSchema.index({ payStatus: 1 });
+
+// VNPay expiry checker — queries unpaid VNPAY orders with a set expiry time
+OrdersSchema.index({ paymentMethod: 1, payStatus: 1, vnpay_expiry_time: 1 });
+
+// Compound for common admin list: all orders sorted by date
+OrdersSchema.index({ orderDate: -1 });
+
+module.exports = mongoose.model('Orders', OrdersSchema);

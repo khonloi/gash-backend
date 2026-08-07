@@ -91,4 +91,15 @@ VoucherSchema.set('toJSON', {
     },
 });
 
+// ===== Indexes =====
+// Voucher code lookup at checkout (already has unique:true, but explicit index for clarity)
+VoucherSchema.index({ code: 1 });
+
+// Active voucher list: filter out deleted and expired vouchers
+VoucherSchema.index({ endDate: 1, isDeleted: 1 });
+
+// Usage tracking: find vouchers not yet at their limit
+VoucherSchema.index({ usageLimit: 1, usedCount: 1 });
+
 module.exports = mongoose.model('Vouchers', VoucherSchema);
+

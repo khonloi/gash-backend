@@ -47,6 +47,16 @@ const OrderDetailsSchema = new mongoose.Schema({
       default: false,
     },
   },
-});
+}, { timestamps: true });
 
-module.exports = mongoose.model('OrderDetails', OrderDetailsSchema);
+// ===== Indexes =====
+// Primary lookup: all details for a given order
+OrderDetailsSchema.index({ orderId: 1 });
+
+// Feedback queries: look up a specific item within an order
+OrderDetailsSchema.index({ orderId: 1, variantId: 1 });
+
+// Product feedback page: all reviews for a variant across all orders
+OrderDetailsSchema.index({ variantId: 1 });
+
+module.exports = mongoose.model('OrderDetails', OrderDetailsSchema);

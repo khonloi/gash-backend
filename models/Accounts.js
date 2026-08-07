@@ -30,7 +30,7 @@ const accountSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true,
-    select: null
+    select: false  // Never return password in queries unless explicitly selected with +password
   },
   image: {
     type: String,
@@ -118,3 +118,20 @@ accountSchema.methods.comparePassword = async function (candidatePassword) {
 };
 
 module.exports = mongoose.model('Accounts', accountSchema);
+
+// ===== Indexes =====
+// Note: username and email already have unique indexes from schema definition.
+// These additional indexes optimize common filter + sort patterns.
+
+// Login, OTP, password reset — lookup by email
+accountSchema.index({ email: 1 });
+
+// Admin dashboard — filter accounts by role
+accountSchema.index({ role: 1 });
+
+// Admin dashboard — filter by account status
+accountSchema.index({ accountStatus: 1 });
+
+// Soft-delete filter (isDeleted already has index: true in the schema field)
+// Compound for listing active, non-deleted users
+accountSchema.index({ isDeleted: 1, accountStatus: 1 });

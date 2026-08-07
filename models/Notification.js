@@ -45,4 +45,19 @@ const NotificationSchema = new mongoose.Schema({
   },
 });
 
-module.exports = mongoose.model("Notification", NotificationSchema);
+// ===== Indexes =====
+// User inbox: fetch all unread notifications for a user (most common query)
+NotificationSchema.index({ userId: 1, isRead: 1 });
+
+// Sort newest-first
+NotificationSchema.index({ createdAt: -1 });
+
+// Filter by type (e.g., only order notifications)
+NotificationSchema.index({ type: 1 });
+
+// TTL index: MongoDB automatically deletes notifications older than 90 days.
+// This keeps the collection from growing indefinitely without requiring a cron job.
+NotificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 90 });
+
+module.exports = mongoose.model('Notification', NotificationSchema);
+
