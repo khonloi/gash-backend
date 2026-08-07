@@ -69,7 +69,6 @@ const accountsRoutes = require("./routes/accountRoutes");
 const passkeyRoutes = require("./routes/passkeyRoutes");
 
 // -- Catalog --
-const categoriesRoutes = require("./routes/categoryRoutes");
 const productRoutes = require("./routes/productRoutes");
 const productSpecRoutes = require("./routes/specificationRoutes");
 const favoritesRoutes = require("./routes/favoriteRoutes");
@@ -104,7 +103,7 @@ app.use("/accounts", accountsRoutes);
 app.use("/passkeys", passkeyRoutes);
 
 // Catalog
-app.use("/categories", categoriesRoutes);
+app.use("/categories", productSpecRoutes);
 app.use("/products", productRoutes);
 app.use("/variants", productRoutes);
 app.use("/specifications", productSpecRoutes);

@@ -28,7 +28,9 @@ const {
 const {
   getCustomerStatistics,
   exportCustomerStatistics,
-} = require('../controllers/customerStatisticsController');
+  getTopCustomers,
+  getCustomerSparkline,
+} = statisticController;
 
 // ===============================
 // CUSTOMER STATISTICS
@@ -52,7 +54,7 @@ router.get(
   '/customers/top',
   authenticateJWT,
   authorizeRole(['admin']),
-  require('../controllers/customerStatisticsController').getTopCustomers
+  getTopCustomers
 );
 
 // Sparkline Data
@@ -60,7 +62,7 @@ router.get(
   '/customers/sparkline',
   authenticateJWT,
   authorizeRole(['admin']),
-  require('../controllers/customerStatisticsController').getCustomerSparkline
+  getCustomerSparkline
 );
 
 
