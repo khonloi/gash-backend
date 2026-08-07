@@ -74,6 +74,5 @@ module.exports = {
   LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET,
 
   // Debug flags
-  ENABLE_DEBUG_ORDERS: process.env.ENABLE_DEBUG_ORDERS === 'true',
   DEBUG: process.env.DEBUG === 'true',
 };

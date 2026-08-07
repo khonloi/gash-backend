@@ -1,5 +1,5 @@
-const LiveComment = require('../models/liveComment');
-const LiveProduct = require('../models/liveProduct');
+const LiveComment = require('../models/LiveComment');
+const LiveProduct = require('../models/LiveProduct');
 const Livestream = require('../models/Livestream');
 const { getIO } = require('../sockets/productSocket');
 

@@ -71,14 +71,12 @@ const passkeyRoutes = require("./routes/passkeyRoutes");
 // -- Catalog --
 const categoriesRoutes = require("./routes/categoryRoutes");
 const productRoutes = require("./routes/productRoutes");
-const productVariantRoutes = require("./routes/productVariantRoutes");
 const productSpecRoutes = require("./routes/specificationRoutes");
 const favoritesRoutes = require("./routes/favoriteRoutes");
 
 // -- Cart & Orders --
 const cartRoutes = require("./routes/cartRoutes");
 const ordersRoutes = require("./routes/orderRoutes");
-const orderDetailsRoutes = require("./routes/orderDetailRoutes");
 const billRoutes = require("./routes/billRoutes");
 const voucherRoutes = require("./routes/voucherRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
@@ -92,9 +90,6 @@ const notificationRoutes = require("./routes/notificationRoutes");
 
 // -- Livestream --
 const livestreamRoutes = require("./routes/livestreamRoutes");
-const livestreamProductRoutes = require("./routes/livestreamProductRoutes");
-const livestreamCommentRoutes = require("./routes/livestreamCommentRoutes");
-const livestreamReactionRoutes = require("./routes/livestreamReactionRoutes");
 
 // -- Statistics --
 const statisticsRoutes = require("./routes/statisticRoutes");
@@ -113,14 +108,14 @@ app.use("/passkeys", passkeyRoutes);
 // Catalog
 app.use("/categories", categoriesRoutes);
 app.use("/products", productRoutes);
-app.use("/variants", productVariantRoutes);
+app.use("/variants", productRoutes);
 app.use("/specifications", productSpecRoutes);
 app.use("/favorites", favoritesRoutes);
 
 // Cart & Orders
 app.use("/carts", cartRoutes);
 app.use("/orders", ordersRoutes);
-app.use("/order-details", orderDetailsRoutes);
+app.use("/order-details", ordersRoutes);
 app.use("/bills", billRoutes);
 app.use("/vouchers", voucherRoutes);
 app.use("/feedback", feedbackRoutes);
@@ -136,9 +131,9 @@ app.use("/notifications", notificationRoutes);
 
 // Livestream
 app.use("/livestream", livestreamRoutes);
-app.use("/livestream-products", livestreamProductRoutes);
-app.use("/livestream-comments", livestreamCommentRoutes);
-app.use("/livestream-reactions", livestreamReactionRoutes);
+app.use("/livestream-products", livestreamRoutes);
+app.use("/livestream-comments", livestreamRoutes);
+app.use("/livestream-reactions", livestreamRoutes);
 
 // Statistics
 app.use("/statistics", statisticsRoutes);

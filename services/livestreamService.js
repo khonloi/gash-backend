@@ -1,7 +1,7 @@
 const { generateAccessToken, createRoom, deleteRoom, roomService, LIVEKIT_CONFIG } = require('../config/livekit');
 const Livestream = require('../models/Livestream');
-const LiveProduct = require('../models/liveProduct');
-const LiveComment = require('../models/liveComment');
+const LiveProduct = require('../models/LiveProduct');
+const LiveComment = require('../models/LiveComment');
 const livestreamReactionService = require('./livestreamReactionService');
 
 // Cache for viewer counts (to reduce API calls)

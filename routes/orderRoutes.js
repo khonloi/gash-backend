@@ -1,55 +1,66 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
-const {
-  getAllOrderForAdmin,
-  searchOrders,
-  getOrderById,
-  updateOrderByAdmin,
-  deleteOrder,
-  createVnpayPaymentUrl,
-  vnpayReturn,
-  // vnpayIpn,
-  cancelOrder,
-  getUserOrders, // New endpoint
-} = require('../controllers/orderController');
 const orderController = require('../controllers/orderController');
-const debugOrderController = require('../controllers/debugOrderController');
+const orderDetailController = require('../controllers/orderDetailController');
 
-// router.post('/', authenticateJWT, createOrder); 
-// router.get('/', authenticateJWT, getAllOrders);
-// router.get('/search', authenticateJWT, searchOrders); 
-// router.get('/vnpay-ipn', vnpayIpn); // User không sử dụng
-// router.put('/:id', authenticateJWT, updateOrder);
-// router.delete('/:id', authenticateJWT, deleteOrder); 
+// ==========================================
+// 1. USER ORDER APIs
+// ==========================================
 
-// USER APIs
-// api checkout for user
+// Checkout for user
 router.post('/checkout', authenticateJWT, orderController.checkout);
 
-// api create payment url for vnpay
-router.post('/payment-url', authenticateJWT, createVnpayPaymentUrl);
+// Create payment URL for VNPay
+router.post('/payment-url', authenticateJWT, orderController.createVnpayPaymentUrl);
 
-// api vnpay return
-router.get('/vnpay-return', vnpayReturn);
+// VNPay return callback
+router.get('/vnpay-return', orderController.vnpayReturn);
 
-// api cancel order for user
-router.patch('/:id/cancel', authenticateJWT, cancelOrder);
+// Cancel order for user
+router.patch('/:id/cancel', authenticateJWT, orderController.cancelOrder);
 
-// api get 1 order by id for user and admin
-router.get('/get-order-by-id/:id', authenticateJWT, getOrderById);
+// Get single order by ID
+router.get('/get-order-by-id/:id', authenticateJWT, orderController.getOrderById);
 
-// api get all orders for a specific user
-router.get('/user/:accountId', authenticateJWT, getUserOrders);
+// Get all orders for a specific user
+router.get('/user/:accountId', authenticateJWT, orderController.getUserOrders);
 
-// ADMIN APIs
-// Lấy tất cả đơn hàng cho admin
-router.get('/admin/get-all-order', authenticateJWT, authorizeRole(['admin', 'manager']), getAllOrderForAdmin);
+// ==========================================
+// 2. ADMIN ORDER APIs
+// ==========================================
 
-// Cập nhật đơn hàng - Chỉ Admin/Staff
-router.put('/admin/update/:orderId', authenticateJWT, authorizeRole(['admin', 'manager']), updateOrderByAdmin);
+// Get all orders for admin/manager
+router.get('/admin/get-all-order', authenticateJWT, authorizeRole(['admin', 'manager']), orderController.getAllOrderForAdmin);
 
-// DEBUG API - Generate random orders (only when ENABLE_DEBUG_ORDERS=true)
-router.post('/debug/generate-orders', authenticateJWT, authorizeRole(['admin', 'manager']), debugOrderController.generateDebugOrders);
+// Update order by admin/manager
+router.put('/admin/update/:orderId', authenticateJWT, authorizeRole(['admin', 'manager']), orderController.updateOrderByAdmin);
+
+// ==========================================
+// 3. ORDER DETAIL APIs
+// ==========================================
+
+// Advanced search/filter for order details with feedback
+router.get('/order-detail/search', authenticateJWT, orderDetailController.searchOrderDetails);
+router.get('/search', authenticateJWT, orderDetailController.searchOrderDetails);
+
+// Create a new order detail
+router.post('/create-order-detail', authenticateJWT, orderDetailController.createOrderDetail);
+
+// Get all order details for an order
+router.get('/get-all-order-details/:orderId', authenticateJWT, orderDetailController.getAllOrderDetails);
+
+// Get a single order detail by ID
+router.get('/get-order-detail-by-id/:id', authenticateJWT, orderDetailController.getOrderDetailById);
+
+// Update an order detail
+router.put('/update-order-detail/:id', authenticateJWT, orderDetailController.updateOrderDetail);
+
+// Delete an order detail
+router.delete('/delete-order-detail/:id', authenticateJWT, orderDetailController.deleteOrderDetail);
+
+// Get all order details for a product with feedback
+router.get('/get-order-details-by-product/:productId', orderDetailController.getOrderDetailsByProduct);
+router.get('/product/:productId', orderDetailController.getOrderDetailsByProduct);
 
 module.exports = router;
