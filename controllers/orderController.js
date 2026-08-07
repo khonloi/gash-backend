@@ -1,6 +1,67 @@
+// ===== Imports (all at top) =====
+const mongoose = require('mongoose');
 const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
 const { createOrderNotification, emitOrderNotification } = require('../utils/orderNotificationHelper');
+
+// Models used in checkout, cancelOrder, feedback, and VNPay handlers
+const Accounts = require('../models/Accounts');
+const Orders = require('../models/Orders');
+const OrderDetails = require('../models/OrderDetails');
+const newProductVariants = require('../models/newProductVariant');
+const newProducts = require('../models/newProduct');
+const newProductImages = require('../models/newProductImage');
+const ProductColors = require('../models/ProductColors');
+const ProductSizes = require('../models/ProductSizes');
+const Voucher = require('../models/Voucher');
+const NewCart = require('../models/newCartModel');
+const { applyVoucher } = require('./voucherController');
+
+// ===== Shared Socket Emit Helper =====
+/**
+ * Emits an order update to the user's room and the admin room,
+ * then creates and emits a notification.
+ *
+ * @param {import('socket.io').Server} io
+ * @param {object} order - The updated order document (Mongoose or plain object)
+ * @param {string} messageType - One of: 'created', 'status_changed', 'payment_changed', 'cancelled', 'delivered'
+ * @param {object} [opts] - Optional overrides
+ * @param {string} [opts.oldOrderStatus] - Used to determine notification messageType for admin updates
+ * @param {string} [opts.oldPayStatus]
+ */
+async function emitOrderUpdate(io, order, messageType, opts = {}) {
+  if (!io || !order) return;
+
+  const accountId = order.accountId;
+  if (!accountId) return;
+
+  const userId =
+    typeof accountId === 'object' && accountId._id
+      ? accountId._id.toString()
+      : accountId.toString();
+
+  const orderId = order._id.toString();
+
+  // Normalize to a plain object
+  const orderData = order.toObject ? order.toObject() : order;
+
+  io.to(`user_${userId}`).emit('orderUpdated', { userId, order: orderData });
+  io.to('order_admins').emit('orderUpdated', { userId, order: orderData });
+
+  try {
+    const notification = await createOrderNotification({
+      userId,
+      orderId,
+      orderStatus: order.orderStatus,
+      payStatus: order.payStatus,
+      messageType,
+    });
+    // Small delay to ensure socket connection is established before emitting
+    setTimeout(() => emitOrderNotification(io, notification, userId), 100);
+  } catch (notifErr) {
+    console.error('Error creating order notification:', notifErr.message);
+  }
+}
 
 exports.searchOrders = async (req, res) => {
   try {
@@ -159,57 +220,15 @@ exports.updateOrderByAdmin = async (req, res) => {
 
     const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
     const io = req.app.get('io');
-    if (io && updatedOrder && updatedOrder.accountId) {
-      const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
-        ? updatedOrder.accountId._id.toString()
-        : updatedOrder.accountId.toString();
 
-      // Ensure order is properly formatted with all fields
-      const formattedOrder = {
-        ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
-        accountId: updatedOrder.accountId,
-        name: updatedOrder.name,
-        orderDate: updatedOrder.orderDate,
-        updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
-        createdAt: updatedOrder.createdAt
-      };
+    // Determine notification type
+    const newOrderStatus = updatedOrder.orderStatus;
+    const newPayStatus   = updatedOrder.payStatus;
+    let notifType = 'status_changed';
+    if (oldPayStatus !== newPayStatus && newPayStatus) notifType = 'payment_changed';
+    else if (newOrderStatus === 'delivered' && oldOrderStatus !== 'delivered') notifType = 'delivered';
 
-      // Emit to specific user room for real-time updates
-      io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
-      // Also emit to admin room so dashboard gets updates
-      io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-
-      console.log(`📦 Order ${orderId} updated, emitted to user_${userId} and order_admins`);
-
-      // 🔔 Create and emit order update notification
-      try {
-        const newOrderStatus = updatedOrder.orderStatus;
-        const newPayStatus = updatedOrder.payStatus;
-
-        // Determine notification type based on what changed
-        let messageType = 'status_changed';
-        if (oldPayStatus !== newPayStatus && newPayStatus) {
-          messageType = 'payment_changed';
-        } else if (newOrderStatus === 'delivered' && oldOrderStatus !== 'delivered') {
-          messageType = 'delivered';
-        }
-
-        const notification = await createOrderNotification({
-          userId,
-          orderId: orderId.toString(),
-          orderStatus: newOrderStatus,
-          payStatus: newPayStatus,
-          messageType
-        });
-
-        // Small delay to ensure socket connection is established
-        setTimeout(() => {
-          emitOrderNotification(io, notification, userId);
-        }, 100);
-      } catch (notifError) {
-        console.error('Error creating order update notification:', notifError);
-      }
-    }
+    await emitOrderUpdate(io, updatedOrder, notifType);
     res.status(200).json({
       success: true,
       message: 'Order updated successfully by admin',
@@ -285,43 +304,7 @@ exports.vnpayReturn = async (req, res) => {
         .lean();
 
       if (updatedOrder && updatedOrder.accountId) {
-        const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
-          ? updatedOrder.accountId._id.toString()
-          : updatedOrder.accountId.toString();
-
-        // Ensure order is properly formatted with all fields
-        const formattedOrder = {
-          ...updatedOrder,
-          name: updatedOrder.name,
-          orderDate: updatedOrder.orderDate,
-          updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
-          createdAt: updatedOrder.createdAt
-        };
-
-        // Emit to specific user room for real-time updates
-        io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
-        // Also emit to admin room so dashboard gets updates
-        io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-
-        console.log(`📦 Order ${orderId} payment updated (VNPay Return), emitted to user_${userId} and order_admins`);
-
-        // 🔔 Create and emit payment status notification
-        try {
-          const notification = await createOrderNotification({
-            userId,
-            orderId: orderId.toString(),
-            orderStatus: formattedOrder.orderStatus,
-            payStatus: formattedOrder.payStatus,
-            messageType: 'payment_changed'
-          });
-
-          // Small delay to ensure socket connection is established
-          setTimeout(() => {
-            emitOrderNotification(io, notification, userId);
-          }, 100);
-        } catch (notifError) {
-          console.error('Error creating payment notification:', notifError);
-        }
+        await emitOrderUpdate(io, updatedOrder, 'payment_changed');
       }
     }
 
@@ -378,43 +361,7 @@ exports.vnpayIpn = async (req, res) => {
         .lean();
 
       if (updatedOrder && updatedOrder.accountId) {
-        const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
-          ? updatedOrder.accountId._id.toString()
-          : updatedOrder.accountId.toString();
-
-        // Ensure order is properly formatted with all fields
-        const formattedOrder = {
-          ...updatedOrder,
-          name: updatedOrder.name,
-          orderDate: updatedOrder.orderDate,
-          updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
-          createdAt: updatedOrder.createdAt
-        };
-
-        // Emit to specific user room for real-time updates
-        io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
-        // Also emit to admin room so dashboard gets updates
-        io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-
-        console.log(`📦 Order ${orderId} payment updated (VNPay IPN), emitted to user_${userId} and order_admins`);
-
-        // 🔔 Create and emit payment status notification
-        try {
-          const notification = await createOrderNotification({
-            userId,
-            orderId: orderId.toString(),
-            orderStatus: formattedOrder.orderStatus,
-            payStatus: formattedOrder.payStatus,
-            messageType: 'payment_changed'
-          });
-
-          // Small delay to ensure socket connection is established
-          setTimeout(() => {
-            emitOrderNotification(io, notification, userId);
-          }, 100);
-        } catch (notifError) {
-          console.error('Error creating payment notification:', notifError);
-        }
+        await emitOrderUpdate(io, updatedOrder, 'payment_changed');
       }
     }
 
@@ -427,19 +374,6 @@ exports.vnpayIpn = async (req, res) => {
     });
   }
 };
-
-const mongoose = require("mongoose");
-const Accounts = require("../models/Accounts");
-const Orders = require("../models/Orders");
-const OrderDetails = require("../models/OrderDetails");
-const newProductVariants = require("../models/newProductVariant");
-const newProducts = require("../models/newProduct");
-const newProductImages = require("../models/newProductImage");
-const ProductColors = require("../models/ProductColors");
-const ProductSizes = require("../models/ProductSizes");
-const Voucher = require("../models/Voucher");
-const NewCart = require('../models/newCartModel');
-const { applyVoucher } = require('./voucherController');
 
 exports.checkout = async (req, res) => {
   try {
@@ -523,59 +457,65 @@ exports.checkout = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
       }
 
-      const variant = await newProductVariants.findById(variantId);
-      if (!variant) {
-        return res.status(404).json({ success: false, message: `Product variant not found: ${variantId}` });
-      }
+      // Atomically check-and-deduct stock in a single operation.
+      // If another concurrent checkout already took the last unit, this returns null
+      // and we abort with a clear error instead of overselling.
+      const updatedVariant = await newProductVariants.findOneAndUpdate(
+        { _id: variantId, stockQuantity: { $gte: Quantity } },
+        [
+          {
+            $set: {
+              stockQuantity: { $subtract: ['$stockQuantity', Quantity] },
+              // Auto-deactivate when stock hits 0
+              variantStatus: {
+                $cond: [
+                  { $eq: [{ $subtract: ['$stockQuantity', Quantity] }, 0] },
+                  'inactive',
+                  '$variantStatus',
+                ],
+              },
+            },
+          },
+        ],
+        { new: true }
+      );
 
-      // Kiểm tra số lượng tồn kho
-      if (variant.stockQuantity < Quantity) {
+      if (!updatedVariant) {
+        // Roll back the order and voucher usage if stock deduction failed
+        await savedOrder.deleteOne();
+        if (voucher) {
+          voucher.usedCount -= 1;
+          await voucher.save();
+        }
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock for variant ${variantId}. Available: ${variant.stockQuantity}, Requested: ${Quantity}`
+          message: `Insufficient stock for variant ${variantId}. The item may have just sold out.`,
         });
       }
 
+      // Stock confirmed and deducted — create the order detail record
       const orderDetail = new OrderDetails({
         orderId: savedOrder._id,
         variantId,
         unitPrice,
         Quantity,
-        feedback_details: feedback_details || '',
       });
       const savedDetail = await orderDetail.save();
       orderDetailsToSave.push(savedDetail);
       boughtVariantIds.push(variantId.toString());
-    }
+    } // end for (const item of items)
 
-    // Lấy orderDetailsId từ saved order details
+    // Link order details to the order
     const orderDetailsIds = orderDetailsToSave.map(detail => detail._id);
-
-    // Lưu orderDetailsId vào order.orderDetails
     savedOrder.orderDetails = orderDetailsIds;
     await savedOrder.save();
 
-    // Trừ số lượng sản phẩm khỏi kho
-    for (const item of items) {
-      const { variantId, Quantity } = item;
-      const variant = await newProductVariants.findById(variantId);
-      if (variant) {
-        variant.stockQuantity -= Quantity;
-        // Nếu stockQuantity = 0 thì set variantStatus = inactive
-        if (variant.stockQuantity === 0) {
-          variant.variantStatus = 'inactive';
-        }
-        await variant.save();
-      }
-    }
-
-    // XÓA CÁC SẢN PHẨM ĐÃ MUA KHỎI CART (chỉ xóa đúng sản phẩm đã mua của user)
+    // Remove purchased items from the cart
     const objectUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
     const objectVariantIds = boughtVariantIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
-
     await NewCart.deleteMany({
       accountId: objectUserId,
-      variantId: { $in: objectVariantIds }
+      variantId: { $in: objectVariantIds },
     });
 
     // 🔔 Emit Socket.IO events for cart update and new order
@@ -1488,60 +1428,17 @@ exports.cancelOrder = async (req, res) => {
       updateData.refundStatus = 'pending_refund';
     }
 
-    const updatedOrder = await orderService.updateOrderService(
-      orderId,
-      updateData,
-      req.user
-    );
-    // Emit Socket.IO event for order cancellation
+    const updatedOrder = await orderService.updateOrderService(orderId, updateData, req.user);
+
+    // Emit real-time update and notification
     const io = req.app.get('io');
-    if (io && updatedOrder && updatedOrder.accountId) {
-      const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
-        ? updatedOrder.accountId._id.toString()
-        : updatedOrder.accountId.toString();
-
-      // Ensure order is properly formatted with all fields
-      const formattedOrder = {
-        ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
-        accountId: updatedOrder.accountId,
-        name: updatedOrder.name,
-        orderDate: updatedOrder.orderDate,
-        updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
-        createdAt: updatedOrder.createdAt,
-        cancelReason: updatedOrder.cancelReason
-      };
-
-      // Emit to specific user room for real-time updates
-      io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
-      // Also emit to admin room so dashboard gets updates
-      io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-
-      console.log(`📦 Order ${orderId} cancelled, emitted to user_${userId} and order_admins`);
-
-      // 🔔 Create and emit order cancellation notification
-      try {
-        const notification = await createOrderNotification({
-          userId,
-          orderId: orderId.toString(),
-          orderStatus: updatedOrder.orderStatus,
-          payStatus: updatedOrder.payStatus,
-          messageType: 'cancelled'
-        });
-
-        // Small delay to ensure socket connection is established
-        setTimeout(() => {
-          emitOrderNotification(io, notification, userId);
-        }, 100);
-      } catch (notifError) {
-        console.error('❌ Error creating order cancellation notification:', notifError);
-      }
-    }
+    await emitOrderUpdate(io, updatedOrder, 'cancelled');
 
     res.status(200).json({
       message: 'Order cancelled successfully',
       order: updatedOrder,
-      voucherRefunded: order.voucherId ? true : false,
-      stockRestored: order.orderDetails ? order.orderDetails.length : 0
+      voucherRefunded: !!order.voucherId,
+      stockRestored: order.orderDetails ? order.orderDetails.length : 0,
     });
   } catch (error) {
     res

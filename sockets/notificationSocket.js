@@ -1,57 +1,58 @@
 // sockets/notificationSocket.js
-const connectedUsers = new Map(); // Lưu userId -> socketId
+const mongoose = require('mongoose');
+
+// Track userId -> socketId for connected notification clients
+const connectedUsers = new Map();
 
 module.exports = (io) => {
-  io.on("connection", (socket) => {
-    console.log("📡 New notification socket connected:", socket.id);
-
+  io.on('connection', (socket) => {
     /**
-     * Khi user kết nối (FE sẽ emit "userConnected" sau khi login)
-     * => Lưu lại userId và socketId, join vào room
+     * Fired by the frontend after login to join the user's notification room.
+     * The room name matches the format used by orderNotificationHelper and orderSocket.
      */
-    socket.on("userConnected", (userId) => {
-      if (!userId) {
-        console.warn("⚠️ userConnected received without userId");
+    socket.on('userConnected', (userId) => {
+      if (!userId || !mongoose.isValidObjectId(userId.toString())) {
+        if (process.env.DEBUG === 'true') {
+          console.warn('⚠️ userConnected: invalid or missing userId');
+        }
         return;
       }
-      
+
       const userIdStr = userId.toString();
       connectedUsers.set(userIdStr, socket.id);
-      
-      // Join both room formats for compatibility
+
+      // Join both room formats for compatibility with all notification emitters
       socket.join(userIdStr);
       socket.join(`user_${userIdStr}`);
-      
-      console.log(`User ${userIdStr} joined notification rooms: ${userIdStr}, user_${userIdStr}`);
+
+      if (process.env.DEBUG === 'true') {
+        console.log(`🔔 User ${userIdStr} joined notification rooms`);
+      }
     });
 
     /**
-     * Handle joinRoom event (for compatibility)
+     * Legacy joinRoom event — kept for backward compatibility.
      */
-    socket.on("joinRoom", (userId) => {
-      if (!userId) return;
+    socket.on('joinRoom', (userId) => {
+      if (!userId || !mongoose.isValidObjectId(userId.toString())) return;
       const userIdStr = userId.toString();
       socket.join(userIdStr);
       socket.join(`user_${userIdStr}`);
-      console.log(`User ${userIdStr} joined notification rooms via joinRoom`);
     });
 
-    /**
-     * Khi user ngắt kết nối
-     * => Xóa khỏi danh sách connectedUsers
-     */
-    socket.on("disconnect", () => {
+    socket.on('disconnect', () => {
       for (const [userId, sockId] of connectedUsers.entries()) {
         if (sockId === socket.id) {
           connectedUsers.delete(userId);
-          console.log(`User disconnected from notifications: ${userId}`);
+          if (process.env.DEBUG === 'true') {
+            console.log(`🔔 User ${userId} disconnected from notifications`);
+          }
           break;
         }
       }
-      console.log(`Notification socket disconnected: ${socket.id}`);
     });
   });
 };
 
-// Export Map để controller có thể dùng
+// Export Map so controllers can check if a user is online (if needed)
 module.exports.connectedUsers = connectedUsers;

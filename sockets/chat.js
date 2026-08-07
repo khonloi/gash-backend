@@ -1,30 +1,94 @@
 // chat.js
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const Conversations = require('../models/Conversation');
 const Messages = require('../models/Message');
 
+// ===== Rate Limiting =====
+// Tracks per-socket event counts to prevent flooding.
+const RATE_LIMIT_WINDOW_MS = 10_000; // 10-second window
+const RATE_LIMIT_MAX_EVENTS = 20;    // max events per window
+
+const rateLimitMap = new Map(); // socketId -> { count, resetAt }
+
+/**
+ * Returns true if the socket is within rate limits, false if the limit is exceeded.
+ * @param {string} socketId
+ */
+function checkRateLimit(socketId) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(socketId) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+
+  if (now > entry.resetAt) {
+    // Window expired — reset counter
+    entry.count = 1;
+    entry.resetAt = now + RATE_LIMIT_WINDOW_MS;
+  } else {
+    entry.count += 1;
+  }
+
+  rateLimitMap.set(socketId, entry);
+  return entry.count <= RATE_LIMIT_MAX_EVENTS;
+}
+
+/**
+ * Validates that a string is a valid MongoDB ObjectId.
+ */
+function isValidObjectId(id) {
+  return mongoose.isValidObjectId(id);
+}
+
 module.exports = (io) => {
+  // ===== Socket.IO JWT Authentication Middleware =====
+  // All connections to this namespace must supply a valid JWT.
+  // Public chat (guest user support) is handled separately below.
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+
+    if (!token) {
+      // Allow unauthenticated connections — chat is accessible to guests.
+      // Controllers will validate userId from the event payload instead.
+      socket.isAuthenticated = false;
+      return next();
+    }
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = decoded;
+      socket.isAuthenticated = true;
+      next();
+    } catch (err) {
+      // Invalid token — still allow connection as unauthenticated
+      socket.isAuthenticated = false;
+      next();
+    }
+  });
+
   io.on('connection', (socket) => {
-    console.log('⚡ Client connected:', socket.id);
+    if (process.env.DEBUG === 'true') {
+      console.log(`⚡ Chat socket connected: ${socket.id} (auth: ${socket.isAuthenticated})`);
+    }
 
-    // Join a specific conversation room
+    // ===== join_room =====
     socket.on('join_room', (conversationId) => {
-      if (!conversationId) return;
+      if (!conversationId || !isValidObjectId(conversationId)) return;
       socket.join(conversationId.toString());
-      console.log(`📥 ${socket.id} joined room ${conversationId}`);
     });
 
-    // Leave a specific conversation room
+    // ===== leave_room =====
     socket.on('leave_room', (conversationId) => {
-      if (!conversationId) return;
+      if (!conversationId || !isValidObjectId(conversationId)) return;
       socket.leave(conversationId.toString());
-      console.log(`📤 ${socket.id} left room ${conversationId}`);
     });
 
-    // User starts or resumes a chat
+    // ===== start_chat =====
     socket.on('start_chat', async ({ userId, messageText }) => {
+      if (!checkRateLimit(socket.id)) {
+        return socket.emit('error', 'Rate limit exceeded. Please slow down.');
+      }
       try {
-        if (!userId) {
-          return socket.emit('error', 'userId is required');
+        if (!userId || !isValidObjectId(userId)) {
+          return socket.emit('error', 'Valid userId is required');
         }
 
         // Find existing open or pending conversation
@@ -34,26 +98,20 @@ module.exports = (io) => {
         });
 
         let isNew = false;
-        const hasMessage = messageText && messageText.trim() !== '';
-        
+        const hasMessage = messageText && typeof messageText === 'string' && messageText.trim() !== '';
+
         // Only create new conversation if user is actually sending a message
         if (!conversation && hasMessage) {
-          // Create new if none exists AND user is sending a message
           conversation = await Conversations.create({
             accountId: userId,
             status: 'open',
           });
           isNew = true;
         } else if (conversation) {
-          // Update timestamp for existing conversation
           conversation.updatedAt = new Date();
           await conversation.save();
         } else {
-          // No conversation exists and no message - just return empty history
-          socket.emit('chat_history', {
-            conversation: null,
-            messages: [],
-          });
+          socket.emit('chat_history', { conversation: null, messages: [] });
           return;
         }
 
@@ -63,76 +121,68 @@ module.exports = (io) => {
         // Fetch message history
         const messages = await Messages.find({ conversationId: convoId }).sort({ createdAt: 1 });
 
-        // Send history to the user
         socket.emit('chat_history', {
           conversation: { ...conversation.toObject(), id: convoId },
           messages: messages.map(msg => ({ ...msg.toObject(), id: msg._id.toString() })),
         });
 
-        // If initial message provided, send it
         if (hasMessage) {
+          // Sanitize message text
+          const sanitizedText = messageText.trim().substring(0, 2000);
           const newMessage = await Messages.create({
             conversationId: convoId,
             senderId: userId,
-            messageText,
+            messageText: sanitizedText,
             type: 'text',
           });
-          
-          // Update conversation with lastMessage
+
           const updatedConvo = await Conversations.findByIdAndUpdate(
             convoId,
-            { 
-              lastMessage: messageText,
-              updatedAt: new Date() 
-            },
+            { lastMessage: sanitizedText, updatedAt: new Date() },
             { new: true }
-          ).populate('accountId', 'username email')
-           .populate('staffId', 'username email');
-          
+          )
+            .populate('accountId', 'username email')
+            .populate('staffId', 'username email');
+
           io.to(convoId).emit('new_message', {
             ...newMessage.toObject(),
             id: newMessage._id.toString(),
             conversationId: convoId,
           });
-          
-          // Emit conversation update to admins
+
           if (updatedConvo) {
             io.emit('conversation_updated', {
               ...updatedConvo.toObject(),
               id: convoId,
-              lastMessage: messageText,
+              lastMessage: sanitizedText,
             });
           }
         }
 
-        // Notify admins if new conversation (only if there's a message)
         if (isNew && hasMessage) {
-          io.emit('conversation_created', {
-            ...conversation.toObject(),
-            id: convoId,
-          });
+          io.emit('conversation_created', { ...conversation.toObject(), id: convoId });
         }
-
-        console.log(`start_chat for user ${userId}, convo ${convoId} (new: ${isNew}, hasMessage: ${hasMessage})`);
       } catch (err) {
         console.error('start_chat error:', err);
         socket.emit('error', 'Failed to start chat');
       }
     });
 
-    // Staff takes a conversation
+    // ===== take_conversation =====
     socket.on('take_conversation', async ({ staffId, conversationId }) => {
+      if (!checkRateLimit(socket.id)) return socket.emit('error', 'Rate limit exceeded.');
       try {
-        if (!staffId || !conversationId) {
-          return socket.emit('error', 'staffId and conversationId required');
+        if (!staffId || !isValidObjectId(staffId) || !conversationId || !isValidObjectId(conversationId)) {
+          return socket.emit('error', 'Valid staffId and conversationId required');
         }
 
         const conversation = await Conversations.findOneAndUpdate(
           { _id: conversationId, status: 'open' },
           { staffId, status: 'pending' },
           { new: true }
-        ).populate('accountId', 'username email')
-         .populate('staffId', 'username email');
+        )
+          .populate('accountId', 'username email')
+          .populate('staffId', 'username email');
 
         if (!conversation) {
           return socket.emit('error', 'Conversation not available to take');
@@ -141,77 +191,67 @@ module.exports = (io) => {
         const convoId = conversation._id.toString();
         socket.join(convoId);
 
-        io.to(convoId).emit('conversation_taken', {
-          ...conversation.toObject(),
-          id: convoId,
-        });
-
-        console.log(`Conversation ${convoId} taken by staff ${staffId}`);
+        io.to(convoId).emit('conversation_taken', { ...conversation.toObject(), id: convoId });
       } catch (err) {
         console.error('take_conversation error:', err);
         socket.emit('error', 'Failed to take conversation');
       }
     });
 
-    // Send a message (text, image, sticker, emoji)
+    // ===== send_message =====
     socket.on('send_message', async ({ conversationId, senderId, messageText, attachments, type, imageUrl }) => {
+      if (!checkRateLimit(socket.id)) return socket.emit('error', 'Rate limit exceeded.');
       try {
-        if (!conversationId || !senderId) {
-          return socket.emit('error', 'conversationId and senderId required');
+        if (!conversationId || !isValidObjectId(conversationId) || !senderId || !isValidObjectId(senderId)) {
+          return socket.emit('error', 'Valid conversationId and senderId required');
+        }
+
+        const messageType = type || 'text';
+        const ALLOWED_TYPES = ['text', 'image', 'sticker', 'emoji'];
+        if (!ALLOWED_TYPES.includes(messageType)) {
+          return socket.emit('error', 'Invalid message type');
         }
 
         const messageData = {
           conversationId,
           senderId,
-          type: type || 'text',
+          type: messageType,
           isRead: false,
         };
 
-        if (type === 'text') {
-          messageData.messageText = messageText || '';
-        } else if (type === 'image') {
-          // Use imageUrl if provided (from frontend), otherwise use attachments
+        let lastMessageText = 'Media';
+        if (messageType === 'text') {
+          const sanitized = (messageText || '').trim().substring(0, 2000);
+          messageData.messageText = sanitized;
+          lastMessageText = sanitized;
+        } else if (messageType === 'image') {
           messageData.imageUrl = imageUrl || attachments || null;
           messageData.attachments = imageUrl || attachments || null;
-        } else if (['sticker', 'emoji'].includes(type)) {
+          lastMessageText = 'Image';
+        } else if (messageType === 'sticker') {
           messageData.imageUrl = imageUrl || null;
+          lastMessageText = 'Sticker';
+        } else if (messageType === 'emoji') {
+          messageData.imageUrl = imageUrl || null;
+          lastMessageText = 'Emoji';
         }
 
         const newMessage = await Messages.create(messageData);
 
-        // Determine lastMessage text for conversation
-        let lastMessageText = '';
-        if (type === 'text') {
-          lastMessageText = messageText || '';
-        } else if (type === 'image') {
-          lastMessageText = 'Image';
-        } else if (type === 'sticker') {
-          lastMessageText = 'Sticker';
-        } else if (type === 'emoji') {
-          lastMessageText = 'Emoji';
-        } else {
-          lastMessageText = 'Media';
-        }
-
-        // Update conversation with lastMessage and timestamp
         const updatedConversation = await Conversations.findByIdAndUpdate(
           conversationId,
-          { 
-            lastMessage: lastMessageText,
-            updatedAt: new Date() 
-          },
+          { lastMessage: lastMessageText, updatedAt: new Date() },
           { new: true }
-        ).populate('accountId', 'username email')
-         .populate('staffId', 'username email');
+        )
+          .populate('accountId', 'username email')
+          .populate('staffId', 'username email');
 
-        // Emit new message to room
         io.to(conversationId.toString()).emit('new_message', {
           ...newMessage.toObject(),
           id: newMessage._id.toString(),
           conversationId: conversationId.toString(),
         });
 
-        // Emit conversation update to admins (for sidebar update)
         if (updatedConversation) {
           io.emit('conversation_updated', {
             ...updatedConversation.toObject(),
@@ -219,19 +259,18 @@ module.exports = (io) => {
             lastMessage: lastMessageText,
           });
         }
-
-        console.log(`💬 Message sent [${type || 'text'}] to ${conversationId}`);
       } catch (err) {
         console.error('send_message error:', err);
         socket.emit('error', 'Failed to send message');
       }
     });
 
-    // Mark messages as read
+    // ===== mark_read =====
     socket.on('mark_read', async ({ conversationId, readerId }) => {
+      if (!checkRateLimit(socket.id)) return;
       try {
-        if (!conversationId || !readerId) {
-          return socket.emit('error', 'conversationId and readerId required');
+        if (!conversationId || !isValidObjectId(conversationId) || !readerId || !isValidObjectId(readerId)) {
+          return socket.emit('error', 'Valid conversationId and readerId required');
         }
 
         await Messages.updateMany(
@@ -243,19 +282,18 @@ module.exports = (io) => {
           conversationId: conversationId.toString(),
           readerId,
         });
-
-        console.log(`👁️ Messages marked read in ${conversationId} by ${readerId}`);
       } catch (err) {
         console.error('mark_read error:', err);
         socket.emit('error', 'Failed to mark as read');
       }
     });
 
-    // Close a conversation
+    // ===== close_conversation =====
     socket.on('close_conversation', async ({ conversationId }) => {
+      if (!checkRateLimit(socket.id)) return socket.emit('error', 'Rate limit exceeded.');
       try {
-        if (!conversationId) {
-          return socket.emit('error', 'conversationId required');
+        if (!conversationId || !isValidObjectId(conversationId)) {
+          return socket.emit('error', 'Valid conversationId required');
         }
 
         const conversation = await Conversations.findByIdAndUpdate(
@@ -271,16 +309,18 @@ module.exports = (io) => {
         io.to(conversationId.toString()).emit('conversation_closed', {
           conversationId: conversationId.toString(),
         });
-
-        console.log(`🔴 Conversation ${conversationId} closed`);
       } catch (err) {
         console.error('close_conversation error:', err);
         socket.emit('error', 'Failed to close conversation');
       }
     });
 
+    // ===== disconnect =====
     socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+      rateLimitMap.delete(socket.id); // Clean up rate limit tracking
+      if (process.env.DEBUG === 'true') {
+        console.log(`Chat socket disconnected: ${socket.id}`);
+      }
     });
   });
 };

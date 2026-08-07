@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 
 const app = require('./app');
+const { CORS_ORIGINS } = require('./app');
 const chatSocket = require('./sockets/chat');
 const productSocket = require('./sockets/productSocket');
 const notificationSocket = require('./sockets/notificationSocket');
@@ -23,31 +24,28 @@ server.timeout = 300000; // 5 phút (300 giây) cho upload nhiều file
 server.keepAliveTimeout = 65000; // 65 giây
 server.headersTimeout = 66000; // 66 giây
 
-// Socket.IO
+// Socket.IO — shares CORS origins with Express app
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://gash-pi.vercel.app'
-    ],
+    origin: CORS_ORIGINS,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   },
 });
+
 app.set('io', io);
 
-// Kết nối MongoDB
-mongoose.connect(process.env.MONGO_URI)
+// Connect to MongoDB
+mongoose.connect(env.MONGO_URI)
   .then(() => {
-    console.log('MongoDB connected');
-    // Start VNPay expiry checker
+    console.log('✅ MongoDB connected');
     vnpayExpiryService.startExpiryChecker();
   })
-  .catch(err => console.error('MongoDB error:', err.message));
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err.message);
+    process.exit(1);
+  });
+
 
 // Socket cha
 chatSocket(io);
