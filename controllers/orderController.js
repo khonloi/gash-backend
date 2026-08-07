@@ -8,13 +8,13 @@ const { createOrderNotification, emitOrderNotification } = require('../utils/ord
 const Accounts = require('../models/Accounts');
 const Orders = require('../models/Orders');
 const OrderDetails = require('../models/OrderDetails');
-const newProductVariants = require('../models/newProductVariant');
-const newProducts = require('../models/newProduct');
-const newProductImages = require('../models/newProductImage');
+const ProductVariant = require('../models/ProductVariant');
+const Product = require('../models/Product');
+const ProductImage = require('../models/ProductImage');
 const ProductColors = require('../models/ProductColors');
 const ProductSizes = require('../models/ProductSizes');
 const Voucher = require('../models/Voucher');
-const NewCart = require('../models/newCartModel');
+const Cart = require('../models/Cart');
 const { applyVoucher } = require('./voucherController');
 
 // ===== Shared Socket Emit Helper =====
@@ -460,7 +460,7 @@ exports.checkout = async (req, res) => {
       // Atomically check-and-deduct stock in a single operation.
       // If another concurrent checkout already took the last unit, this returns null
       // and we abort with a clear error instead of overselling.
-      const updatedVariant = await newProductVariants.findOneAndUpdate(
+      const updatedVariant = await ProductVariant.findOneAndUpdate(
         { _id: variantId, stockQuantity: { $gte: Quantity } },
         [
           {
@@ -513,7 +513,7 @@ exports.checkout = async (req, res) => {
     // Remove purchased items from the cart
     const objectUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
     const objectVariantIds = boughtVariantIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
-    await NewCart.deleteMany({
+    await Cart.deleteMany({
       accountId: objectUserId,
       variantId: { $in: objectVariantIds },
     });
@@ -708,7 +708,7 @@ exports.cancelOrder = async (req, res) => {
     if (order.orderDetails && order.orderDetails.length > 0) {
       for (const orderDetail of order.orderDetails) {
         if (orderDetail.variantId) {
-          const variant = await newProductVariants.findById(orderDetail.variantId);
+          const variant = await ProductVariant.findById(orderDetail.variantId);
           if (variant) {
             // Lưu stockQuantity trước khi hoàn lại để kiểm tra
             const oldStockQuantity = variant.stockQuantity;
@@ -1177,7 +1177,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     }
 
     // Kiểm tra product có tồn tại không
-    const product = await newProducts.findById(productId);
+    const product = await Product.findById(productId);
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -1186,7 +1186,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     }
 
     // Lấy tất cả variants của product này
-    const allVariantsOfProduct = await newProductVariants.find({
+    const allVariantsOfProduct = await ProductVariant.find({
       productId: productId
     }).select('_id');
 
@@ -1401,7 +1401,7 @@ exports.cancelOrder = async (req, res) => {
     if (order.orderDetails && order.orderDetails.length > 0) {
       for (const orderDetail of order.orderDetails) {
         if (orderDetail.variantId) {
-          const variant = await newProductVariants.findById(orderDetail.variantId);
+          const variant = await ProductVariant.findById(orderDetail.variantId);
           if (variant) {
             // Lưu stockQuantity trước khi hoàn lại để kiểm tra
             const oldStockQuantity = variant.stockQuantity;

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const newProductSchema = new Schema(
+const productSchema = new Schema(
   {
     productName: {
       type: String,
@@ -44,15 +44,15 @@ const newProductSchema = new Schema(
 
 // ===== Indexes =====
 // Category page: list all products in a category
-newProductSchema.index({ categoryId: 1 });
+productSchema.index({ categoryId: 1 });
 
 // Admin product list: filter by status
-newProductSchema.index({ productStatus: 1 });
+productSchema.index({ productStatus: 1 });
 
 // Text search on product name (supports $regex queries efficiently)
-newProductSchema.index({ productName: 1 });
+productSchema.index({ productName: 1 });
 
 // Compound: category + status (most common catalog query)
-newProductSchema.index({ categoryId: 1, productStatus: 1 });
+productSchema.index({ categoryId: 1, productStatus: 1 });
 
-module.exports = mongoose.model('newProducts', newProductSchema);
+module.exports = mongoose.model('Product', productSchema, 'newProducts');

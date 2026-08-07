@@ -1,7 +1,7 @@
 const Orders = require("../models/Orders");
 const OrderDetails = require("../models/OrderDetails");
 const Accounts = require("../models/Accounts");
-const newProductVariant = require("../models/newProductVariant");
+const ProductVariant = require("../models/ProductVariant");
 const Vouchers = require("../models/Voucher");
 const mongoose = require("mongoose");
 
@@ -290,7 +290,7 @@ const bulkGenerateOrders = async (count) => {
     }
 
     // Get available variants (only active ones)
-    const variants = await newProductVariant
+    const variants = await ProductVariant
       .find({
         variantStatus: "active",
       })

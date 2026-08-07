@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const OrderDetails = require('../models/OrderDetails');
 const Orders = require('../models/Orders');
-const newProductVariants = require('../models/newProductVariant');
+const ProductVariant = require('../models/ProductVariant');
 const Accounts = require('../models/Accounts');
 
 exports.searchOrderDetails = async (queryParams, user) => {
@@ -50,7 +50,7 @@ exports.searchOrderDetails = async (queryParams, user) => {
     if (productId) variantQuery.productId = productId;
     if (productColorId) variantQuery.productColorId = productColorId;
     if (productSizeId) variantQuery.productSizeId = productSizeId;
-    const variants = await newProductVariants.find(variantQuery).select('_id');
+    const variants = await ProductVariant.find(variantQuery).select('_id');
     const variantIds = variants.map(v => v._id);
     query.variantId = { $in: variantIds };
   }
@@ -138,7 +138,7 @@ exports.createOrderDetail = async (data, user) => {
   if (user.role !== 'admin' && user.role !== 'manager' && order.accountId.toString() !== user.id) {
     return { status: 403, response: { message: 'Access denied: Can only create order detail for own order' } };
   }
-  const variant = await newProductVariants.findById(variantId);
+  const variant = await ProductVariant.findById(variantId);
   if (!variant) {
     return { status: 404, response: { message: 'Product variant not found' } };
   }
@@ -239,7 +239,7 @@ exports.updateOrderDetail = async (id, data, user) => {
     if (!mongoose.isValidObjectId(variantId)) {
       return { status: 400, response: { message: 'Invalid variant ID' } };
     }
-    const variant = await newProductVariants.findById(variantId);
+    const variant = await ProductVariant.findById(variantId);
     if (!variant) {
       return { status: 404, response: { message: 'Product variant not found' } };
     }
@@ -308,7 +308,7 @@ exports.getOrderDetailsByProduct = async (productId) => {
     err.status = 400;
     throw err;
   }
-  const variants = await newProductVariants.find({ productId }).select('_id');
+  const variants = await ProductVariant.find({ productId }).select('_id');
   const variantIds = variants.map(variant => variant._id);
   return await OrderDetails.find({
     variantId: { $in: variantIds },

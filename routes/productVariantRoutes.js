@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const productVariantController = require('../controllers/newProductVariantController');
+const productVariantController = require('../controllers/productVariantController');
 const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
 
 // Create a new product variant (restricted to manager/admin)

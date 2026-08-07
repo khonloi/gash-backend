@@ -26,8 +26,8 @@ async function getFavoritesService(accountId) {
   return await Favorites.find({ accountId }).populate({
     path: 'productId',
     populate: [
-      { path: 'productVariantIds', model: 'newProductVariants' },
-      { path: 'productImageIds', model: 'newProductImages' },
+      { path: 'productVariantIds', model: 'ProductVariant' },
+      { path: 'productImageIds', model: 'ProductImage' },
       { path: 'categoryId', model: 'Categories' }
     ]
   });

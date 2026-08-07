@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
-const NewCart = require("../models/newCartModel");
-const newProductVariant = require("../models/newProductVariant");
+const Cart = require("../models/Cart");
+const ProductVariant = require("../models/ProductVariant");
 
-class NewCartService {
+class CartService {
   // Create a new cart item or update existing one
   async createCartItem(userId, data) {
     try {
@@ -19,15 +19,15 @@ class NewCartService {
         throw new Error('Invalid productQuantity: Must be a positive number');
       }
 
-      // Fetch variantPrice and stockQuantity from referenced newProductVariant
-      const variant = await newProductVariant.findById(variantId);
+      // Fetch variantPrice and stockQuantity from referenced ProductVariant
+      const variant = await ProductVariant.findById(variantId);
       if (!variant) {
         throw new Error('Invalid variantId: Variant not found');
       }
       const productPrice = variant.variantPrice; // Derive price from variant
 
       // Check if a cart item already exists for this accountId and variantId
-      const existingCartItem = await NewCart.findOne({ accountId, variantId });
+      const existingCartItem = await Cart.findOne({ accountId, variantId });
       if (existingCartItem) {
         // Calculate new total quantity
         const currentQuantity = parseInt(existingCartItem.productQuantity, 10);
@@ -60,7 +60,7 @@ class NewCartService {
         throw new Error(`Requested quantity (${quantityNum}) exceeds available stock (${variant.stockQuantity})`);
       }
 
-      const newCartItem = new NewCart({
+      const newCartItem = new Cart({
         accountId,
         variantId,
         productQuantity,
@@ -92,7 +92,7 @@ class NewCartService {
       if (userId !== accountId) {
         throw new Error('Unauthorized: You can only view your own cart');
       }
-      const cartItems = await NewCart.find({ accountId })
+      const cartItems = await Cart.find({ accountId })
         .populate([
           { 
             path: 'variantId',
@@ -112,7 +112,7 @@ class NewCartService {
   // Get cart item by cartId (_id)
   async getCartItemById(userId, cartId) {
     try {
-      const cartItem = await NewCart.findById(cartId)
+      const cartItem = await Cart.findById(cartId)
         .populate([
           { 
             path: 'variantId',
@@ -140,7 +140,7 @@ class NewCartService {
   async updateCartItem(userId, cartId, updateData) {
     try {
       // Fetch cart item to verify ownership
-      const cartItem = await NewCart.findById(cartId);
+      const cartItem = await Cart.findById(cartId);
       if (!cartItem) {
         throw new Error('Cart item not found');
       }
@@ -151,7 +151,7 @@ class NewCartService {
       // If productQuantity is being updated, check against stockQuantity
       const { productQuantity, selected } = updateData;
       if (productQuantity) {
-        const variant = await newProductVariant.findById(cartItem.variantId);
+        const variant = await ProductVariant.findById(cartItem.variantId);
         if (!variant) {
           throw new Error('Invalid variantId: Variant not found');
         }
@@ -164,7 +164,7 @@ class NewCartService {
         }
       }
 
-      const updatedCartItem = await NewCart.findByIdAndUpdate(
+      const updatedCartItem = await Cart.findByIdAndUpdate(
         cartId,
         { productQuantity, selected, updatedAt: Date.now() },
         { new: true, runValidators: true }
@@ -188,7 +188,7 @@ class NewCartService {
   async deleteCartItem(userId, cartId) {
     try {
       // Fetch cart item to verify ownership
-      const cartItem = await NewCart.findById(cartId);
+      const cartItem = await Cart.findById(cartId);
       if (!cartItem) {
         throw new Error('Cart item not found');
       }
@@ -196,7 +196,7 @@ class NewCartService {
         throw new Error('Unauthorized: You can only delete your own cart items');
       }
 
-      await NewCart.findByIdAndDelete(cartId);
+      await Cart.findByIdAndDelete(cartId);
       return { message: 'Cart item deleted successfully' };
     } catch (error) {
       throw new Error(`Delete failed: ${error.message}`);
@@ -204,4 +204,4 @@ class NewCartService {
   }
 }
 
-module.exports = new NewCartService();
+module.exports = new CartService();

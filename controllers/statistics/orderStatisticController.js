@@ -1,6 +1,6 @@
 // controllers/orderStatisticsController.js
 const Orders = require("../../models/Orders"); // Adjust path as needed
-const NewCart = require("../../models/newCartModel"); // Adjust path as needed
+const Cart = require("../../models/Cart"); // Adjust path as needed
 
 async function getOrderStatistics(req, res) {
   try {
@@ -237,7 +237,7 @@ async function getOrderStatistics(req, res) {
     // 2. No order was placed by that user within the period
     
     // Get all unique users who have carts created within the period
-    const usersWithCartsInPeriod = await NewCart.distinct("accountId", {
+    const usersWithCartsInPeriod = await Cart.distinct("accountId", {
       createdAt: { $gte: startDate, $lte: endDate }
     });
     

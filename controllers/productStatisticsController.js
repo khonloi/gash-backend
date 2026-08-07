@@ -1,4 +1,4 @@
-const NewProduct = require("../models/newProduct");
+const Product = require("../models/Product");
 const Category = require("../models/Categories");
 const ExcelJS = require("exceljs");
 
@@ -36,26 +36,26 @@ exports.getProductStatistics = async (req, res) => {
     }
 
     // --- Đếm dữ liệu theo filter ---
-    const totalProducts = await NewProduct.countDocuments(filter);
-    const activeProducts = await NewProduct.countDocuments({
+    const totalProducts = await Product.countDocuments(filter);
+    const activeProducts = await Product.countDocuments({
       ...filter,
       productStatus: "active",
     });
-    const inactiveProducts = await NewProduct.countDocuments({
+    const inactiveProducts = await Product.countDocuments({
       ...filter,
       productStatus: "inactive",
     });
-    const pendingProducts = await NewProduct.countDocuments({
+    const pendingProducts = await Product.countDocuments({
       ...filter,
       productStatus: "pending",
     });
-    const discontinuedProducts = await NewProduct.countDocuments({
+    const discontinuedProducts = await Product.countDocuments({
       ...filter,
       productStatus: "discontinued",
     });
 
     // --- Sản phẩm mới trong 30 ngày ---
-    const newProducts = await NewProduct.countDocuments({
+    const newProducts = await Product.countDocuments({
       ...filter,
       createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
     });
@@ -86,7 +86,7 @@ exports.getProductStatistics = async (req, res) => {
    ====================================================== */
 exports.getCategoryDistribution = async (req, res) => {
   try {
-    const data = await NewProduct.aggregate([
+    const data = await Product.aggregate([
       {
         $lookup: {
           from: "categories", // đúng tên collection chứa danh mục
@@ -138,7 +138,7 @@ exports.getCategoryDistribution = async (req, res) => {
 exports.getTopProducts = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 6;
-    const top = await NewProduct.find()
+    const top = await Product.find()
       .sort({ sold: -1 }) // Nếu dùng field khác, ví dụ sales hoặc quantitySold → đổi ở đây
       .limit(limit)
       .select("productName sku sold stock categoryId");
@@ -167,7 +167,7 @@ exports.getTopProducts = async (req, res) => {
    ====================================================== */
 exports.exportProductStatistics = async (req, res) => {
   try {
-    const products = await NewProduct.find().populate("categoryId");
+    const products = await Product.find().populate("categoryId");
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Product Statistics");

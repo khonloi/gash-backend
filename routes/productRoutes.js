@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const productController = require('../controllers/newProductController');
+const productController = require('../controllers/productController');
 const { authenticateJWT, authorizeRole, optionalAuth } = require('../middleware/authMiddleware');
 
 router.use((req, res, next) => {

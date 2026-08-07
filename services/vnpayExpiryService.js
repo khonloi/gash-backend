@@ -1,6 +1,6 @@
 const Orders = require('../models/Orders');
 const OrderDetails = require('../models/OrderDetails');
-const newProductVariants = require('../models/newProductVariant');
+const ProductVariant = require('../models/ProductVariant');
 const mongoose = require('mongoose');
 
 /**
@@ -16,7 +16,7 @@ async function restoreStockForOrder(orderId) {
   for (const detail of details) {
     if (!detail.variantId) continue;
 
-    const variant = await newProductVariants.findById(detail.variantId);
+    const variant = await ProductVariant.findById(detail.variantId);
     if (!variant) continue;
 
     const wasOutOfStock = variant.stockQuantity === 0;

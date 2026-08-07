@@ -1,4 +1,4 @@
-const productVariantService = require('../services/newProductVariantService');
+const productVariantService = require('../services/productVariantService');
 
 const createProductVariant = async (req, res) => {
   try {

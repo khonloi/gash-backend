@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const newProductVariant = require("../models/newProductVariant");
-const newProduct = require("../models/newProduct");
+const ProductVariant = require("../models/ProductVariant");
+const Product = require("../models/Product");
 const OrderDetails = require("../models/OrderDetails");
 const Orders = require("../models/Orders");
 
@@ -11,13 +11,13 @@ const Orders = require("../models/Orders");
 const updateProductStatusBasedOnVariants = async (productId) => {
   try {
     // Find all non-deleted variants (exclude discontinued)
-    const nonDiscontinuedVariants = await newProductVariant.find({
+    const nonDiscontinuedVariants = await ProductVariant.find({
       productId,
       variantStatus: { $ne: "discontinued" }
     });
 
     // Get current product to check previous status
-    const currentProduct = await newProduct.findById(productId);
+    const currentProduct = await Product.findById(productId);
     if (!currentProduct) {
       return;
     }
@@ -31,7 +31,7 @@ const updateProductStatusBasedOnVariants = async (productId) => {
       // If product was previously active (had variants), set to "inactive"
       let newStatus = currentProduct.productStatus === "active" ? "inactive" : "pending";
 
-      await newProduct.findByIdAndUpdate(
+      await Product.findByIdAndUpdate(
         productId,
         { productStatus: newStatus, updatedAt: Date.now() },
         { new: true }
@@ -43,7 +43,7 @@ const updateProductStatusBasedOnVariants = async (productId) => {
     const hasActive = nonDiscontinuedVariants.some(v => v.variantStatus === "active");
     let newStatus = hasActive ? "active" : "inactive";
 
-    await newProduct.findByIdAndUpdate(
+    await Product.findByIdAndUpdate(
       productId,
       { productStatus: newStatus, updatedAt: Date.now() },
       { new: true }
@@ -97,7 +97,7 @@ const createProductVariant = async (variantData) => {
       throw new Error("The stock quantity must not exceed 1000");
     }
 
-    const product = await newProduct.findById(productId);
+    const product = await Product.findById(productId);
     if (!product) {
       throw new Error("Product not found");
     }
@@ -106,7 +106,7 @@ const createProductVariant = async (variantData) => {
     }
 
     // Check for existing variant (excluding discontinued ones)
-    const existingVariant = await newProductVariant.findOne({
+    const existingVariant = await ProductVariant.findOne({
       productId,
       productColorId,
       productSizeId,
@@ -146,14 +146,14 @@ const createProductVariant = async (variantData) => {
 
     // Create new variant if it doesn't exist
     const variantStatus = stockQuantity > 0 ? "active" : "inactive";
-    const variant = new newProductVariant({
+    const variant = new ProductVariant({
       ...variantData,
       variantStatus
     });
     await variant.save();
 
     // Add variant to product
-    const updatedProduct = await newProduct.findByIdAndUpdate(
+    const updatedProduct = await Product.findByIdAndUpdate(
       productId,
       {
         $addToSet: { productVariantIds: variant._id },
@@ -204,7 +204,7 @@ const getAllProductVariants = async (filters = {}) => {
       query.productSizeId = productSizeId;
     }
 
-    return await newProductVariant
+    return await ProductVariant
       .find(query)
       .populate("productId")
       .populate("productColorId")
@@ -221,7 +221,7 @@ const getProductVariantById = async (variantId) => {
       throw new Error("Invalid variant ID");
     }
 
-    const variant = await newProductVariant
+    const variant = await ProductVariant
       .findById(variantId)
       .populate("productId")
       .populate("productColorId")
@@ -270,7 +270,7 @@ const updateProductVariant = async (variantId, updateData) => {
       throw new Error("The stock quantity must not exceed 1000");
     }
 
-    const existingVariant = await newProductVariant.findById(variantId);
+    const existingVariant = await ProductVariant.findById(variantId);
     if (!existingVariant) {
       throw new Error("Product variant not found");
     }
@@ -279,7 +279,7 @@ const updateProductVariant = async (variantId, updateData) => {
       throw new Error("Cannot update a discontinued variant");
     }
 
-    const product = await newProduct.findById(existingVariant.productId);
+    const product = await Product.findById(existingVariant.productId);
     if (!product) {
       throw new Error("Associated product not found");
     }
@@ -288,7 +288,7 @@ const updateProductVariant = async (variantId, updateData) => {
     }
 
     if (productId || productColorId || productSizeId) {
-      const existingDuplicate = await newProductVariant.findOne({
+      const existingDuplicate = await ProductVariant.findOne({
         productId: productId || existingVariant.productId,
         productColorId: productColorId || existingVariant.productColorId,
         productSizeId: productSizeId || existingVariant.productSizeId,
@@ -307,7 +307,7 @@ const updateProductVariant = async (variantId, updateData) => {
       updatedData.variantStatus = stockQuantity > 0 ? "active" : "inactive";
     }
 
-    const variant = await newProductVariant.findByIdAndUpdate(
+    const variant = await ProductVariant.findByIdAndUpdate(
       variantId,
       updatedData,
       { new: true, runValidators: true }
@@ -366,7 +366,7 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Cannot delete variant because it still contains active orders.");
     }
 
-    const variant = await newProductVariant.findByIdAndUpdate(
+    const variant = await ProductVariant.findByIdAndUpdate(
       variantId,
       { variantStatus: "discontinued", updatedAt: Date.now() },
       { new: true }
@@ -376,7 +376,7 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Product variant not found");
     }
 
-    const updatedProduct = await newProduct.findByIdAndUpdate(
+    const updatedProduct = await Product.findByIdAndUpdate(
       variant.productId,
       {
         $pull: { productVariantIds: variant._id },
@@ -446,7 +446,7 @@ const bulkCreateProductVariants = async (bulkData) => {
       throw new Error("The stock quantity must not exceed 1000");
     }
 
-    const product = await newProduct.findById(productId);
+    const product = await Product.findById(productId);
     if (!product) {
       throw new Error("Product not found");
     }
@@ -455,7 +455,7 @@ const bulkCreateProductVariants = async (bulkData) => {
     }
 
     // Check for existing variants to avoid duplicates (only active/inactive, not discontinued)
-    const existingVariants = await newProductVariant.find({
+    const existingVariants = await ProductVariant.find({
       productId,
       productColorId,
       productSizeId: { $in: sizeIds },
@@ -485,11 +485,11 @@ const bulkCreateProductVariants = async (bulkData) => {
     }));
 
     // Insert all variants
-    const createdVariants = await newProductVariant.insertMany(variants);
+    const createdVariants = await ProductVariant.insertMany(variants);
 
     // Update product with all variant IDs
     const variantIds = createdVariants.map((v) => v._id);
-    const updatedProduct = await newProduct.findByIdAndUpdate(
+    const updatedProduct = await Product.findByIdAndUpdate(
       productId,
       {
         $addToSet: { productVariantIds: { $each: variantIds } },

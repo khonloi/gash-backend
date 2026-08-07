@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const newProductVariantSchema = new Schema(
+const productVariantSchema = new Schema(
   {
     productId: {
       type: Schema.Types.ObjectId,
-      ref: 'newProducts',
+      ref: 'Product',
       required: true,
     },
     productColorId: {
@@ -48,13 +48,13 @@ const newProductVariantSchema = new Schema(
 
 // ===== Indexes =====
 // All variants for a product (product detail page)
-newProductVariantSchema.index({ productId: 1 });
+productVariantSchema.index({ productId: 1 });
 
 // Active variants for a product (add to cart, inventory)
-newProductVariantSchema.index({ productId: 1, variantStatus: 1 });
+productVariantSchema.index({ productId: 1, variantStatus: 1 });
 
 // Checkout race condition fix uses findOneAndUpdate with _id — covered by default _id index.
 // Stock availability check: find active variants with stock
-newProductVariantSchema.index({ variantStatus: 1, stockQuantity: 1 });
+productVariantSchema.index({ variantStatus: 1, stockQuantity: 1 });
 
-module.exports = mongoose.model('newProductVariants', newProductVariantSchema);
+module.exports = mongoose.model('ProductVariant', productVariantSchema, 'newProductVariants');
