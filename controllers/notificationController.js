@@ -7,7 +7,6 @@ const User = require("../models/Accounts");
 /** ====================== ADMIN ====================== */
 exports.createNotification = async (req, res) => {
   try {
-    console.log("Body received from FE:", req.body);
     const { recipientType } = req.body;
     const notifications = await notificationService.createNotificationService(req.body);
 
@@ -15,35 +14,33 @@ exports.createNotification = async (req, res) => {
     const io = req.app.get("io");
 
     if (io && notifications?.length) {
+      // Pre-fetch all user preferences in a single query to avoid N+1
+      const userIds = [...new Set(notifications.filter(n => n.userId).map(n => n.userId.toString()))];
+      let prefsMap = new Map();
+      
+      if (userIds.length > 0) {
+        try {
+          const users = await User.find({ _id: { $in: userIds } }, 'preferences');
+          users.forEach(u => prefsMap.set(u._id.toString(), u.preferences || { email: true, web: true }));
+        } catch (err) {
+          console.error("Error pre-fetching user preferences:", err);
+        }
+      }
+
       // Emit each notification to its specific user room, but only if user has web notifications enabled
       for (const n of notifications) {
         if (n.userId) {
           const targetId = n.userId.toString();
+          const prefs = prefsMap.get(targetId) || { email: true, web: true };
           
-          // Check user's web preference
-          try {
-            const account = await User.findById(targetId);
-            const prefs = account?.preferences || { email: true, web: true };
-            
-            if (prefs.web) {
-              io.to(targetId).emit("newNotification", n);
-              console.log("Sent web notification to user room:", targetId);
-            } else {
-              console.log("Skipped web notification for user (disabled):", targetId);
-            }
-          } catch (err) {
-            console.error("Error checking user preferences for web notification:", err);
-            // Default to sending if we can't check preferences
+          if (prefs.web) {
             io.to(targetId).emit("newNotification", n);
-            console.log("Sent web notification to user room (default):", targetId);
           }
         } else {
           // If userId is null, it's a global notification - emit to all
           io.emit("newNotification", n);
-          console.log("Sent to ALL users (global notification)");
         }
       }
-      console.log(`Emitted ${notifications.length} notification(s) via Socket.IO`);
     }
 
     return res.status(201).json({
@@ -60,48 +57,39 @@ exports.createNotification = async (req, res) => {
 };
 
 /** ====================== USER PREFERENCES ====================== */
-exports.getUserPreferences = async (req, res) => {
+exports.getUserPreferences = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const account = await User.findById(userId);
-    if (!account) {
-      return res.status(404).json({ error: "User not found" });
+    if (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.id !== userId) {
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
-
-    const prefs = account.preferences || { email: true, web: true };
-    res.json({
-      preferences: prefs,
-    });
+    const preferences = await notificationService.getUserPreferences(userId);
+    res.json({ preferences });
   } catch (error) {
-    console.error("getUserPreferences:", error);
-    res.status(500).json({ error: error.message });
+    if (error.message === "User not found") {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    next(error);
   }
 };
 
-exports.updateUserPreferences = async (req, res) => {
+exports.updateUserPreferences = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const { email, web } = req.body;
-
-    const account = await User.findById(userId);
-    if (!account) {
-      return res.status(404).json({ error: "User not found" });
+    if (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.id !== userId) {
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
-
-    account.preferences = {
-      email: email ?? account.preferences?.email ?? true,
-      web: web ?? account.preferences?.web ?? true,
-    };
-
-    await account.save();
-
+    const preferences = await notificationService.updateUserPreferences(userId, req.body);
     res.json({
+      success: true,
       message: "Preferences updated successfully",
-      preferences: account.preferences,
+      preferences,
     });
   } catch (error) {
-    console.error("updateUserPreferences:", error);
-    res.status(500).json({ error: error.message });
+    if (error.message === "User not found") {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    next(error);
   }
 };
 
@@ -163,17 +151,13 @@ exports.deleteNotification = async (req, res) => {
         io.to(`user_${userId}`).emit("notificationDeleted", deleteEvent);
         
         // Also emit to the socket ID if we have it
-        const { connectedUsers } = require("../sockets/notificationSocket");
         const socketId = connectedUsers.get(userId);
         if (socketId) {
           io.to(socketId).emit("notificationDeleted", deleteEvent);
         }
-        
-        console.log(`Emitted notificationDeleted to user: ${userId}, socketId: ${socketId || 'none'}`);
       } else {
         // Global notification - notify all users
         io.emit("notificationDeleted", deleteEvent);
-        console.log("Emitted notificationDeleted to ALL users (global notification)");
       }
     } else {
       console.warn("Socket.IO not available in deleteNotification");

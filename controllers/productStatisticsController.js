@@ -35,30 +35,30 @@ exports.getProductStatistics = async (req, res) => {
       if (fromDate) filter.createdAt = { $gte: fromDate };
     }
 
-    // --- Count data based on filter ---
-    const totalProducts = await Product.countDocuments(filter);
-    const activeProducts = await Product.countDocuments({
-      ...filter,
-      productStatus: "active",
-    });
-    const inactiveProducts = await Product.countDocuments({
-      ...filter,
-      productStatus: "inactive",
-    });
-    const pendingProducts = await Product.countDocuments({
-      ...filter,
-      productStatus: "pending",
-    });
-    const discontinuedProducts = await Product.countDocuments({
-      ...filter,
-      productStatus: "discontinued",
-    });
+    // --- Count data based on filter using $facet ---
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    
+    const results = await Product.aggregate([
+      { $match: filter },
+      {
+        $facet: {
+          total: [{ $count: "count" }],
+          active: [{ $match: { productStatus: "active" } }, { $count: "count" }],
+          inactive: [{ $match: { productStatus: "inactive" } }, { $count: "count" }],
+          pending: [{ $match: { productStatus: "pending" } }, { $count: "count" }],
+          discontinued: [{ $match: { productStatus: "discontinued" } }, { $count: "count" }],
+          new: [{ $match: { createdAt: { $gte: thirtyDaysAgo } } }, { $count: "count" }]
+        }
+      }
+    ]);
 
-    // --- New products in the last 30 days ---
-    const newProducts = await Product.countDocuments({
-      ...filter,
-      createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-    });
+    const stats = results[0];
+    const totalProducts = stats.total[0] ? stats.total[0].count : 0;
+    const activeProducts = stats.active[0] ? stats.active[0].count : 0;
+    const inactiveProducts = stats.inactive[0] ? stats.inactive[0].count : 0;
+    const pendingProducts = stats.pending[0] ? stats.pending[0].count : 0;
+    const discontinuedProducts = stats.discontinued[0] ? stats.discontinued[0].count : 0;
+    const newProducts = stats.new[0] ? stats.new[0].count : 0;
 
     // Return response
     res.status(200).json({

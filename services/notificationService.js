@@ -11,9 +11,9 @@ exports.createNotificationService = async (data) => {
   let targets = [];
 
   if (recipientType === "specific" && targetId) {
-    const foundUser =
-      (await Accounts.findOne({ username: targetId })) ||
-      (await Accounts.findById(targetId));
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(targetId);
+    const query = isObjectId ? { $or: [{ _id: targetId }, { username: targetId }] } : { username: targetId };
+    const foundUser = await Accounts.findOne(query);
     if (!foundUser) throw new Error("User not found");
     targets = [foundUser._id];
   } else if (recipientType === "all") {
@@ -21,39 +21,41 @@ exports.createNotificationService = async (data) => {
     const users = await Accounts.find({ "preferences.web": { $ne: false } }, "_id");
     targets = users.map((u) => u._id);
   } else if (recipientType === "multiple" && Array.isArray(userIds)) {
-    const foundUsers = [];
+    const objectIds = [];
+    const usernames = [];
+    
     for (const item of userIds) {
-      let userFound = null;
       if (/^[0-9a-fA-F]{24}$/.test(item)) {
-        userFound = await Accounts.findById(item);
-      }
-      if (!userFound) {
-        userFound = await Accounts.findOne({ username: item });
-      }
-      if (userFound) {
-        foundUsers.push(userFound);
+        objectIds.push(item);
+      } else {
+        usernames.push(item);
       }
     }
-    if (foundUsers.length === 0) throw new Error("No valid recipients found");
-    targets = foundUsers.map((u) => u._id);
+    
+    const query = { $or: [] };
+    if (objectIds.length > 0) query.$or.push({ _id: { $in: objectIds } });
+    if (usernames.length > 0) query.$or.push({ username: { $in: usernames } });
+    
+    if (query.$or.length > 0) {
+      const foundUsers = await Accounts.find(query, "_id");
+      targets = foundUsers.map((u) => u._id);
+    }
+    
+    if (targets.length === 0) throw new Error("No valid recipients found");
   }
 
   if (targets.length === 0) throw new Error("No valid recipients found");
 
-  const notifications = await Promise.all(
-    targets.map(async (uid) => {
-      const noti = new Notification({
-        title,
-        message,
-        userId: uid,
-        type,
-        createdAt: new Date(),
-        isTemplate: false,
-      });
-      return await noti.save();
-    })
-  );
+  const docs = targets.map((uid) => ({
+    title,
+    message,
+    userId: uid,
+    type,
+    createdAt: new Date(),
+    isTemplate: false,
+  }));
 
+  const notifications = await Notification.insertMany(docs);
   return notifications;
 };
 

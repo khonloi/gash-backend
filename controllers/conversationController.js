@@ -6,7 +6,7 @@ const Messages = require('../models/Message');
 // Get conversation list
 exports.getList = async (req, res) => {
   try {
-    const { status, accountId, staffId, isAdmin } = req.query;
+    const { status, accountId, isAdmin } = req.query;
     const filter = {};
     
     // Exclude closed conversations unless explicitly requested
@@ -16,48 +16,156 @@ exports.getList = async (req, res) => {
       filter.status = { $ne: 'closed' };
     }
     
-    if (accountId) filter.accountId = accountId;
+    // Convert to ObjectId for aggregation $match
+    const mongoose = require('mongoose');
+    if (accountId && mongoose.isValidObjectId(accountId)) {
+      filter.accountId = new mongoose.Types.ObjectId(accountId);
+    }
     
-    // CHANGED: Removed staff-specific filtering to allow all staff to view all conversations
-    // Previously, non-admins with staffId only saw their assigned or open conversations
-    // Now, if isAdmin or staffId provided, show all (admins and staff see everything)
-    // If neither, still applies general filter, but in practice, staff provide staffId
-    if (isAdmin === 'true' || isAdmin === true) {
-      // Admin can see all conversations - no staff filtering needed
-    } // Removed else if (staffId) block that added restrictive $or filter
+    const pipeline = [
+      { $match: filter },
+      // Sort by updatedAt descending to keep the most recent conversation first when grouping
+      { $sort: { updatedAt: -1 } },
+      
+      // Deduplicate to keep only 1 conversation per accountId (the latest one due to sort)
+      { $group: {
+          _id: "$accountId",
+          doc: { $first: "$$ROOT" }
+        }
+      },
+      { $replaceRoot: { newRoot: "$doc" } },
+      
+      // Lookup the last message for the conversation
+      { $lookup: {
+          from: "messages",
+          let: { convoId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$conversationId", "$$convoId"] } } },
+            { $sort: { createdAt: -1 } },
+            { $limit: 1 }
+          ],
+          as: "lastMsgArray"
+        }
+      },
+      
+      // ONLY CONVERSATIONS THAT HAVE AT LEAST ONE MESSAGE
+      { $match: { "lastMsgArray.0": { $exists: true } } },
+      
+      // Lookup unread messages (senderId = accountId, isRead = false)
+      { $lookup: {
+          from: "messages",
+          let: { convoId: "$_id", accId: "$accountId" },
+          pipeline: [
+            { $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$conversationId", "$$convoId"] },
+                    { $eq: ["$senderId", "$$accId"] },
+                    { $eq: ["$isRead", false] }
+                  ]
+                }
+              }
+            },
+            { $count: "count" }
+          ],
+          as: "unreadArray"
+        }
+      },
+      
+      // Populate accountId
+      { $lookup: {
+          from: "accounts",
+          localField: "accountId",
+          foreignField: "_id",
+          as: "accountIdArray"
+        }
+      },
+      
+      // Populate staffId
+      { $lookup: {
+          from: "accounts",
+          localField: "staffId",
+          foreignField: "_id",
+          as: "staffIdArray"
+        }
+      },
+      
+      // Final projection to format the output exactly as before
+      { $project: {
+          _id: 1,
+          accountId: { $arrayElemAt: ["$accountIdArray", 0] },
+          staffId: { $arrayElemAt: ["$staffIdArray", 0] },
+          status: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          
+          lastMessage: {
+            $let: {
+              vars: { lastMsg: { $arrayElemAt: ["$lastMsgArray", 0] } },
+              in: {
+                $cond: {
+                  if: { $not: ["$$lastMsg"] },
+                  then: "No message",
+                  else: {
+                    $cond: {
+                      if: "$$lastMsg.messageText",
+                      then: "$$lastMsg.messageText",
+                      else: {
+                        $cond: {
+                          if: { $eq: ["$$lastMsg.type", "image"] },
+                          then: "Image",
+                          else: "Media"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          
+          unreadCount: {
+            $let: {
+              vars: { unread: { $arrayElemAt: ["$unreadArray", 0] } },
+              in: { $ifNull: ["$$unread.count", 0] }
+            }
+          }
+        }
+      },
+      
+      // Ensure specific fields from populated accounts are returned (username, email)
+      { $project: {
+          "accountId.password": 0,
+          "staffId.password": 0
+        }
+      },
+      
+      // Final sort since $group messes up the original sort order
+      { $sort: { updatedAt: -1 } }
+    ];
 
-    // ---- ONLY CONVERSATIONS THAT HAVE AT LEAST ONE MESSAGE ----
-    const conversationsWithMsg = await Messages.distinct('conversationId');
-    filter._id = { $in: conversationsWithMsg };
+    const result = await Conversations.aggregate(pipeline);
 
-    const conversations = await Conversations.find(filter)
-      .populate('accountId', 'username email')
-      .populate('staffId', 'username email')
-      .sort({ updatedAt: -1 });
+    // Format the populated account arrays to objects with only _id, username, email
+    const formattedResult = result.map(convo => {
+      if (convo.accountId) {
+        convo.accountId = {
+          _id: convo.accountId._id,
+          username: convo.accountId.username,
+          email: convo.accountId.email
+        };
+      }
+      if (convo.staffId) {
+        convo.staffId = {
+          _id: convo.staffId._id,
+          username: convo.staffId.username,
+          email: convo.staffId.email
+        };
+      }
+      return convo;
+    });
 
-    // Deduplicate to keep only 1 conversation per accountId
-    const uniqueMap = new Map();
-    for (const convo of conversations) {
-      const accId = convo.accountId?._id?.toString() || convo.accountId?.toString();
-      if (!uniqueMap.has(accId)) uniqueMap.set(accId, convo);
-    }
-    const result = Array.from(uniqueMap.values());
-
-    // Compute lastMessage and unreadCount reliably
-    for (const convo of result) {
-      const lastMsg = await Messages.findOne({ conversationId: convo._id }).sort({ createdAt: -1 });
-      convo.lastMessage = lastMsg 
-        ? (lastMsg.messageText || (lastMsg.type === 'image' ? 'Image' : 'Media'))
-        : 'No message';
-
-      convo.unreadCount = await Messages.countDocuments({
-        conversationId: convo._id,
-        senderId: convo.accountId._id,  // Use populated _id
-        isRead: false
-      });
-    }
-
-    res.json({ success: true, data: result });
+    res.json({ success: true, data: formattedResult });
   } catch (err) {
     console.error('getList error:', err);
     res.status(500).json({ success: false, message: err.message });

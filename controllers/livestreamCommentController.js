@@ -15,6 +15,13 @@ exports.addComment = async (req, res) => {
             });
         }
 
+        if (commentText.length > 500) {
+            return res.status(400).json({
+                success: false,
+                message: 'Comment text cannot exceed 500 characters'
+            });
+        }
+
         if (!mongoose.Types.ObjectId.isValid(liveId)) {
             return res.status(400).json({
                 success: false,

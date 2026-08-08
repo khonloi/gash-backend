@@ -128,16 +128,26 @@ exports.viewRevenueByYear = async (req, res) => {
 // API get overview statistics
 exports.getCustomerStatistics = async (req, res) => {
   try {
-    const totalCustomers = await Account.countDocuments({ role: "user" });
-    const activeCustomers = await Account.countDocuments({ role: "user", accountStatus: "active" });
-    const inactiveCustomers = await Account.countDocuments({ role: "user", accountStatus: "inactive" });
-
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
-    const newCustomers = await Account.countDocuments({
-      role: "user",
-      createdAt: { $gte: startOfMonth },
-    });
+
+    const results = await Account.aggregate([
+      { $match: { role: "user" } },
+      {
+        $facet: {
+          total: [{ $count: "count" }],
+          active: [{ $match: { accountStatus: "active" } }, { $count: "count" }],
+          inactive: [{ $match: { accountStatus: "inactive" } }, { $count: "count" }],
+          new: [{ $match: { createdAt: { $gte: startOfMonth } } }, { $count: "count" }]
+        }
+      }
+    ]);
+
+    const stats = results[0];
+    const totalCustomers = stats.total[0] ? stats.total[0].count : 0;
+    const activeCustomers = stats.active[0] ? stats.active[0].count : 0;
+    const inactiveCustomers = stats.inactive[0] ? stats.inactive[0].count : 0;
+    const newCustomers = stats.new[0] ? stats.new[0].count : 0;
 
     res.status(200).json({
       success: true,

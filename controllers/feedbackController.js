@@ -36,7 +36,7 @@ exports.getAllFeedback = async (req, res) => {
 
     if (hasContent !== undefined) {
       if (hasContent === 'true') {
-        query['feedback.content'] = { $exists: true, $ne: '', $ne: null };
+        query['feedback.content'] = { $exists: true, $nin: ['', null] };
       } else if (hasContent === 'false') {
         query.$or = [
           { 'feedback.content': { $exists: false } },
@@ -71,19 +71,20 @@ exports.getAllFeedback = async (req, res) => {
       query.variantId = variantId;
     }
 
+    const orderQuery = {};
     if (userId && mongoose.isValidObjectId(userId)) {
-      const orders = await Orders.find({ accountId: userId }).select('_id');
-      const orderIds = orders.map(o => o._id);
-      query.orderId = { $in: orderIds };
+      orderQuery.accountId = userId;
     }
-
     if (orderStatus) {
       const validStatuses = ['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'];
       if (validStatuses.includes(orderStatus)) {
-        const orders = await Orders.find({ orderStatus: orderStatus }).select('_id');
-        const orderIds = orders.map(o => o._id);
-        query.orderId = { $in: orderIds };
+        orderQuery.orderStatus = orderStatus;
       }
+    }
+    if (Object.keys(orderQuery).length > 0) {
+      const orders = await Orders.find(orderQuery).select('_id');
+      const orderIds = orders.map(o => o._id);
+      query.orderId = { $in: orderIds };
     }
 
     if (dateFrom || dateTo) {

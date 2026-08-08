@@ -4,16 +4,16 @@ const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware
 const statisticController = require('../controllers/statisticController');
 
 // View Revenue by Week (Admin/Manager only)
-router.get('/revenue/revenue-by-week', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByWeek);
+router.get('/revenue/revenue-by-week', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByWeek);
 
 // View Revenue by Month (Admin/Manager only)
-router.get('/revenue/revenue-by-month', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByMonth);
+router.get('/revenue/revenue-by-month', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByMonth);
 
 // View Revenue by Year (Admin/Manager only)
-router.get('/revenue/revenue-by-year', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByYear);
+router.get('/revenue/revenue-by-year', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByYear);
 
 // View Revenue by Day (Admin/Manager only)
-router.get('/revenue/revenue-by-day', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByDay);
+router.get('/revenue/revenue-by-day', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByDay);
 
 // ========================================================================
 // CUSTOMER + PRODUCT STATISTICS
@@ -38,14 +38,14 @@ const {
 router.get(
   '/customers',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getCustomerStatistics
 );
 
 router.get(
   '/customers/export',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   exportCustomerStatistics
 );
 
@@ -53,7 +53,7 @@ router.get(
 router.get(
   '/customers/top',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getTopCustomers
 );
 
@@ -61,7 +61,7 @@ router.get(
 router.get(
   '/customers/sparkline',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getCustomerSparkline
 );
 
@@ -72,28 +72,28 @@ router.get(
 router.get(
   '/products',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getProductStatistics
 );
 
 router.get(
   '/products/categories',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getCategoryDistribution
 );
 
 router.get(
   '/products/top',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getTopProducts
 );
 
 router.get(
   '/products/export',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   exportProductStatistics
 );
 

@@ -19,7 +19,7 @@ const invalidateLiveNowCache = () => {
 };
 
 // Cleanup old cache entries periodically
-setInterval(() => {
+const cacheCleanupInterval = setInterval(() => {
     const now = Date.now();
     for (const [key, value] of viewerCache.entries()) {
         // Remove entries older than 1 minute
@@ -34,6 +34,21 @@ setInterval(() => {
     }
 }, CACHE_CLEANUP_INTERVAL);
 
+// unref() allows the Node.js process to exit if this is the only active timer
+cacheCleanupInterval.unref();
+
+// Helper to add a timeout to a promise
+const withTimeout = (promise, ms, errorMessage) => {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
+    });
+    return Promise.race([
+        promise.finally(() => clearTimeout(timeoutId)),
+        timeoutPromise
+    ]);
+};
+
 // Get real-time viewer count from LiveKit (with caching to reduce API calls)
 const getRealTimeViewers = async (roomName, useCache = true) => {
     // Check cache first (skip cache for critical operations like join/leave)
@@ -44,20 +59,14 @@ const getRealTimeViewers = async (roomName, useCache = true) => {
         }
     }
 
-    let timeoutId;
     try {
         // Use listParticipants to get current participants in the room
         // Increased timeout to 10 seconds for better reliability
-        const timeoutPromise = new Promise((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('LiveKit API timeout after 10s')), 10000);
-        });
-
-        const participants = await Promise.race([
-            roomService.listParticipants(roomName).finally(() => {
-                if (timeoutId) clearTimeout(timeoutId);
-            }),
-            timeoutPromise
-        ]);
+        const participants = await withTimeout(
+            roomService.listParticipants(roomName),
+            10000,
+            'LiveKit API timeout after 10s'
+        );
 
         if (!participants || participants.length === 0) {
             // Only cache if useCache is true (don't cache for real-time operations)
@@ -93,9 +102,6 @@ const getRealTimeViewers = async (roomName, useCache = true) => {
         }
         return uniqueViewers; // Return unique users instead of total connections
     } catch (error) {
-        // Cleanup timeout if still pending
-        if (timeoutId) clearTimeout(timeoutId);
-
         // Only log first timeout error to avoid spam
         const cacheKey = `error_${roomName}`;
         const errorCache = viewerCache.get(cacheKey);
