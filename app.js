@@ -5,6 +5,7 @@ const helmet = require("helmet");
 const compression = require("compression");
 const cookieParser = require("cookie-parser");
 const path = require("path");
+const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
 
@@ -144,20 +145,8 @@ app.use((req, res) => {
 });
 
 // ===== Global Error Handler =====
-// eslint-disable-next-line no-unused-vars
-app.use((err, req, res, next) => {
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-
-  if (status >= 500) {
-    console.error("Unhandled error:", err);
-  }
-
-  res.status(status).json({
-    success: false,
-    message,
-    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
-  });
-});
+// Handles AppError, Mongoose errors, JWT errors, and unexpected crashes.
+// Must be the LAST middleware — Express identifies error handlers by their 4-argument signature.
+app.use(errorHandler);
 
 module.exports = app;
