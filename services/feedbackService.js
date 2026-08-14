@@ -512,3 +512,102 @@ exports.restoreFeedback = async (feedbackId) => {
     restored_at: feedback.feedback.updatedAt,
   };
 };
+
+const orderService = require("./orderService");
+
+exports.addFeedbackProductService = async (orderId, variantId, rating, content, user) => {
+  if (rating !== undefined) {
+    if (typeof rating !== 'number' || !Number.isInteger(rating)) throw new Error('Rating must be an integer');
+    if (rating < 1 || rating > 5) throw new Error('Rating must be between 1 and 5');
+  }
+
+  if (content !== undefined && content !== null) {
+    if (typeof content !== 'string') throw new Error('Content must be a string');
+    if (content.length > 500) throw new Error('Feedback cannot exceed 500 characters');
+  }
+
+  const order = await orderService.getOrderByIdService(orderId, user);
+  if (!order) {
+    const err = new Error('Order not found'); err.status = 404; throw err;
+  }
+
+  if (order.orderStatus !== 'delivered') {
+    const err = new Error('Feedback can only be added when the order is delivered'); err.status = 400; throw err;
+  }
+
+  const orderDetail = await OrderDetails.findOne({ orderId, variantId });
+  if (!orderDetail) {
+    const err = new Error('Product not found in this order'); err.status = 404; throw err;
+  }
+
+  const updateData = {};
+  if (rating !== undefined) updateData['feedback.rating'] = rating;
+  if (content !== undefined) updateData['feedback.content'] = content === null ? null : content.trim();
+  updateData['feedback.isDeleted'] = false;
+  updateData['feedback.createdAt'] = new Date();
+  updateData['feedback.updatedAt'] = new Date();
+
+  const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
+    orderDetail._id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
+
+  return { savedOrderDetail, order };
+};
+
+exports.editFeedbackProductService = async (orderId, variantId, rating, content, user) => {
+  if (!rating && !content) {
+    const err = new Error('Either rating or content (or both) is required'); err.status = 400; throw err;
+  }
+
+  if (rating !== undefined) {
+    if (typeof rating !== 'number' || !Number.isInteger(rating)) throw new Error('Rating must be an integer');
+    if (rating < 1 || rating > 5) throw new Error('Rating must be between 1 and 5');
+  }
+
+  if (content !== undefined && content !== null) {
+    if (typeof content !== 'string') throw new Error('Content must be a string');
+    if (content.length > 500) throw new Error('Feedback cannot exceed 500 characters');
+  }
+
+  const order = await orderService.getOrderByIdService(orderId, user);
+  if (!order) {
+    const err = new Error('Order not found'); err.status = 404; throw err;
+  }
+
+  if (order.orderStatus !== 'delivered') {
+    const err = new Error('Feedback can only be edited when the order is delivered'); err.status = 400; throw err;
+  }
+
+  const orderDetail = await OrderDetails.findOne({ orderId, variantId });
+  if (!orderDetail) {
+    const err = new Error('Product not found in this order'); err.status = 404; throw err;
+  }
+
+  if (orderDetail.feedback && orderDetail.feedback.isDeleted === true) {
+    const err = new Error('Feedback has been deleted'); err.status = 404; throw err;
+  }
+
+  const hasExistingFeedback = orderDetail.feedback && (
+    (orderDetail.feedback.rating && orderDetail.feedback.rating !== null) ||
+    (orderDetail.feedback.content && orderDetail.feedback.content.trim() !== '')
+  );
+
+  if (!hasExistingFeedback) {
+    const err = new Error('No existing feedback to edit. Use add feedback instead.'); err.status = 400; throw err;
+  }
+
+  const updateData = {};
+  if (rating !== undefined) updateData['feedback.rating'] = rating;
+  if (content !== undefined) updateData['feedback.content'] = content === null ? null : content.trim();
+  updateData['feedback.updatedAt'] = new Date();
+
+  const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
+    orderDetail._id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
+
+  return { savedOrderDetail, order };
+};

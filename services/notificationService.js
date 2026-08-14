@@ -79,3 +79,155 @@ exports.updateUserPreferences = async (userId, prefs) => {
   await account.save();
   return account.preferences;
 };
+
+/** ====================== ADMIN ====================== */
+exports.getAllNotificationsService = async (page = 1, limit = 20) => {
+  const skip = (page - 1) * limit;
+  const query = { type: { $ne: "preference" } };
+
+  const [notifications, total] = await Promise.all([
+    Notification.find(query)
+      .populate("userId", "fullName username email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Notification.countDocuments(query)
+  ]);
+
+  return {
+    notifications,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit)
+    }
+  };
+};
+
+exports.updateNotificationService = async (id, data) => {
+  const { title, message, type } = data;
+  const updated = await Notification.findByIdAndUpdate(
+    id,
+    { title, message, type },
+    { new: true }
+  );
+  if (!updated) throw new Error("Notification not found");
+  return updated;
+};
+
+exports.deleteNotificationService = async (id) => {
+  const notification = await Notification.findById(id);
+  if (!notification) throw new Error("Notification not found");
+  
+  await Notification.findByIdAndDelete(id);
+  return notification; // Return deleted notification for socket emit
+};
+
+/** ====================== USER ====================== */
+exports.getUserNotificationsService = async (userId, page = 1, limit = 20) => {
+  const skip = (page - 1) * limit;
+  const query = {
+    isTemplate: false,
+    type: { $ne: "preference" },
+    $or: [{ userId }, { userId: null }],
+  };
+
+  const [notifications, total] = await Promise.all([
+    Notification.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Notification.countDocuments(query)
+  ]);
+
+  return {
+    notifications,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit)
+    }
+  };
+};
+
+exports.markAsReadService = async (id) => {
+  const notification = await Notification.findByIdAndUpdate(id, { isRead: true });
+  if (!notification) throw new Error("Notification not found");
+  return notification;
+};
+
+exports.clearAllService = async (userId) => {
+  const result = await Notification.deleteMany({
+    isTemplate: false,
+    type: { $ne: "preference" },
+    $or: [{ userId }, { userId: null }],
+  });
+  return result.deletedCount;
+};
+
+exports.deleteUserNotificationService = async (userId, id) => {
+  const notification = await Notification.findById(id);
+  if (!notification) throw new Error("Notification not found");
+  
+  if (notification.userId === null) {
+    throw new Error("Cannot delete a global notification");
+  }
+  
+  if (notification.userId.toString() !== userId.toString()) {
+    throw new Error("You are not allowed to delete this notification");
+  }
+  
+  await Notification.findByIdAndDelete(id);
+  return notification;
+};
+
+/** ====================== TEMPLATE ====================== */
+exports.getAllTemplatesService = async () => {
+  return await Notification.find({ isTemplate: true }).sort({ createdAt: -1 });
+};
+
+exports.createTemplateService = async (data) => {
+  const { name, title, message, type } = data;
+  if (!name || !title || !message) throw new Error("Missing required fields.");
+  
+  const template = new Notification({
+    name,
+    title,
+    message,
+    type,
+    isTemplate: true,
+  });
+  await template.save();
+  return template;
+};
+
+exports.updateTemplateService = async (id, data) => {
+  const { name, title, message, type } = data;
+  const updated = await Notification.findOneAndUpdate(
+    { _id: id, isTemplate: true },
+    { name, title, message, type },
+    { new: true }
+  );
+  if (!updated) throw new Error("Template not found.");
+  return updated;
+};
+
+exports.deleteTemplateService = async (id) => {
+  const deleted = await Notification.findOneAndDelete({
+    _id: id,
+    isTemplate: true,
+  });
+  if (!deleted) throw new Error("Template not found.");
+  return deleted;
+};
+
+exports.getUsersPreferencesMapService = async (userIds) => {
+  const prefsMap = new Map();
+  if (userIds.length > 0) {
+    const users = await Accounts.find({ _id: { $in: userIds } }, 'preferences');
+    users.forEach(u => prefsMap.set(u._id.toString(), u.preferences || { email: true, web: true }));
+  }
+  return prefsMap;
+};

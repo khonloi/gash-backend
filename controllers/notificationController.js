@@ -1,8 +1,5 @@
-const mongoose = require("mongoose");
-const Notification = require("../models/Notification");
 const notificationService = require("../services/notificationService");
 const { connectedUsers } = require("../sockets/notificationSocket");
-const User = require("../models/Accounts");
 
 /** ====================== ADMIN ====================== */
 exports.createNotification = async (req, res) => {
@@ -16,16 +13,7 @@ exports.createNotification = async (req, res) => {
     if (io && notifications?.length) {
       // Pre-fetch all user preferences in a single query to avoid N+1
       const userIds = [...new Set(notifications.filter(n => n.userId).map(n => n.userId.toString()))];
-      let prefsMap = new Map();
-      
-      if (userIds.length > 0) {
-        try {
-          const users = await User.find({ _id: { $in: userIds } }, 'preferences');
-          users.forEach(u => prefsMap.set(u._id.toString(), u.preferences || { email: true, web: true }));
-        } catch (err) {
-          console.error("Error pre-fetching user preferences:", err);
-        }
-      }
+      const prefsMap = await notificationService.getUsersPreferencesMapService(userIds);
 
       // Emit each notification to its specific user room, but only if user has web notifications enabled
       for (const n of notifications) {
@@ -98,28 +86,9 @@ exports.getAllNotifications = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
 
-    const query = { type: { $ne: "preference" } };
-
-    const [notifications, total] = await Promise.all([
-      Notification.find(query)
-        .populate("userId", "fullName username email")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      Notification.countDocuments(query)
-    ]);
-
-    res.json({
-      notifications,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit)
-      }
-    });
+    const data = await notificationService.getAllNotificationsService(page, limit);
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -128,35 +97,22 @@ exports.getAllNotifications = async (req, res) => {
 exports.updateNotification = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, message, type } = req.body;
-
-    const updated = await Notification.findByIdAndUpdate(
-      id,
-      { title, message, type },
-      { new: true }
-    );
-
-    if (!updated)
-      return res.status(404).json({ error: "Notification not found" });
+    const updated = await notificationService.updateNotificationService(id, req.body);
     res.json({ success: true, notification: updated });
   } catch (error) {
+    if (error.message === "Notification not found") {
+      return res.status(404).json({ error: "Notification not found" });
+    }
     res.status(500).json({ error: "Failed to update notification" });
   }
 };
 
 exports.deleteNotification = async (req, res) => {
   try {
-    // Get notification before deleting to know who to notify
-    const notification = await Notification.findById(req.params.id);
-    if (!notification) {
-      return res.status(404).json({ error: "Notification not found" });
-    }
+    const notification = await notificationService.deleteNotificationService(req.params.id);
 
     const userId = notification.userId ? notification.userId.toString() : null;
     const notificationId = notification._id.toString();
-
-    // Delete the notification
-    await Notification.findByIdAndDelete(req.params.id);
 
     // Emit Socket.IO event to notify recipients
     const io = req.app.get("io");
@@ -183,6 +139,9 @@ exports.deleteNotification = async (req, res) => {
 
     res.json({ message: "Deleted successfully" });
   } catch (error) {
+    if (error.message === "Notification not found") {
+      return res.status(404).json({ error: "Notification not found" });
+    }
     res.status(500).json({ error: error.message });
   }
 };
@@ -193,31 +152,9 @@ exports.getUserNotifications = async (req, res) => {
     const { userId } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
 
-    const query = {
-      isTemplate: false,
-      type: { $ne: "preference" },
-      $or: [{ userId }, { userId: null }],
-    };
-
-    const [notifications, total] = await Promise.all([
-      Notification.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      Notification.countDocuments(query)
-    ]);
-
-    res.json({
-      notifications,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit)
-      }
-    });
+    const data = await notificationService.getUserNotificationsService(userId, page, limit);
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -225,18 +162,18 @@ exports.getUserNotifications = async (req, res) => {
 
 exports.markAsRead = async (req, res) => {
   try {
-    const notification = await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
-    if (notification) {
-      // Emit Socket.IO event for notification badge update
-      const io = req.app.get('io');
-      const userId = notification.userId?.toString();
-      if (io && userId) {
-        io.to(userId).emit('notificationBadgeUpdate', { userId });
-      } else if (io && !userId) {
-        // Global notification, emit to all users
-        io.emit('notificationBadgeUpdate', { userId: null });
-      }
+    const notification = await notificationService.markAsReadService(req.params.id);
+    
+    // Emit Socket.IO event for notification badge update
+    const io = req.app.get('io');
+    const userId = notification.userId?.toString();
+    if (io && userId) {
+      io.to(userId).emit('notificationBadgeUpdate', { userId });
+    } else if (io && !userId) {
+      // Global notification, emit to all users
+      io.emit('notificationBadgeUpdate', { userId: null });
     }
+    
     res.json({ message: "Marked as read" });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -246,11 +183,7 @@ exports.markAsRead = async (req, res) => {
 exports.clearAll = async (req, res) => {
   try {
     const { userId } = req.params;
-    const result = await Notification.deleteMany({
-      isTemplate: false,
-      type: { $ne: "preference" },
-      $or: [{ userId }, { userId: null }],
-    });
+    const deletedCount = await notificationService.clearAllService(userId);
 
     // Emit Socket.IO event for notification badge update
     const io = req.app.get('io');
@@ -263,7 +196,7 @@ exports.clearAll = async (req, res) => {
 
     res.json({
       message: "Cleared all notifications",
-      deletedCount: result.deletedCount,
+      deletedCount,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -273,25 +206,8 @@ exports.clearAll = async (req, res) => {
 exports.deleteUserNotification = async (req, res) => {
   try {
     const { userId, id } = req.params;
-    const notification = await Notification.findById(id);
-
-    if (!notification) {
-      return res.status(404).json({ error: "Notification not found" });
-    }
-
-    if (notification.userId === null) {
-      return res
-        .status(403)
-        .json({ error: "Cannot delete a global notification" });
-    }
-
-    if (notification.userId.toString() !== userId.toString()) {
-      return res
-        .status(403)
-        .json({ error: "You are not allowed to delete this notification" });
-    }
-
-    await Notification.findByIdAndDelete(id);
+    
+    await notificationService.deleteUserNotificationService(userId, id);
 
     // Emit Socket.IO event for notification badge update
     const io = req.app.get('io');
@@ -302,6 +218,12 @@ exports.deleteUserNotification = async (req, res) => {
     return res.json({ message: "Deleted successfully" });
   } catch (error) {
     console.error("Error in deleteUserNotification:", error);
+    if (error.message === "Notification not found") {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+    if (error.message === "Cannot delete a global notification" || error.message === "You are not allowed to delete this notification") {
+      return res.status(403).json({ error: error.message });
+    }
     res.status(500).json({ error: error.message });
   }
 };
@@ -309,9 +231,7 @@ exports.deleteUserNotification = async (req, res) => {
 /** ====================== TEMPLATE ====================== */
 exports.getAllTemplates = async (req, res) => {
   try {
-    const templates = await Notification.find({
-      isTemplate: true,
-    }).sort({ createdAt: -1 });
+    const templates = await notificationService.getAllTemplatesService();
     res.json(templates);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch templates." });
@@ -320,20 +240,12 @@ exports.getAllTemplates = async (req, res) => {
 
 exports.createTemplate = async (req, res) => {
   try {
-    const { name, title, message, type } = req.body;
-    if (!name || !title || !message)
-      return res.status(400).json({ error: "Missing required fields." });
-
-    const template = new Notification({
-      name,
-      title,
-      message,
-      type,
-      isTemplate: true,
-    });
-    await template.save();
+    const template = await notificationService.createTemplateService(req.body);
     res.status(201).json(template);
   } catch (error) {
+    if (error.message === "Missing required fields.") {
+      return res.status(400).json({ error: "Missing required fields." });
+    }
     res.status(500).json({ error: "Failed to create template." });
   }
 };
@@ -341,17 +253,12 @@ exports.createTemplate = async (req, res) => {
 exports.updateTemplate = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, title, message, type } = req.body;
-
-    const updated = await Notification.findOneAndUpdate(
-      { _id: id, isTemplate: true },
-      { name, title, message, type },
-      { new: true }
-    );
-
-    if (!updated) return res.status(404).json({ error: "Template not found." });
+    const updated = await notificationService.updateTemplateService(id, req.body);
     res.json(updated);
   } catch (error) {
+    if (error.message === "Template not found.") {
+      return res.status(404).json({ error: "Template not found." });
+    }
     res.status(500).json({ error: "Failed to update template." });
   }
 };
@@ -359,14 +266,12 @@ exports.updateTemplate = async (req, res) => {
 exports.deleteTemplate = async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await Notification.findOneAndDelete({
-      _id: id,
-      isTemplate: true,
-    });
-    if (!deleted)
-      return res.status(404).json({ error: "Template not found." });
+    await notificationService.deleteTemplateService(id);
     res.json({ message: "Template deleted successfully." });
   } catch (error) {
+    if (error.message === "Template not found.") {
+      return res.status(404).json({ error: "Template not found." });
+    }
     res.status(500).json({ error: "Failed to delete template." });
   }
 };

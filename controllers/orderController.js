@@ -2,17 +2,11 @@
 const mongoose = require('mongoose');
 const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
+const feedbackService = require('../services/feedbackService');
 const { createOrderNotification, emitOrderNotification } = require('../utils/orderNotificationHelper');
 
 // Models used in checkout, cancelOrder, feedback, and VNPay handlers
 const Accounts = require('../models/Accounts');
-const Orders = require('../models/Orders');
-const OrderDetails = require('../models/OrderDetails');
-const ProductVariant = require('../models/ProductVariant');
-const Product = require('../models/Product');
-const ProductImage = require('../models/ProductImage');
-const ProductColors = require('../models/ProductColors');
-const ProductSizes = require('../models/ProductSizes');
 const Voucher = require('../models/Voucher');
 const Cart = require('../models/Cart');
 const { applyVoucher } = require('./voucherController');
@@ -286,23 +280,13 @@ exports.vnpayReturn = async (req, res) => {
     }
 
     const result = await vnpayService.handleReturn(req.query);
-
-    // Get orderId from VNPay (vnp_TxnRef sent when creating URL)
     const orderId = req.query.vnp_TxnRef;
-
-    // Get amount (VNPay returns amount multiplied by 100)
     const amount = req.query.vnp_Amount ? Number(req.query.vnp_Amount) / 100 : 0;
-
-    // Payment method
     const paymentMethod = "VNPay";
 
-    // Emit Socket.IO event for payment status update
     const io = req.app.get('io');
     if (io && orderId) {
-      const updatedOrder = await Orders.findById(orderId)
-        .populate('accountId', 'username name email phone')
-        .lean();
-
+      const updatedOrder = await orderService.getOrderForEmitService(orderId);
       if (updatedOrder && updatedOrder.accountId) {
         await emitOrderUpdate(io, updatedOrder, 'payment_changed');
       }
@@ -352,14 +336,10 @@ exports.vnpayIpn = async (req, res) => {
 
     const result = await vnpayService.handleIpn(req.query);
 
-    // Emit Socket.IO event for payment status update (IPN)
     const io = req.app.get('io');
     if (io && req.query.vnp_TxnRef) {
       const orderId = req.query.vnp_TxnRef;
-      const updatedOrder = await Orders.findById(orderId)
-        .populate('accountId', 'username name email phone')
-        .lean();
-
+      const updatedOrder = await orderService.getOrderForEmitService(orderId);
       if (updatedOrder && updatedOrder.accountId) {
         await emitOrderUpdate(io, updatedOrder, 'payment_changed');
       }
@@ -396,153 +376,24 @@ exports.checkout = async (req, res) => {
 
 exports.getOrderByIdForUser = async (req, res) => {
   try {
-    const user = req.user;
-    const orderId = req.params.id;
-
-    if (!mongoose.isValidObjectId(orderId)) {
-      return res.status(400).json({ success: false, message: 'Invalid order ID' });
-    }
-
-    const order = await Orders.findById(orderId)
-      .populate('accountId', 'username name')
-      .populate('voucherId', 'code discountType discountValue');
-
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    // Check permissions
-    if (user.role !== 'admin' && user.role !== 'manager' && order.accountId._id.toString() !== user.id) {
-      return res.status(403).json({ success: false, message: 'Access denied: Can only view own order' });
-    }
-
+    const order = await orderService.getOrderByIdForUserService(req.params.id, req.user);
     return res.status(200).json({ success: true, order });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || 'Error retrieving order' });
+    return res.status(error.status || 500).json({ success: false, message: error.message || 'Error retrieving order' });
   }
 };
 
 exports.cancelOrder = async (req, res) => {
   try {
     const orderId = req.params.id;
-    const { cancelReason } = req.body; // Added cancelReason from request body
-
-    // Validate cancelReason
-    if (cancelReason && (typeof cancelReason !== 'string' || cancelReason.length > 500)) {
-      return res.status(400).json({
-        message: 'Invalid cancel reason. Must be a string up to 500 characters.'
-      });
-    }
-
-    // Get current order information with voucher
-    const order = await orderService.getOrderByIdService(orderId, req.user);
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-
-    // Only allow cancelling when status is pending
-    if (order.orderStatus !== 'pending') {
-      return res.status(400).json({ message: 'Only pending orders can be cancelled' });
-    }
-
-    // Handle voucher if order used a voucher
-    if (order.voucherId) {
-      const voucher = await Voucher.findById(order.voucherId);
-      if (voucher) {
-        // Decrease usedCount of voucher (restore usage count)
-        if (voucher.usedCount > 0) {
-          voucher.usedCount -= 1;
-          await voucher.save();
-        }
-      }
-    }
-
-    // Restore product stock quantity to warehouse
-    if (order.orderDetails && order.orderDetails.length > 0) {
-      for (const orderDetail of order.orderDetails) {
-        if (orderDetail.variantId) {
-          const variant = await ProductVariant.findById(orderDetail.variantId);
-          if (variant) {
-            // Save stockQuantity before restoring for validation
-            const oldStockQuantity = variant.stockQuantity;
-            // Add purchased quantity back to stock
-            variant.stockQuantity += orderDetail.Quantity;
-            // If transition from 0 to > 0, set variantStatus = active
-            if (oldStockQuantity === 0 && variant.stockQuantity > 0) {
-              variant.variantStatus = 'active';
-            }
-            await variant.save();
-          }
-        }
-      }
-    }
-
-    // Update status to cancelled and save cancelReason
-    let updateData = {
-      orderStatus: 'cancelled',
-      cancelReason
-    };
-
-    // If it's a paid VNPAY order, automatically start refund process
-    if (order.paymentMethod === 'VNPAY' && order.payStatus === 'paid') {
-      updateData.refundStatus = 'pending_refund';
-    }
-
-    const updatedOrder = await orderService.updateOrderService(
-      orderId,
-      updateData,
-      req.user
-    );
-
-    // Emit Socket.IO event for order cancellation
+    const { cancelReason } = req.body;
     const io = req.app.get('io');
-    if (io && updatedOrder && updatedOrder.accountId) {
-      const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
-        ? updatedOrder.accountId._id.toString()
-        : updatedOrder.accountId.toString();
-
-      // Ensure order is properly formatted with all fields
-      const formattedOrder = {
-        ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
-        accountId: updatedOrder.accountId,
-        name: updatedOrder.name,
-        orderDate: updatedOrder.orderDate,
-        updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
-        createdAt: updatedOrder.createdAt,
-        cancelReason: updatedOrder.cancelReason
-      };
-
-      // Emit to specific user room for real-time updates
-      io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
-      // Also emit to admin room so dashboard gets updates
-      io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
-
-      console.log(`Order ${orderId} cancelled, emitted to user_${userId} and order_admins`);
-
-      // Create and emit order cancellation notification
-      try {
-        const notification = await createOrderNotification({
-          userId,
-          orderId: orderId.toString(),
-          orderStatus: updatedOrder.orderStatus,
-          payStatus: updatedOrder.payStatus,
-          messageType: 'cancelled'
-        });
-
-        // Small delay to ensure socket connection is established
-        setTimeout(() => {
-          emitOrderNotification(io, notification, userId);
-        }, 100);
-      } catch (notifError) {
-        console.error('Error creating order cancellation notification:', notifError);
-      }
-    }
+    
+    const result = await orderService.cancelOrderService(orderId, cancelReason, req.user, io);
 
     res.status(200).json({
       message: 'Order cancelled successfully',
-      order: updatedOrder,
-      voucherRefunded: order.voucherId ? true : false,
-      stockRestored: order.orderDetails ? order.orderDetails.length : 0
+      ...result
     });
   } catch (error) {
     res
@@ -556,95 +407,11 @@ exports.addFeedbackProduct = async (req, res) => {
     const { orderId, variantId } = req.params;
     const { rating, content } = req.body;
 
-    // Validate input
-    if (!rating) {
-      return res.status(400).json({
-        success: false,
-        message: 'Rating is required',
-      });
-    }
-
-    // Validate IDs
     if (!mongoose.isValidObjectId(orderId) || !mongoose.isValidObjectId(variantId)) {
       return res.status(400).json({ success: false, message: 'Invalid order or variant ID' });
     }
 
-    // Validate rating
-    if (rating !== undefined) {
-      if (typeof rating !== 'number' || !Number.isInteger(rating)) {
-        return res.status(400).json({ success: false, message: 'Rating must be an integer' });
-      }
-      if (rating < 1 || rating > 5) {
-        return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5' });
-      }
-    }
-
-    // Validate content
-    if (content !== undefined && content !== null) {
-      if (typeof content !== 'string') {
-        return res.status(400).json({ success: false, message: 'Content must be a string' });
-      }
-      if (content.length > 500) {
-        return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
-      }
-    }
-
-    // Check order exists and belongs to current user
-    const order = await orderService.getOrderByIdService(orderId, req.user);
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    // Only allow feedback when order is delivered
-    if (order.orderStatus !== 'delivered') {
-      return res.status(400).json({
-        success: false,
-        message: 'Feedback can only be added when the order is delivered',
-      });
-    }
-
-    // Find product detail in order
-    const orderDetail = await OrderDetails.findOne({
-      orderId: orderId,
-      variantId: variantId,
-    });
-
-    if (!orderDetail) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found in this order',
-      });
-    }
-
-    // Create update object
-    const updateData = {};
-    if (rating !== undefined) {
-      updateData['feedback.rating'] = rating;
-    }
-    if (content !== undefined) {
-      updateData['feedback.content'] = content === null ? null : content.trim();
-    }
-    // Reset isDeleted and set timestamps when creating new feedback
-    updateData['feedback.isDeleted'] = false;
-    updateData['feedback.createdAt'] = new Date();
-    updateData['feedback.updatedAt'] = new Date();
-
-    // Update directly in database
-    const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
-      orderDetail._id,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
-
-    if (!savedOrderDetail) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to save feedback to database'
-      });
-    }
-
-    // Verify from database
-    const verifyOrderDetail = await OrderDetails.findById(orderDetail._id);
+    const { savedOrderDetail, order } = await feedbackService.addFeedbackProductService(orderId, variantId, rating, content, req.user);
 
     res.status(200).json({
       success: true,
@@ -661,7 +428,7 @@ exports.addFeedbackProduct = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message || 'Error adding product feedback',
     });
@@ -673,111 +440,11 @@ exports.editFeedbackProduct = async (req, res) => {
     const { orderId, variantId } = req.params;
     const { rating, content } = req.body;
 
-    // Validate input
-    if (!rating && !content) {
-      return res.status(400).json({
-        success: false,
-        message: 'Either rating or content (or both) is required',
-      });
-    }
-
-    // Validate IDs
     if (!mongoose.isValidObjectId(orderId) || !mongoose.isValidObjectId(variantId)) {
       return res.status(400).json({ success: false, message: 'Invalid order or variant ID' });
     }
 
-    // Validate rating
-    if (rating !== undefined) {
-      if (typeof rating !== 'number' || !Number.isInteger(rating)) {
-        return res.status(400).json({ success: false, message: 'Rating must be an integer' });
-      }
-      if (rating < 1 || rating > 5) {
-        return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5' });
-      }
-    }
-
-    // Validate content
-    if (content !== undefined && content !== null) {
-      if (typeof content !== 'string') {
-        return res.status(400).json({ success: false, message: 'Content must be a string' });
-      }
-      if (content.length > 500) {
-        return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
-      }
-    }
-
-    // Check order exists and belongs to current user
-    const order = await orderService.getOrderByIdService(orderId, req.user);
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    // Only allow edit feedback when order is delivered
-    if (order.orderStatus !== 'delivered') {
-      return res.status(400).json({
-        success: false,
-        message: 'Feedback can only be edited when the order is delivered',
-      });
-    }
-
-    // Find product detail in order
-    const orderDetail = await OrderDetails.findOne({
-      orderId: orderId,
-      variantId: variantId,
-    });
-
-    if (!orderDetail) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found in this order',
-      });
-    }
-
-    // Check if feedback is deleted
-    if (orderDetail.feedback && orderDetail.feedback.isDeleted === true) {
-      return res.status(404).json({
-        success: false,
-        message: 'Feedback has been deleted',
-      });
-    }
-
-    // Check if there is existing feedback to edit
-    const hasExistingFeedback = orderDetail.feedback && (
-      (orderDetail.feedback.rating && orderDetail.feedback.rating !== null) ||
-      (orderDetail.feedback.content && orderDetail.feedback.content.trim() !== '')
-    );
-
-    if (!hasExistingFeedback) {
-      return res.status(400).json({
-        success: false,
-        message: 'No existing feedback to edit. Use add feedback instead.',
-      });
-    }
-
-    // Create update object
-    const updateData = {};
-    if (rating !== undefined) {
-      updateData['feedback.rating'] = rating;
-    }
-    if (content !== undefined) {
-      updateData['feedback.content'] = content === null ? null : content.trim();
-    }
-    // Update updatedAt when editing
-    updateData['feedback.updatedAt'] = new Date();
-
-    // Update directly in database
-    const savedOrderDetail = await OrderDetails.findByIdAndUpdate(
-      orderDetail._id,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
-
-    if (!savedOrderDetail) {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to update feedback in database'
-      });
-    }
+    const { savedOrderDetail, order } = await feedbackService.editFeedbackProductService(orderId, variantId, rating, content, req.user);
 
     res.status(200).json({
       success: true,
@@ -792,7 +459,7 @@ exports.editFeedbackProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Edit feedback product error:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
       message: error.message || 'Error updating product feedback',
     });

@@ -434,7 +434,9 @@ module.exports = {
   getOrderByIdService,
   deleteOrderService,
   getUserOrdersService,
-  checkoutService
+  checkoutService,
+  exportBillService,
+  cancelOrderService
 };
 
 async function checkoutService(userId, body, io) {
@@ -644,3 +646,239 @@ async function checkoutService(userId, body, io) {
     }))
   };
 }
+
+async function exportBillService(orderId, user) {
+  if (!mongoose.isValidObjectId(orderId)) {
+    const error = new Error('Invalid order ID');
+    error.status = 400;
+    throw error;
+  }
+
+  const order = await Orders.findById(orderId)
+    .populate({
+      path: 'accountId',
+      select: 'username name email phone address'
+    })
+    .populate({
+      path: 'voucherId',
+      select: 'code voucher_name discountType discountValue discount_percentage discount_amount minOrderValue maxDiscountAmount usedCount usageLimit startDate endDate isActive'
+    });
+
+  if (!order) {
+    const error = new Error('Order not found');
+    error.status = 404;
+    throw error;
+  }
+
+  if (user.role !== 'admin' && user.role !== 'manager' &&
+    order.accountId._id.toString() !== user.id) {
+    const error = new Error('Access denied. You can only view your own order bills.');
+    error.status = 403;
+    throw error;
+  }
+
+  const orderDetails = await OrderDetails.find({ orderId: orderId })
+    .populate({
+      path: 'variantId',
+      select: 'productId productColorId productSizeId variantImage',
+      populate: [
+        { path: 'productId', select: 'productName' },
+        { path: 'productColorId', select: 'productColorName' },
+        { path: 'productSizeId', select: 'productSizeName' }
+      ]
+    });
+
+  const billData = {
+    order: {
+      orderId: order._id,
+      orderDate: order.orderDate,
+      orderStatus: order.orderStatus,
+      totalPrice: order.totalPrice,
+      finalPrice: order.finalPrice,
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.payStatus,
+      shippingAddress: order.addressReceive
+    },
+    customer: {
+      name: order.name,
+      email: order.accountId.email,
+      phone: order.phone,
+      address: order.addressReceive
+    },
+    items: orderDetails.map(detail => ({
+      productName: detail.variantId?.productId?.productName || 'N/A',
+      color: detail.variantId?.productColorId?.productColorName || 'N/A',
+      size: detail.variantId?.productSizeId?.productSizeName || 'N/A',
+      image: detail.variantId?.variantImage || null,
+      unitPrice: detail.unitPrice,
+      quantity: detail.Quantity,
+      totalPrice: detail.unitPrice * detail.Quantity
+    })),
+    discount: order.voucherId ? {
+      voucher: {
+        _id: order.voucherId._id,
+        code: order.voucherId.code,
+        voucher_name: order.voucherId.voucher_name,
+        discountType: order.voucherId.discountType,
+        discountValue: order.voucherId.discountValue,
+        discount_percentage: order.voucherId.discount_percentage,
+        discount_amount: order.voucherId.discount_amount,
+        minOrderValue: order.voucherId.minOrderValue,
+        maxDiscountAmount: order.voucherId.maxDiscountAmount,
+        usedCount: order.voucherId.usedCount,
+        usageLimit: order.voucherId.usageLimit,
+        startDate: order.voucherId.startDate,
+        endDate: order.voucherId.endDate,
+        isActive: order.voucherId.isActive
+      },
+      appliedDiscount: order.discountAmount || 0
+    } : {
+      voucher: null,
+      appliedDiscount: 0
+    },
+    summary: {
+      subtotal: orderDetails.reduce((sum, detail) => sum + (detail.unitPrice * detail.Quantity), 0),
+      discount: order.discountAmount || 0,
+      totalAmount: order.finalPrice
+    }
+  };
+
+  return billData;
+}
+
+const Voucher = require("../models/Voucher");
+
+async function cancelOrderService(orderId, cancelReason, user, io) {
+  if (cancelReason && (typeof cancelReason !== 'string' || cancelReason.length > 500)) {
+    const error = new Error('Invalid cancel reason. Must be a string up to 500 characters.');
+    error.status = 400;
+    throw error;
+  }
+
+  const order = await getOrderByIdService(orderId, user);
+  if (!order) {
+    const error = new Error('Order not found');
+    error.status = 404;
+    throw error;
+  }
+
+  if (order.orderStatus !== 'pending') {
+    const error = new Error('Only pending orders can be cancelled');
+    error.status = 400;
+    throw error;
+  }
+
+  if (order.voucherId) {
+    const voucher = await Voucher.findById(order.voucherId);
+    if (voucher && voucher.usedCount > 0) {
+      voucher.usedCount -= 1;
+      await voucher.save();
+    }
+  }
+
+  if (order.orderDetails && order.orderDetails.length > 0) {
+    for (const orderDetail of order.orderDetails) {
+      if (orderDetail.variantId) {
+        const variant = await ProductVariant.findById(orderDetail.variantId._id || orderDetail.variantId);
+        if (variant) {
+          const oldStockQuantity = variant.stockQuantity;
+          variant.stockQuantity += orderDetail.Quantity;
+          if (oldStockQuantity === 0 && variant.stockQuantity > 0) {
+            variant.variantStatus = 'active';
+          }
+          await variant.save();
+        }
+      }
+    }
+  }
+
+  let updateData = {
+    orderStatus: 'cancelled',
+    cancelReason
+  };
+
+  if (order.paymentMethod === 'VNPAY' && order.payStatus === 'paid') {
+    updateData.refundStatus = 'pending_refund';
+  }
+
+  const updatedOrder = await updateOrderService(
+    orderId,
+    updateData,
+    user
+  );
+
+  if (io && updatedOrder && updatedOrder.accountId) {
+    const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
+      ? updatedOrder.accountId._id.toString()
+      : updatedOrder.accountId.toString();
+
+    const formattedOrder = {
+      ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
+      accountId: updatedOrder.accountId,
+      name: updatedOrder.name,
+      orderDate: updatedOrder.orderDate,
+      updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
+      createdAt: updatedOrder.createdAt,
+      cancelReason: updatedOrder.cancelReason
+    };
+
+    io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
+    io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
+
+    try {
+      const notification = await createOrderNotification({
+        userId,
+        orderId: orderId.toString(),
+        orderStatus: updatedOrder.orderStatus,
+        payStatus: updatedOrder.payStatus,
+        messageType: 'cancelled'
+      });
+      setTimeout(() => {
+        emitOrderNotification(io, notification, userId);
+      }, 100);
+    } catch (notifError) {
+      console.error('Error creating order cancellation notification:', notifError);
+    }
+  }
+
+  return {
+    updatedOrder,
+    voucherRefunded: order.voucherId ? true : false,
+    stockRestored: order.orderDetails ? order.orderDetails.length : 0
+  };
+}
+
+async function getOrderByIdForUserService(orderId, user) {
+  if (!mongoose.isValidObjectId(orderId)) {
+    const error = new Error('Invalid order ID');
+    error.status = 400;
+    throw error;
+  }
+
+  const order = await Orders.findById(orderId)
+    .populate('accountId', 'username name')
+    .populate('voucherId', 'code discountType discountValue');
+
+  if (!order) {
+    const error = new Error('Order not found');
+    error.status = 404;
+    throw error;
+  }
+
+  if (user.role !== 'admin' && user.role !== 'manager' && order.accountId._id.toString() !== user.id) {
+    const error = new Error('Access denied: Can only view own order');
+    error.status = 403;
+    throw error;
+  }
+
+  return order;
+}
+
+async function getOrderForEmitService(orderId) {
+  return await Orders.findById(orderId)
+    .populate('accountId', 'username name email phone')
+    .lean();
+}
+
+module.exports.getOrderByIdForUserService = getOrderByIdForUserService;
+module.exports.getOrderForEmitService = getOrderForEmitService;
