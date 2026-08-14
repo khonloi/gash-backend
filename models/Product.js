@@ -15,13 +15,13 @@ const productSchema = new Schema(
     productImageIds: [
       {
         type: Schema.Types.ObjectId,
-        ref: 'newProductImages',
+        ref: 'ProductImage',
       },
     ],
     productVariantIds: [
       {
         type: Schema.Types.ObjectId,
-        ref: 'newProductVariants',
+        ref: 'ProductVariant',
       },
     ],
     description: {
@@ -55,4 +55,4 @@ productSchema.index({ productName: 1 });
 // Compound: category + status (most common catalog query)
 productSchema.index({ categoryId: 1, productStatus: 1 });
 
-module.exports = mongoose.model('Product', productSchema, 'newProducts');
+module.exports = mongoose.model('Product', productSchema, 'products');

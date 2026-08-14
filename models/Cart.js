@@ -9,7 +9,7 @@ const cartSchema = new mongoose.Schema(
     },
     variantId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "newProductVariants", // Reference to newProductVariants collection/model
+      ref: "ProductVariant", // Reference to ProductVariant collection/model
       required: true,
     },
     productQuantity: {
@@ -30,4 +30,4 @@ const cartSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model("Cart", cartSchema, "NewCart");
+module.exports = mongoose.model("Cart", cartSchema, "carts");

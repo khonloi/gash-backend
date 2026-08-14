@@ -96,12 +96,30 @@ exports.updateUserPreferences = async (req, res, next) => {
 /** ====================== ADMIN GET ALL ====================== */
 exports.getAllNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({
-      type: { $ne: "preference" },
-    })
-      .populate("userId", "fullName username email")
-      .sort({ createdAt: -1 });
-    res.json(notifications);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const query = { type: { $ne: "preference" } };
+
+    const [notifications, total] = await Promise.all([
+      Notification.find(query)
+        .populate("userId", "fullName username email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Notification.countDocuments(query)
+    ]);
+
+    res.json({
+      notifications,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -173,12 +191,33 @@ exports.deleteNotification = async (req, res) => {
 exports.getUserNotifications = async (req, res) => {
   try {
     const { userId } = req.params;
-    const notifications = await Notification.find({
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const query = {
       isTemplate: false,
       type: { $ne: "preference" },
       $or: [{ userId }, { userId: null }],
-    }).sort({ createdAt: -1 });
-    res.json(notifications);
+    };
+
+    const [notifications, total] = await Promise.all([
+      Notification.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Notification.countDocuments(query)
+    ]);
+
+    res.json({
+      notifications,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

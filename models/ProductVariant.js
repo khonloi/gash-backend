@@ -57,4 +57,4 @@ productVariantSchema.index({ productId: 1, variantStatus: 1 });
 // Stock availability check: find active variants with stock
 productVariantSchema.index({ variantStatus: 1, stockQuantity: 1 });
 
-module.exports = mongoose.model('ProductVariant', productVariantSchema, 'newProductVariants');
+module.exports = mongoose.model('ProductVariant', productVariantSchema, 'productvariants');

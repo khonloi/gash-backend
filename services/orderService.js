@@ -2,6 +2,10 @@ const Orders = require("../models/Orders");
 const Accounts = require("../models/Accounts");
 const mongoose = require("mongoose");
 const OrderDetails = require("../models/OrderDetails");
+const ProductVariant = require("../models/ProductVariant");
+const Cart = require("../models/Cart");
+const voucherService = require("./voucherService");
+const { createOrderNotification, emitOrderNotification } = require("../utils/orderNotificationHelper");
 
 async function searchOrdersService(queryParams, user) {
   const {
@@ -428,7 +432,215 @@ module.exports = {
   getAllOrdersForAdminService,
   searchOrdersService,
   getOrderByIdService,
-  updateOrderService,
   deleteOrderService,
-  getUserOrdersService
+  getUserOrdersService,
+  checkoutService
 };
+
+async function checkoutService(userId, body, io) {
+  const { name, addressReceive, phone, totalPrice, paymentMethod, voucherCode, items } = body;
+
+  if (!name || !addressReceive || !phone || !totalPrice || !paymentMethod || !items || !Array.isArray(items) || items.length === 0) {
+    const error = new Error('Missing required fields: name, addressReceive, phone, totalPrice, paymentMethod, items');
+    error.status = 400;
+    throw error;
+  }
+  if (!['COD', 'VNPAY'].includes(paymentMethod)) {
+    const error = new Error('Invalid payment method');
+    error.status = 400;
+    throw error;
+  }
+
+  const account = await Accounts.findById(userId);
+  if (!account) {
+    const error = new Error('Account not found');
+    error.status = 404;
+    throw error;
+  }
+
+  let voucher = null;
+  let discountAmount = 0;
+  let finalPrice = totalPrice;
+
+  if (voucherCode) {
+    try {
+      const result = await voucherService.applyVoucherLogic(voucherCode, totalPrice);
+      if (result.success && result.data) {
+        voucher = result.data.voucher;
+        discountAmount = result.data.discountAmount;
+        finalPrice = result.data.finalPrice;
+      }
+    } catch (err) {
+      // Ignore voucher error, keep original price
+    }
+  }
+
+  const newOrder = new Orders({
+    accountId: userId,
+    name,
+    addressReceive,
+    phone,
+    totalPrice,
+    voucherId: voucher ? voucher._id : null,
+    discountAmount,
+    finalPrice,
+    orderStatus: 'pending',
+    payStatus: 'unpaid',
+    paymentMethod,
+  });
+
+  const savedOrder = await newOrder.save();
+
+  if (voucher) {
+    voucher.usedCount += 1;
+    await voucher.save();
+  }
+
+  const orderDetailsToSave = [];
+  const boughtVariantIds = [];
+  for (const item of items) {
+    const { variantId, unitPrice, Quantity, feedback_details } = item;
+
+    if (!variantId || !unitPrice || !Quantity) {
+      const err = new Error('Invalid item in order details'); err.status = 400; throw err;
+    }
+    if (unitPrice < 0) {
+      const err = new Error('Unit price cannot be negative'); err.status = 400; throw err;
+    }
+    if (Quantity < 1) {
+      const err = new Error('Quantity must be at least 1'); err.status = 400; throw err;
+    }
+    if (feedback_details && feedback_details.length > 500) {
+      const err = new Error('Feedback cannot exceed 500 characters'); err.status = 400; throw err;
+    }
+
+    const updatedVariant = await ProductVariant.findOneAndUpdate(
+      { _id: variantId, stockQuantity: { $gte: Quantity } },
+      [
+        {
+          $set: {
+            stockQuantity: { $subtract: ['$stockQuantity', Quantity] },
+            variantStatus: {
+              $cond: [
+                { $eq: [{ $subtract: ['$stockQuantity', Quantity] }, 0] },
+                'inactive',
+                '$variantStatus',
+              ],
+            },
+          },
+        },
+      ],
+      { new: true }
+    );
+
+    if (!updatedVariant) {
+      await savedOrder.deleteOne();
+      if (voucher) {
+        voucher.usedCount -= 1;
+        await voucher.save();
+      }
+      const err = new Error(`Insufficient stock for variant ${variantId}. The item may have just sold out.`);
+      err.status = 400;
+      throw err;
+    }
+
+    const orderDetail = new OrderDetails({
+      orderId: savedOrder._id,
+      variantId,
+      unitPrice,
+      Quantity,
+    });
+    const savedDetail = await orderDetail.save();
+    orderDetailsToSave.push(savedDetail);
+    boughtVariantIds.push(variantId.toString());
+  }
+
+  const orderDetailsIds = orderDetailsToSave.map(detail => detail._id);
+  savedOrder.orderDetails = orderDetailsIds;
+  await savedOrder.save();
+
+  const objectUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+  const objectVariantIds = boughtVariantIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
+  await Cart.deleteMany({
+    accountId: objectUserId,
+    variantId: { $in: objectVariantIds },
+  });
+
+  if (io && userId) {
+    io.to(`user_${userId.toString()}`).emit('cartUpdated', {
+      action: 'cleared',
+      accountId: userId
+    });
+
+    const populatedOrder = await Orders.findById(savedOrder._id)
+      .populate('accountId', 'username name email phone')
+      .lean();
+
+    const formattedOrderForSocket = {
+      _id: populatedOrder._id,
+      accountId: populatedOrder.accountId,
+      name: populatedOrder.name,
+      addressReceive: populatedOrder.addressReceive,
+      phone: populatedOrder.phone,
+      totalPrice: populatedOrder.totalPrice,
+      voucherId: populatedOrder.voucherId,
+      discountAmount: populatedOrder.discountAmount,
+      finalPrice: populatedOrder.finalPrice,
+      orderStatus: populatedOrder.orderStatus,
+      payStatus: populatedOrder.payStatus,
+      paymentMethod: populatedOrder.paymentMethod,
+      orderDate: populatedOrder.orderDate,
+      createdAt: populatedOrder.createdAt,
+      updatedAt: populatedOrder.updatedAt || populatedOrder.createdAt,
+      orderDetails: orderDetailsIds
+    };
+
+    io.to(`user_${userId.toString()}`).emit('orderUpdated', {
+      userId: userId.toString(),
+      order: formattedOrderForSocket
+    });
+    io.to('order_admins').emit('orderUpdated', {
+      userId: userId.toString(),
+      order: formattedOrderForSocket
+    });
+
+    try {
+      const notification = await createOrderNotification({
+        userId: userId.toString(),
+        orderId: savedOrder._id.toString(),
+        orderStatus: savedOrder.orderStatus,
+        payStatus: savedOrder.payStatus,
+        messageType: 'created'
+      });
+      emitOrderNotification(io, notification, userId.toString());
+    } catch (notifError) {
+      console.error('Error creating order creation notification:', notifError);
+    }
+  }
+
+  return {
+    order: {
+      _id: savedOrder._id,
+      accountId: savedOrder.accountId,
+      addressReceive: savedOrder.addressReceive,
+      phone: savedOrder.phone,
+      totalPrice: savedOrder.totalPrice,
+      voucherId: savedOrder.voucherId,
+      discountAmount: savedOrder.discountAmount,
+      finalPrice: savedOrder.finalPrice,
+      orderStatus: savedOrder.orderStatus,
+      payStatus: savedOrder.payStatus,
+      paymentMethod: savedOrder.paymentMethod,
+      orderDate: savedOrder.orderDate,
+      orderDetails: orderDetailsIds
+    },
+    orderDetails: orderDetailsToSave.map(detail => ({
+      _id: detail._id,
+      orderId: detail.orderId,
+      variantId: detail.variantId,
+      unitPrice: detail.unitPrice,
+      Quantity: detail.Quantity,
+      feedback: detail.feedback
+    }))
+  };
+}

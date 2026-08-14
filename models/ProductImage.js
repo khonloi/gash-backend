@@ -30,4 +30,4 @@ productImageSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('ProductImage', productImageSchema, 'newProductImages');
+module.exports = mongoose.model('ProductImage', productImageSchema, 'productimages');
