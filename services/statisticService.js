@@ -20,56 +20,7 @@ const getMonthName = (monthNumber) => {
 };
 
 
-exports.getCustomerStats = async () => {
-  const totalCustomers = await Accounts.countDocuments();
-  const activeCustomers = await Accounts.countDocuments({ acc_status: 'active' });
-  const inactiveCustomers = await Accounts.countDocuments({ acc_status: 'inactive' });
-  const suspendedCustomers = await Accounts.countDocuments({ acc_status: 'suspended' });
-  const roleCounts = await Accounts.aggregate([
-    { $group: { _id: '$role', count: { $sum: 1 } } }
-  ]);
-  return {
-    totalCustomers,
-    activeCustomers,
-    inactiveCustomers,
-    suspendedCustomers,
-    roleCounts
-  };
-};
 
-exports.getRevenueStats = async () => {
-  const totalRevenue = await Orders.aggregate([
-    { $match: { pay_status: 'paid' } },
-    { $group: { _id: null, total: { $sum: '$totalPrice' } } }
-  ]);
-  const averageOrderValue = await Orders.aggregate([
-    { $match: { pay_status: 'paid' } },
-    { $group: { _id: null, avg: { $avg: '$totalPrice' } } }
-  ]);
-  return {
-    totalRevenue: totalRevenue[0]?.total || 0,
-    averageOrderValue: averageOrderValue[0]?.avg || 0
-  };
-};
-
-exports.getOrderStats = async () => {
-  const totalOrders = await Orders.countDocuments();
-  const statusCounts = await Orders.aggregate([
-    { $group: { _id: '$order_status', count: { $sum: 1 } } }
-  ]);
-  const payStatusCounts = await Orders.aggregate([
-    { $group: { _id: '$pay_status', count: { $sum: 1 } } }
-  ]);
-  const shippingStatusCounts = await Orders.aggregate([
-    { $group: { _id: '$shipping_status', count: { $sum: 1 } } }
-  ]);
-  return {
-    totalOrders,
-    statusCounts,
-    payStatusCounts,
-    shippingStatusCounts
-  };
-};
 
 exports.getRevenueByWeek = async (numWeeks = 4) => {
   const now = new Date();
@@ -83,11 +34,11 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
   currentWeekEnd.setDate(now.getDate() - now.getDay() + 6);
   currentWeekEnd.setHours(23, 59, 59, 999);
 
-  // ✅ Query ALL data once with daily grouping
+  // Query ALL data once with daily grouping
   const dailyRevenue = await Orders.aggregate([
     {
       $match: {
-        pay_status: 'paid',
+        payStatus: 'paid',
         orderDate: { $gte: oldestWeekStart, $lte: currentWeekEnd }
       }
     },
@@ -235,14 +186,14 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
     message: 'Weekly revenue statistics retrieved successfully',
     data: {
       summary: {
-        // Doanh thu tuần này
+        // This week revenue
         currentWeekRevenue: totalRevenueThisWeek,
         currentWeekRevenueFormatted: formatVND(totalRevenueThisWeek) + ' VND',
 
-        // % so với tuần trước
+        // % compared to last week
         changeVsLastWeek: changeVsLastWeek,
 
-        // Xu hướng doanh thu (so với trung bình 4 tuần trước)
+        // Revenue trend (compared to average of last 4 weeks)
         trend: {
           status: trend,
           description: trendDescription,
@@ -250,11 +201,11 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
           comparedTo: '4-week average'
         },
 
-        // Doanh thu trung bình 1 tuần
+        // Average weekly revenue
         averageWeeklyRevenue: Math.round(averageWeeklyRevenue),
         averageWeeklyRevenueFormatted: formatVND(Math.round(averageWeeklyRevenue)) + ' VND',
 
-        // Tuần có doanh thu cao nhất
+        // Highest revenue week
         bestWeek: bestWeekDisplay + ' VND',
       },
       weeklyData: formattedWeeks.map(week => ({
@@ -286,11 +237,11 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
   const endDate = new Date(endYear, endMonth + 1, 0);
   endDate.setHours(23, 59, 59, 999);
 
-  // ✅ Query ALL data once with monthly grouping
+  // Query ALL data once with monthly grouping
   const monthlyRevenue = await Orders.aggregate([
     {
       $match: {
-        pay_status: 'paid',
+        payStatus: 'paid',
         orderDate: { $gte: startDate, $lte: endDate }
       }
     },
@@ -435,14 +386,14 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
     message: 'Monthly revenue statistics retrieved successfully',
     data: {
       summary: {
-        // Doanh thu tháng này
+        // This month revenue
         currentMonthRevenue: totalRevenueThisMonth,
         currentMonthRevenueFormatted: formatVND(totalRevenueThisMonth) + ' VND',
 
-        // % so với tháng trước
+        // % compared to last month
         changeVsLastMonth: changeVsLastMonth,
 
-        // Xu hướng doanh thu (so với trung bình 3 tháng trước)
+        // Revenue trend (compared to average of last 3 months)
         trend: {
           status: trend,
           description: trendDescription,
@@ -450,14 +401,14 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
           comparedTo: '3-month average'
         },
 
-        // % so với cùng kỳ năm trước
+        // % compared to same period last year
         changeVsSamePeriodLastYear: changeVsSamePeriodLastYear,
 
-        // Doanh thu trung bình 1 tháng
+        // Average monthly revenue
         averageMonthlyRevenue: Math.round(averageMonthlyRevenue),
         averageMonthlyRevenueFormatted: formatVND(Math.round(averageMonthlyRevenue)) + ' VND',
 
-        // Tháng có doanh thu cao nhất
+        // Highest revenue month
         bestMonth: bestMonthDisplay
       },
       monthlyData: formattedMonths.map(month => ({
@@ -496,11 +447,11 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   const extendedStartDate = new Date(startDate.getTime() - (7 * 24 * 60 * 60 * 1000));
   extendedStartDate.setHours(0, 0, 0, 0);
 
-  // ✅ Query ALL data once with daily grouping (including 7 days before for comparison)
+  // Query ALL data once with daily grouping (including 7 days before for comparison)
   const dailyRevenue = await Orders.aggregate([
     {
       $match: {
-        pay_status: 'paid',
+        payStatus: 'paid',
         orderDate: { $gte: extendedStartDate, $lte: endDate }
       }
     },
@@ -659,7 +610,7 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   // Find best day in the period
   const bestDay = formattedDays.reduce((max, day) =>
     day.totalRevenue > max.totalRevenue ? day : max,
-    { totalRevenue: 0, day: 'Mon', date: '01/01/2025', fullDate: '2025-01-01' }
+    { totalRevenue: 0, day: 'Mon', date: '01/01/2026', fullDate: '2026-01-01' }
   );
 
   // Format best day display with date and revenue
@@ -686,7 +637,7 @@ exports.getRevenueByDay = async (startDate, endDate) => {
         changeVsLastDay: changeVsLastDay,
         changeVsSameDayLastWeek: changeVsSameDayLastWeek,
 
-        // Xu hướng doanh thu (so với trung bình 7 ngày trước)
+        // Revenue trend (compared to average of last 7 days)
         trend: {
           status: trend,
           description: trendDescription,
@@ -731,11 +682,11 @@ exports.getRevenueByYear = async (numYears = 3) => {
   const endDate = new Date(now.getFullYear(), 11, 31);
   endDate.setHours(23, 59, 59, 999);
 
-  // ✅ Query ALL data once with yearly grouping
+  // Query ALL data once with yearly grouping
   const yearlyRevenue = await Orders.aggregate([
     {
       $match: {
-        pay_status: 'paid',
+        payStatus: 'paid',
         orderDate: { $gte: startDate, $lte: endDate }
       }
     },
@@ -855,14 +806,14 @@ exports.getRevenueByYear = async (numYears = 3) => {
     message: 'Yearly revenue statistics retrieved successfully',
     data: {
       summary: {
-        // Doanh thu năm này
+        // This year revenue
         currentYearRevenue: totalRevenueThisYear,
         currentYearRevenueFormatted: formatVND(totalRevenueThisYear) + ' VND',
 
-        // % so với năm trước
+        // % compared to last year
         changeVsLastYear: changeVsLastYear,
 
-        // Xu hướng doanh thu (so với trung bình 2 năm trước)
+        // Revenue trend (compared to average of last 2 years)
         trend: {
           status: trend,
           description: trendDescription,
@@ -870,11 +821,11 @@ exports.getRevenueByYear = async (numYears = 3) => {
           comparedTo: '2-year average'
         },
 
-        // Doanh thu trung bình hàng năm
+        // Average yearly revenue
         averageYearlyRevenue: Math.round(averageYearlyRevenue),
         averageYearlyRevenueFormatted: formatVND(Math.round(averageYearlyRevenue)) + ' VND',
 
-        // Năm có doanh thu cao nhất
+        // Highest revenue year
         bestYear: bestYearDisplay
       },
       yearlyData: formattedYears.map(year => ({

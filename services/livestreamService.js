@@ -1,7 +1,7 @@
-const { generateAccessToken, createRoom, deleteRoom, roomService } = require('../config/livekit');
+const { generateAccessToken, createRoom, deleteRoom, roomService, LIVEKIT_CONFIG } = require('../config/livekit');
 const Livestream = require('../models/Livestream');
-const LiveProduct = require('../models/liveProduct');
-const LiveComment = require('../models/liveComment');
+const LiveProduct = require('../models/LiveProduct');
+const LiveComment = require('../models/LiveComment');
 const livestreamReactionService = require('./livestreamReactionService');
 
 // Cache for viewer counts (to reduce API calls)
@@ -19,7 +19,7 @@ const invalidateLiveNowCache = () => {
 };
 
 // Cleanup old cache entries periodically
-setInterval(() => {
+const cacheCleanupInterval = setInterval(() => {
     const now = Date.now();
     for (const [key, value] of viewerCache.entries()) {
         // Remove entries older than 1 minute
@@ -34,6 +34,21 @@ setInterval(() => {
     }
 }, CACHE_CLEANUP_INTERVAL);
 
+// unref() allows the Node.js process to exit if this is the only active timer
+cacheCleanupInterval.unref();
+
+// Helper to add a timeout to a promise
+const withTimeout = (promise, ms, errorMessage) => {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
+    });
+    return Promise.race([
+        promise.finally(() => clearTimeout(timeoutId)),
+        timeoutPromise
+    ]);
+};
+
 // Get real-time viewer count from LiveKit (with caching to reduce API calls)
 const getRealTimeViewers = async (roomName, useCache = true) => {
     // Check cache first (skip cache for critical operations like join/leave)
@@ -44,20 +59,14 @@ const getRealTimeViewers = async (roomName, useCache = true) => {
         }
     }
 
-    let timeoutId;
     try {
         // Use listParticipants to get current participants in the room
         // Increased timeout to 10 seconds for better reliability
-        const timeoutPromise = new Promise((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('LiveKit API timeout after 10s')), 10000);
-        });
-
-        const participants = await Promise.race([
-            roomService.listParticipants(roomName).finally(() => {
-                if (timeoutId) clearTimeout(timeoutId);
-            }),
-            timeoutPromise
-        ]);
+        const participants = await withTimeout(
+            roomService.listParticipants(roomName),
+            10000,
+            'LiveKit API timeout after 10s'
+        );
 
         if (!participants || participants.length === 0) {
             // Only cache if useCache is true (don't cache for real-time operations)
@@ -67,11 +76,11 @@ const getRealTimeViewers = async (roomName, useCache = true) => {
             return 0;
         }
 
-        // Exclude only host từ viewer count
-        // Host: identity = "Host" (người đang stream)
-        // Staff join qua /join (identity = userId) → tính viewer 
-        // User join (identity = userId) → tính viewer 
-        // Staff vào dashboard (chỉ gọi API, không join LiveKit) → không có participant → không tính viewer ✅
+        // Exclude host from viewer count
+        // Host: identity = "Host" (broadcaster)
+        // Staff joining via /join (identity = userId) -> counted as viewer
+        // User joining (identity = userId) -> counted as viewer
+        // Staff on dashboard (API call only, not joining LiveKit) -> no participant -> not counted as viewer
         const nonHostParticipants = participants.filter(p => {
             const identity = p.identity;
             return identity !== 'Host' && identity !== 'host';
@@ -93,9 +102,6 @@ const getRealTimeViewers = async (roomName, useCache = true) => {
         }
         return uniqueViewers; // Return unique users instead of total connections
     } catch (error) {
-        // Cleanup timeout if still pending
-        if (timeoutId) clearTimeout(timeoutId);
-
         // Only log first timeout error to avoid spam
         const cacheKey = `error_${roomName}`;
         const errorCache = viewerCache.get(cacheKey);
@@ -120,15 +126,22 @@ const updateViewerStats = async (livestreamId, currentViewers) => {
         const livestream = await Livestream.findById(livestreamId);
         if (!livestream) return;
 
+        const now = new Date();
+
         // Update peak viewers (always increase, never decrease)
         if (currentViewers > livestream.peakViewers) {
             livestream.peakViewers = currentViewers;
+            livestream.peakViewersAt = now; // Save exact time when peak was reached
         }
 
-        // Update min viewers (only if livestream is live, update even when count = 0)
-        if (livestream.status === 'live') {
-            if (livestream.minViewers === undefined || livestream.minViewers === null || livestream.minViewers === 0 || currentViewers < livestream.minViewers) {
+        // Update min viewers (only if livestream is live and currentViewers > 0)
+        // minViewers should track the lowest viewer count when there are viewers (> 0)
+        // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+        if (livestream.status === 'live' && currentViewers > 0) {
+            // Update if minViewers is 0 (initial state) or currentViewers is lower than existing minViewers
+            if (livestream.minViewers === 0 || livestream.minViewers === undefined || livestream.minViewers === null || currentViewers < livestream.minViewers) {
                 livestream.minViewers = currentViewers;
+                livestream.minViewersAt = now; // Save exact time when min was reached
             }
         }
 
@@ -138,10 +151,40 @@ const updateViewerStats = async (livestreamId, currentViewers) => {
 };
 
 // Start livestream (Admin)
-// Chỉ cho phép 1 livestream duy nhất tại 1 thời điểm (toàn hệ thống)
+// Only allow 1 single livestream running at a time (system-wide)
 exports.startLivestream = async (hostId, title, description) => {
     try {
-        // Check: Chỉ cho phép 1 livestream duy nhất tại 1 thời điểm (toàn hệ thống)
+        // Validate title
+        if (!title || typeof title !== 'string') {
+            return {
+                success: false,
+                message: 'Please fill in all required fields',
+                error: 'INVALID_TITLE'
+            };
+        }
+
+        const trimmedTitle = title.trim();
+        if (trimmedTitle.length < 3 || trimmedTitle.length > 50) {
+            return {
+                success: false,
+                message: 'Livestream title must be between 3 and 50 characters',
+                error: 'TITLE_INVALID_LENGTH'
+            };
+        }
+
+        // Validate description (optional, but if provided, must be valid)
+        if (description && typeof description === 'string' && description.trim() !== '') {
+            const trimmedDescription = description.trim();
+            if (trimmedDescription.length < 10 || trimmedDescription.length > 100) {
+                return {
+                    success: false,
+                    message: 'Livestream description must be between 10 and 100 characters',
+                    error: 'DESCRIPTION_INVALID_LENGTH'
+                };
+            }
+        }
+
+        // Check: Only allow 1 single livestream at a time (system-wide)
         const activeLivestream = await Livestream.findOne({
             status: 'live'
         });
@@ -161,7 +204,7 @@ exports.startLivestream = async (hostId, title, description) => {
             };
         }
 
-        // Check: One person can only start one livestream (redundant check, nhưng giữ lại để an toàn)
+        // Check: One person can only start one livestream (redundant check, kept for safety)
         const userActiveStream = await Livestream.findOne({
             hostId: hostId,
             status: 'live'
@@ -196,10 +239,11 @@ exports.startLivestream = async (hostId, title, description) => {
         }
 
         // Create livestream record in database
+        const trimmedDescription = description && typeof description === 'string' ? description.trim() : '';
         const livestream = new Livestream({
             hostId: hostId,
-            title: title,
-            description: description,
+            title: trimmedTitle,
+            description: trimmedDescription,
             roomName: roomName,
             status: 'live',
             startTime: new Date(),
@@ -209,7 +253,7 @@ exports.startLivestream = async (hostId, title, description) => {
 
         await livestream.save();
 
-        // Invalidate cache (livestream mới đã start)
+        // Invalidate cache (new livestream started)
         invalidateLiveNowCache();
 
         // Generate host access token
@@ -284,11 +328,12 @@ exports.endLivestream = async (livestreamId, userId, userRole) => {
         }
 
         // Update livestream status
+        // Note: peakViewersAt and minViewersAt are already saved when peak/min were reached during livestream
         livestream.status = 'ended';
         livestream.endTime = new Date();
         await livestream.save();
 
-        // Invalidate cache (livestream đã end)
+        // Invalidate cache (livestream ended)
         invalidateLiveNowCache();
 
         return {
@@ -317,7 +362,7 @@ exports.endLivestream = async (livestreamId, userId, userRole) => {
     }
 };
 
-// Join livestream (User hoặc Staff)
+// Join livestream (User or Staff)
 exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user') => {
     try {
         // Find livestream and populate host
@@ -332,8 +377,8 @@ exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user
             throw new Error('Livestream is not currently live');
         }
 
-        // Tất cả người join qua /join (user hoặc staff) đều tính là viewer
-        // Staff vào dashboard để quản lý (chỉ gọi API) thì không tính viewer vì không join vào LiveKit room
+        // Everyone joining via /join (user or staff) is counted as viewer
+        // Staff opening dashboard to manage (API calls only) is not counted as viewer since they don't join LiveKit room
         const participantIdentity = userId;
 
         // Generate viewer access token
@@ -353,6 +398,7 @@ exports.joinLivestream = async (livestreamId, userId, userName, userRole = 'user
                 livestreamId: livestream._id,
                 roomName: livestream.roomName,
                 viewerToken: viewerToken,
+                serverUrl: LIVEKIT_CONFIG.serverUrl,
                 userId: userId,
                 userName: userName,
                 title: livestream.title,
@@ -414,7 +460,7 @@ exports.leaveLivestream = async (livestreamId, userId) => {
         const livestream = await Livestream.findById(livestreamId)
             .select('_id roomName status')
             .lean();
-        
+
         if (!livestream) {
             return {
                 success: false,
@@ -432,7 +478,7 @@ exports.leaveLivestream = async (livestreamId, userId) => {
         // Verify user has actually left LiveKit room
         // This ensures user disconnected from LiveKit before API returns success
         const userStillInRoom = await isUserInRoom(livestream.roomName, userId);
-        
+
         if (userStillInRoom) {
             // User is still in room - they haven't actually left yet
             return {
@@ -476,17 +522,17 @@ exports.leaveLivestream = async (livestreamId, userId) => {
 };
 
 
-// Get live stream (chỉ có 1 livestream tại 1 thời điểm)
+// Get live stream (only 1 livestream at a time)
 exports.getLiveStreams = async () => {
     try {
-        // Dùng findOne vì chỉ có thể có 0 hoặc 1 livestream đang live
+        // Use findOne since there can only be 0 or 1 live stream
         const livestream = await Livestream.findOne({ status: 'live' })
             .select('_id hostId title description roomName startTime peakViewers minViewers')
             .populate('hostId', 'name email image role') // Populate host for consistency
             .sort({ startTime: -1 })
             .lean(); // Use lean() for better performance on read-only queries
 
-        // Không có livestream đang live
+        // No livestream currently live
         if (!livestream) {
             return {
                 success: true,
@@ -525,13 +571,13 @@ exports.getLiveStreams = async () => {
 };
 
 
-// Get host livestream (only live) - Vì chỉ có 1 livestream duy nhất tại 1 thời điểm (toàn hệ thống)
-// Chỉ trả về livestream metadata + real-time viewer count (tối ưu performance)
-// Products/Comments/Reactions sẽ load qua API riêng để lazy loading và better caching
-// Real-time updates sẽ qua WebSocket cho comments/products/reactions mới
+// Get host livestream (only live) - Since only 1 livestream is allowed at a time (system-wide)
+// Only return livestream metadata + real-time viewer count (performance optimization)
+// Products/Comments/Reactions will load via separate APIs for lazy loading and better caching
+// Real-time updates via WebSocket for new comments/products/reactions
 exports.getHostLivestreams = async (hostId) => {
     try {
-        // Dùng findOne vì chỉ có thể có 0 hoặc 1 livestream đang live
+        // Use findOne since there can only be 0 or 1 live stream
         const livestream = await Livestream.findOne({
             hostId: hostId,
             status: 'live'
@@ -541,7 +587,7 @@ exports.getHostLivestreams = async (hostId) => {
             .sort({ startTime: -1 })
             .lean();
 
-        // Nếu không có livestream đang live
+        // If no livestream is currently live
         if (!livestream) {
             return {
                 success: true,
@@ -567,8 +613,10 @@ exports.getHostLivestreams = async (hostId) => {
             needsUpdate = true;
         }
 
-        // Update min viewers (only if livestream is live, update even when count = 0)
-        if (minViewers === undefined || minViewers === null || minViewers === 0 || currentViewers < minViewers) {
+        // Update min viewers (only when currentViewers > 0)
+        // minViewers should track the lowest viewer count when there are viewers (> 0)
+        // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+        if (currentViewers > 0 && (minViewers === 0 || minViewers === undefined || minViewers === null || currentViewers < minViewers)) {
             minViewers = currentViewers;
             needsUpdate = true;
         }
@@ -577,12 +625,17 @@ exports.getHostLivestreams = async (hostId) => {
         if (needsUpdate) {
             const livestreamDoc = await Livestream.findById(livestream._id);
             if (livestreamDoc) {
+                const now = new Date();
                 if (currentViewers > (livestreamDoc.peakViewers || 0)) {
                     livestreamDoc.peakViewers = currentViewers;
+                    livestreamDoc.peakViewersAt = now; // Save exact time when peak was reached
                 }
-                // Update min viewers (update even when count = 0)
-                if ((livestreamDoc.minViewers || 0) === 0 || currentViewers < livestreamDoc.minViewers) {
+                // Update min viewers (only when currentViewers > 0)
+                // Track lowest viewer count when there are viewers (> 0)
+                // minViewers = 0 means no viewers yet, will be updated when first viewer joins
+                if (currentViewers > 0 && (livestreamDoc.minViewers === 0 || livestreamDoc.minViewers === undefined || livestreamDoc.minViewers === null || currentViewers < livestreamDoc.minViewers)) {
                     livestreamDoc.minViewers = currentViewers;
+                    livestreamDoc.minViewersAt = now; // Save exact time when min was reached
                 }
                 livestreamDoc.save().catch(err => {
                     // Silently handle save errors
@@ -674,10 +727,10 @@ exports.getAllLive = async () => {
     }
 };
 
-// Get specific livestream details (Admin only - có đầy đủ comments, products, stats)
+// Get specific livestream details (Admin only - includes full comments, products, stats)
 exports.getLiveById = async (livestreamId, userRole = null) => {
     try {
-        // Kiểm tra định dạng ObjectId hợp lệ
+        // Validate ObjectId format
         if (!livestreamId || !livestreamId.match(/^[0-9a-fA-F]{24}$/)) {
             return {
                 success: false,
@@ -685,13 +738,13 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
             };
         }
 
-        // Tìm livestream theo ID và populate host (đầy đủ thông tin)
+        // Find livestream by ID and populate host (full info)
         const livestream = await Livestream.findById(livestreamId)
-            .select('_id hostId title description image roomName status startTime endTime peakViewers minViewers createdAt updatedAt')
+            .select('_id hostId title description image roomName status startTime endTime peakViewers peakViewersAt minViewers minViewersAt totalViewers createdAt updatedAt')
             .populate('hostId', 'name email image role username')
             .lean();
 
-        // Không tìm thấy livestream
+        // Livestream not found
         if (!livestream) {
             return {
                 success: false,
@@ -699,12 +752,12 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
             };
         }
 
-        // Lấy TẤT CẢ data song song để tối ưu performance (Promise.all)
+        // Fetch ALL data in parallel for performance optimization (Promise.all)
         const [liveProducts, liveComments, reactionData, currentViewers] = await Promise.all([
-            // 1. Tất cả LiveProducts (kể cả bị remove - isActive: false) với full product data
+            // 1. All LiveProducts (including removed ones - isActive: false) with full product data
             LiveProduct.find({
                 liveId: livestreamId
-                // Không filter isActive - lấy cả products đã bị remove
+                // Do not filter isActive - fetch even removed products
             })
                 .sort({ isPinned: -1, addedAt: -1 })
                 .populate('addBy', 'name username role')
@@ -715,7 +768,7 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
                     populate: [
                         {
                             path: 'categoryId',
-                            select: 'cat_name'
+                            select: 'categoryName'
                         },
                         {
                             path: 'productImageIds',
@@ -727,11 +780,11 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
                             populate: [
                                 {
                                     path: 'productColorId',
-                                    select: 'color_name color_code'
+                                    select: 'productColorName color_code'
                                 },
                                 {
                                     path: 'productSizeId',
-                                    select: 'size_name'
+                                    select: 'productSizeName'
                                 }
                             ],
                             select: 'variantImage variantPrice stockQuantity variantStatus'
@@ -740,47 +793,47 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
                 })
                 .lean(),
 
-            // 2. Tất cả Comments (admin xem hết, including deleted)
+            // 2. All Comments (admin sees all, including deleted)
             LiveComment.find({ liveId: livestreamId })
                 .populate('senderId', 'name username image role')
                 .populate('deletedBy', 'name username role')
-                .populate('pinBy', 'name username role')
-                .populate('unpinBy', 'name username role')
                 .sort({ isPinned: -1, createdAt: -1 })
                 .lean(),
 
             // 3. Reaction counts (aggregate)
             livestreamReactionService.getLiveReactions(livestreamId),
 
-            // 4. Real-time viewer count (chỉ nếu đang live)
+            // 4. Real-time viewer count (only if currently live)
             livestream.status === 'live'
                 ? getRealTimeViewers(livestream.roomName)
                 : Promise.resolve(0)
         ]);
 
-        // Update viewer stats nếu đang live
+        // Update viewer stats if currently live
         if (livestream.status === 'live' && currentViewers > 0) {
             await updateViewerStats(livestream._id, currentViewers);
         }
 
-        // Tính duration nếu livestream đã ended
+        // Calculate duration if livestream has ended
         let duration = null;
         if (livestream.status === 'ended' && livestream.endTime && livestream.startTime) {
             duration = new Date(livestream.endTime) - new Date(livestream.startTime);
         }
 
-        // Trả về TẤT CẢ data của livestream
+        // Return ALL data of the livestream
         return {
             success: true,
             message: 'Livestream details retrieved successfully',
             data: {
                 livestream: {
                     ...livestream,
+                    peakViewersAt: livestream.peakViewersAt || null, // Ensure field is always present
+                    minViewersAt: livestream.minViewersAt || null, // Ensure field is always present
                     currentViewers: currentViewers, // Real-time for live, 0 for ended
                     duration: duration // Duration in milliseconds (null if still live)
                 },
-                products: liveProducts, // Tất cả products với full data
-                comments: liveComments, // Tất cả comments (admin see all including deleted)
+                products: liveProducts, // All products with full data
+                comments: liveComments, // All comments (admin see all including deleted)
                 reactions: reactionData.success ? reactionData.data.reactions : {
                     like: 0,
                     love: 0,
@@ -803,10 +856,10 @@ exports.getLiveById = async (livestreamId, userRole = null) => {
 };
 
 
-// Get currently live stream only (for users) - Vì chỉ có 1 livestream tại 1 thời điểm
-// Chỉ trả về livestream metadata + real-time viewer count (tối ưu performance)
-// Products/Comments/Reactions sẽ load qua API riêng để lazy loading và better caching
-// Real-time updates sẽ qua WebSocket cho comments/products/reactions mới
+// Get currently live stream only (for users) - Since only 1 livestream is allowed at a time
+// Only return livestream metadata + real-time viewer count (performance optimization)
+// Products/Comments/Reactions will load via separate APIs for lazy loading and better caching
+// Real-time updates via WebSocket for new comments/products/reactions
 exports.getLiveNow = async () => {
     try {
         // Check cache first (reduce DB load from polling)
@@ -815,14 +868,14 @@ exports.getLiveNow = async () => {
             return cached.data;
         }
 
-        // Dùng findOne vì chỉ có thể có 0 hoặc 1 livestream đang live (toàn hệ thống)
+        // Use findOne since there can only be 0 or 1 live stream (system-wide)
         const livestream = await Livestream.findOne({ status: 'live' })
             .select('_id hostId title description image roomName status startTime endTime peakViewers minViewers')
             .populate('hostId', 'name email image role username')
             .sort({ startTime: -1 })
             .lean();
 
-        // Không có livestream nào đang live
+        // No livestream currently live
         if (!livestream) {
             const result = {
                 success: true,
@@ -840,14 +893,14 @@ exports.getLiveNow = async () => {
         // Get real-time viewer count only
         const currentViewers = await getRealTimeViewers(livestream.roomName);
 
-        // Update peak/min viewers trong DB (không block nếu lỗi)
+        // Update peak/min viewers in DB (non-blocking on error)
         try {
             await updateViewerStats(livestream._id, currentViewers);
         } catch (updateError) {
             // Silently handle update error
         }
 
-        // Trả kết quả
+        // Return result
         const result = {
             success: true,
             message: 'Currently live stream retrieved successfully',

@@ -77,3 +77,33 @@ exports.requestRegisterOtp = async (req, res) => {
 exports.checkStatus = async (req, res) => {
   res.status(200).json({ message: 'Account is active' });
 };
+
+// Verify password for checkout
+exports.verifyPassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required' });
+    }
+    const result = await authService.verifyPassword(userId, password);
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    res.status(500).json({ message: 'Error verifying password', error: error.message });
+  }
+};
+
+// Update checkout authentication setting
+exports.updateCheckoutAuthSetting = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { requireAuth } = req.body;
+    if (typeof requireAuth !== 'boolean') {
+      return res.status(400).json({ message: 'requireAuth must be a boolean' });
+    }
+    const result = await authService.updateCheckoutAuthSetting(userId, requireAuth);
+    res.status(result.status).json(result.response);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating setting', error: error.message });
+  }
+};

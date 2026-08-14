@@ -1,7 +1,10 @@
 const mongoose = require("mongoose");
-const newProductImage = require("../models/newProductImage");
-const newProduct = require("../models/newProduct");
-const newProductVariant = require("../models/newProductVariant");
+const ProductImage = require("../models/ProductImage");
+const Product = require("../models/Product");
+const ProductVariant = require("../models/ProductVariant");
+const OrderDetails = require("../models/OrderDetails");
+const Categories = require("../models/Categories");
+const { updateProductStatusBasedOnVariants } = require("./productVariantService");
 
 // Create a new product with validation
 const createProduct = async (productData) => {
@@ -58,7 +61,7 @@ const createProduct = async (productData) => {
         'Product status must be either "active", "inactive", or "pending"'
       );
     }
-    const existingProduct = await newProduct.findOne({ productName: trimmedProductName });
+    const existingProduct = await Product.findOne({ productName: trimmedProductName });
     if (existingProduct) {
       throw new Error("Product with this name already exists");
     }
@@ -68,7 +71,7 @@ const createProduct = async (productData) => {
       if (!imageData.imageUrl) {
         throw new Error("Please fill in all required fields");
       }
-      const image = new newProductImage({
+      const image = new ProductImage({
         imageUrl: imageData.imageUrl,
         isMain: imageData.isMain || false,
       });
@@ -83,7 +86,7 @@ const createProduct = async (productData) => {
         if (!mongoose.Types.ObjectId.isValid(variantId)) {
           throw new Error("Invalid product variant ID");
         }
-        const variant = await newProductVariant.findById(variantId);
+        const variant = await ProductVariant.findById(variantId);
         if (!variant) {
           throw new Error(`Product variant with ID ${variantId} not found`);
         }
@@ -94,7 +97,7 @@ const createProduct = async (productData) => {
     // Set product status to "pending" if no variants, otherwise allow provided status or default to "pending"
     const finalProductStatus = validatedVariantIds.length > 0 ? (productStatus || "active") : "pending";
 
-    const product = new newProduct({
+    const product = new Product({
       ...productData,
       productName: trimmedProductName,
       description: trimmedDescription,
@@ -105,13 +108,15 @@ const createProduct = async (productData) => {
     const savedProduct = await product.save();
 
     if (savedImageIds.length > 0) {
-      await newProductImage.updateMany(
+      await ProductImage.updateMany(
         { _id: { $in: savedImageIds } },
         { productId: savedProduct._id }
       );
     }
 
-    return await newProduct
+    await updateProductStatusBasedOnVariants(savedProduct._id);
+
+    return await Product
       .findById(savedProduct._id)
       .populate("categoryId")
       .populate("productImageIds")
@@ -139,17 +144,38 @@ const getAllProducts = async (filters = {}, userRole = "customer") => {
     }
 
     if (userRole === "customer") {
-      query.productStatus = { $ne: "pending" };
+      // BR-11: Only show active products to customers
+      query.productStatus = "active";
     }
 
-    return await newProduct
+    const products = await Product
       .find(query)
-      .populate("categoryId")
+      .populate({
+        path: "categoryId",
+        match: { isDeleted: false }, // BR-15: Only active categories
+      })
       .populate("productImageIds")
       .populate({
         path: "productVariantIds",
+        match: { variantStatus: { $in: ["active", "inactive"] } }, // BR-11: Only active/inactive variants
         populate: [{ path: "productColorId" }, { path: "productSizeId" }],
       });
+
+    // BR-11: Filter products that have at least one active variant and active category
+    if (userRole === "customer") {
+      return products.filter(product => {
+        // Check if product has active category
+        if (!product.categoryId || product.categoryId.isDeleted) {
+          return false;
+        }
+        // Check if product has at least one active variant
+        const hasActiveVariant = product.productVariantIds?.some(v =>
+          v && v.variantStatus === "active"
+        ) || false;
+        return hasActiveVariant;
+      });
+    }
+    return products;
   } catch (error) {
     throw new Error(`Failed to fetch products: ${error.message}`);
   }
@@ -174,17 +200,38 @@ const searchProducts = async (searchParams = {}, userRole = "customer") => {
     }
 
     if (userRole === "customer") {
-      query.productStatus = { $ne: "pending" };
+      // BR-11: Only show active products to customers
+      query.productStatus = "active";
     }
 
-    return await newProduct
+    const products = await Product
       .find(query)
-      .populate("categoryId")
+      .populate({
+        path: "categoryId",
+        match: { isDeleted: false }, // BR-15: Only active categories
+      })
       .populate("productImageIds")
       .populate({
         path: "productVariantIds",
+        match: { variantStatus: { $in: ["active", "inactive"] } }, // BR-11: Only active/inactive variants
         populate: [{ path: "productColorId" }, { path: "productSizeId" }],
       });
+
+    // BR-11: Filter products that have at least one active variant and active category
+    if (userRole === "customer") {
+      return products.filter(product => {
+        // Check if product has active category
+        if (!product.categoryId || product.categoryId.isDeleted) {
+          return false;
+        }
+        // Check if product has at least one active variant
+        const hasActiveVariant = product.productVariantIds?.some(v =>
+          v && v.variantStatus === "active"
+        ) || false;
+        return hasActiveVariant;
+      });
+    }
+    return products;
   } catch (error) {
     throw new Error(`Failed to search products: ${error.message}`);
   }
@@ -197,20 +244,40 @@ const getProductById = async (productId, userRole = "customer") => {
       throw new Error("Invalid product ID");
     }
 
-    const product = await newProduct
+    const product = await Product
       .findById(productId)
-      .populate("categoryId")
+      .populate({
+        path: "categoryId",
+        match: { isDeleted: false }, // BR-15: Only active categories
+      })
       .populate("productImageIds")
       .populate({
         path: "productVariantIds",
+        match: userRole === "customer"
+          ? { variantStatus: { $in: ["active", "inactive"] } } // BR-12: Only active/inactive variants for customers
+          : {}, // Admin can see all variants
         populate: [{ path: "productColorId" }, { path: "productSizeId" }],
       });
     if (!product) {
       throw new Error("Product not found");
     }
 
-    if (product.productStatus === "pending" && userRole === "customer") {
-      throw new Error("Access denied: product is pending approval");
+    if (userRole === "customer") {
+      // BR-11: Only show active products to customers
+      if (product.productStatus !== "active") {
+        throw new Error("Access denied: product is not active");
+      }
+      // BR-15: Check if product has active category
+      if (!product.categoryId || product.categoryId.isDeleted) {
+        throw new Error("Access denied: product category is not active");
+      }
+      // BR-11: Check if product has at least one active variant
+      const hasActiveVariant = product.productVariantIds?.some(v =>
+        v && v.variantStatus === "active"
+      ) || false;
+      if (!hasActiveVariant) {
+        throw new Error("Access denied: product has no active variants");
+      }
     }
 
     return product;
@@ -269,7 +336,7 @@ const updateProduct = async (productId, updateData) => {
       throw new Error("Please fill in all required fields");
     }
 
-    const existingProduct = await newProduct.findById(productId);
+    const existingProduct = await Product.findById(productId);
     if (!existingProduct) {
       throw new Error("Product not found");
     }
@@ -278,7 +345,7 @@ const updateProduct = async (productId, updateData) => {
     }
 
     if (productName && trimmedProductName) {
-      const duplicateProduct = await newProduct.findOne({
+      const duplicateProduct = await Product.findOne({
         productName: trimmedProductName,
         _id: { $ne: productId },
       });
@@ -303,14 +370,14 @@ const updateProduct = async (productId, updateData) => {
           throw new Error("Please fill in all required fields");
         }
         if (imageData._id && mongoose.Types.ObjectId.isValid(imageData._id)) {
-          await newProductImage.findByIdAndUpdate(
+          await ProductImage.findByIdAndUpdate(
             imageData._id,
             { imageUrl: imageData.imageUrl, isMain: imageData.isMain || false },
             { new: true }
           );
           updatedImageIds.push(imageData._id);
         } else {
-          const image = new newProductImage({
+          const image = new ProductImage({
             productId,
             imageUrl: imageData.imageUrl,
             isMain: imageData.isMain || false,
@@ -329,7 +396,7 @@ const updateProduct = async (productId, updateData) => {
         if (!mongoose.Types.ObjectId.isValid(variantId)) {
           throw new Error("Invalid product variant ID");
         }
-        const variant = await newProductVariant.findById(variantId);
+        const variant = await ProductVariant.findById(variantId);
         if (!variant) {
           throw new Error(`Product variant with ID ${variantId} not found`);
         }
@@ -381,7 +448,7 @@ const updateProduct = async (productId, updateData) => {
       updatePayload.description = trimmedDescription;
     }
 
-    const product = await newProduct
+    const product = await Product
       .findByIdAndUpdate(
         productId,
         updatePayload,
@@ -395,6 +462,9 @@ const updateProduct = async (productId, updateData) => {
     if (!product) {
       throw new Error("Product not found");
     }
+
+    await updateProductStatusBasedOnVariants(productId);
+
     return product;
   } catch (error) {
     throw new Error(`Failed to update product: ${error.message}`);
@@ -408,7 +478,7 @@ const deleteProduct = async (productId) => {
       throw new Error("Invalid product ID");
     }
 
-    const product = await newProduct.findById(productId).populate("productVariantIds");
+    const product = await Product.findById(productId).populate("productVariantIds");
     if (!product) {
       throw new Error("Product not found");
     }
@@ -417,8 +487,39 @@ const deleteProduct = async (productId) => {
       return { message: "Product is already discontinued" };
     }
 
+    // Check if product has variants with active orders
+    // If any variant has active orders (pending, confirmed, or shipping), prevent product deletion
+    if (product.productVariantIds && product.productVariantIds.length > 0) {
+      const variantIds = product.productVariantIds.map(v => v._id || v);
+
+      const orderDetails = await OrderDetails.find({
+        variantId: { $in: variantIds }
+      }).populate({
+        path: "orderId",
+        select: "orderStatus",
+      });
+
+      // Only prevent deletion if there are orders that are pending, confirmed, or shipping
+      // Allow deletion if all orders are delivered or cancelled
+      // This prevents deletion of products that have variants with active orders
+      const hasActiveOrders = orderDetails.some(
+        (detail) => {
+          // Skip if orderId is null or not populated
+          if (!detail.orderId) {
+            return false;
+          }
+          const status = detail.orderId.orderStatus;
+          return status === "pending" || status === "confirmed" || status === "shipping";
+        }
+      );
+
+      if (hasActiveOrders) {
+        throw new Error("Cannot delete product because it still contains variants with active orders");
+      }
+    }
+
     // Step 1: Discontinue the product
-    await newProduct.findByIdAndUpdate(
+    await Product.findByIdAndUpdate(
       productId,
       {
         productStatus: "discontinued",
@@ -431,7 +532,7 @@ const deleteProduct = async (productId) => {
     if (product.productVariantIds && product.productVariantIds.length > 0) {
       const variantIds = product.productVariantIds.map(v => v._id);
 
-      await newProductVariant.updateMany(
+      await ProductVariant.updateMany(
         { _id: { $in: variantIds } },
         {
           variantStatus: "discontinued",
@@ -456,7 +557,7 @@ const addProductImage = async (productId, imageData) => {
       throw new Error("Please fill in all required fields");
     }
 
-    const product = await newProduct
+    const product = await Product
       .findById(productId)
       .populate("productImageIds");
     if (!product) {
@@ -468,7 +569,7 @@ const addProductImage = async (productId, imageData) => {
 
     // If new image is isMain: true, set existing isMain to false
     if (imageData.isMain) {
-      await newProductImage.updateMany(
+      await ProductImage.updateMany(
         { productId, isMain: true },
         { isMain: false }
       );
@@ -484,7 +585,7 @@ const addProductImage = async (productId, imageData) => {
       }
     }
 
-    const image = new newProductImage({
+    const image = new ProductImage({
       productId,
       imageUrl: imageData.imageUrl,
       isMain: imageData.isMain || false,
@@ -510,7 +611,7 @@ const deleteProductImage = async (productId, imageId) => {
       throw new Error("Invalid product or image ID");
     }
 
-    const product = await newProduct
+    const product = await Product
       .findById(productId)
       .populate("productImageIds");
     if (!product) {
@@ -525,7 +626,7 @@ const deleteProductImage = async (productId, imageId) => {
       );
     }
 
-    const image = await newProductImage.findById(imageId);
+    const image = await ProductImage.findById(imageId);
     if (!image) {
       throw new Error("Image not found");
     }
@@ -536,13 +637,13 @@ const deleteProductImage = async (productId, imageId) => {
         (img) => img._id.toString() !== imageId
       );
       if (otherImages.length > 0) {
-        await newProductImage.findByIdAndUpdate(otherImages[0]._id, {
+        await ProductImage.findByIdAndUpdate(otherImages[0]._id, {
           isMain: true,
         });
       }
     }
 
-    await newProductImage.findByIdAndDelete(imageId);
+    await ProductImage.findByIdAndDelete(imageId);
     product.productImageIds = product.productImageIds.filter(
       (id) => id.toString() !== imageId
     );

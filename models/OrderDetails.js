@@ -1,17 +1,17 @@
 const mongoose = require('mongoose');
 
 const OrderDetailsSchema = new mongoose.Schema({
-  order_id: {
+  orderId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Orders',
     required: [true, 'Order ID is required'],
   },
-  variant_id: {
+  variantId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'newProductVariants',
+    ref: 'ProductVariant',
     required: [true, 'Variant ID is required'],
   },
-  UnitPrice: {
+  unitPrice: {
     type: Number,
     required: [true, 'Unit price is required'],
     min: [0, 'Unit price cannot be negative'],
@@ -34,19 +34,29 @@ const OrderDetailsSchema = new mongoose.Schema({
       maxlength: [500, 'Feedback cannot exceed 500 characters'],
       default: '',
     },
-    created_at: {
+    createdAt: {
       type: Date,
       default: null,
     },
-    updated_at: {
+    updatedAt: {
       type: Date,
       default: null,
     },
-    is_deleted: {
+    isDeleted: {
       type: Boolean,
       default: false,
     },
   },
-});
+}, { timestamps: true });
 
-module.exports = mongoose.model('OrderDetails', OrderDetailsSchema);
+// ===== Indexes =====
+// Primary lookup: all details for a given order
+OrderDetailsSchema.index({ orderId: 1 });
+
+// Feedback queries: look up a specific item within an order
+OrderDetailsSchema.index({ orderId: 1, variantId: 1 });
+
+// Product feedback page: all reviews for a variant across all orders
+OrderDetailsSchema.index({ variantId: 1 });
+
+module.exports = mongoose.model('OrderDetails', OrderDetailsSchema);

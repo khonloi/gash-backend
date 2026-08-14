@@ -1,28 +1,39 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ===== Dependencies =====
 /node_modules
 /.pnp
 .pnp.js
 
-# testing
+# ===== Testing =====
 /coverage
 
-# production
+# ===== Production Build =====
 /build
+/dist
 
-# misc
-.DS_Store
+# ===== Environment Variables =====
+# NEVER commit .env files — use .env.example as the template
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# ===== Logs =====
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-routes/Favorites.js
-routes/Warehouses.js
-routes/ImportBill.js
-routes/ImportBillDetails.js
+*.log
+
+# ===== OS / Editor =====
+.DS_Store
+.DS_Store?
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# ===== Config with Secrets =====
+# config/default.json is committed but should NOT contain secrets.
+# VNPay merchant codes, API keys, etc. must be in .env (see .env.example).
+# If you accidentally commit secrets, rotate them immediately.

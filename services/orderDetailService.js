@@ -1,13 +1,13 @@
 const mongoose = require('mongoose');
 const OrderDetails = require('../models/OrderDetails');
 const Orders = require('../models/Orders');
-const newProductVariants = require('../models/newProductVariant');
+const ProductVariant = require('../models/ProductVariant');
 const Accounts = require('../models/Accounts');
 
 exports.searchOrderDetails = async (queryParams, user) => {
   const {
-    order_id,
-    variant_id,
+    orderId,
+    variantId,
     productId,
     productColorId,
     productSizeId,
@@ -22,27 +22,27 @@ exports.searchOrderDetails = async (queryParams, user) => {
   };
 
   if (user.role !== 'admin' && user.role !== 'manager') {
-    const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
+    const userOrders = await Orders.find({ accountId: user.id }).select('_id');
     const userOrderIds = userOrders.map(order => order._id);
-    query.order_id = { $in: userOrderIds };
+    query.orderId = { $in: userOrderIds };
   }
 
-  if (order_id) {
-    if (!mongoose.isValidObjectId(order_id)) {
+  if (orderId) {
+    if (!mongoose.isValidObjectId(orderId)) {
       const err = new Error("Invalid order ID");
       err.status = 400;
       throw err;
     }
-    query.order_id = order_id;
+    query.orderId = orderId;
   }
 
-  if (variant_id) {
-    if (!mongoose.isValidObjectId(variant_id)) {
+  if (variantId) {
+    if (!mongoose.isValidObjectId(variantId)) {
       const err = new Error("Invalid variant ID");
       err.status = 400;
       throw err;
     }
-    query.variant_id = variant_id;
+    query.variantId = variantId;
   }
 
   if (productId || productColorId || productSizeId) {
@@ -50,18 +50,18 @@ exports.searchOrderDetails = async (queryParams, user) => {
     if (productId) variantQuery.productId = productId;
     if (productColorId) variantQuery.productColorId = productColorId;
     if (productSizeId) variantQuery.productSizeId = productSizeId;
-    const variants = await newProductVariants.find(variantQuery).select('_id');
+    const variants = await ProductVariant.find(variantQuery).select('_id');
     const variantIds = variants.map(v => v._id);
-    query.variant_id = { $in: variantIds };
+    query.variantId = { $in: variantIds };
   }
 
   if (username) {
     const userDoc = await Accounts.findOne({ username }).select('_id');
     if (!userDoc) return [];
-    const userOrders = await Orders.find({ acc_id: userDoc._id }).select('_id');
+    const userOrders = await Orders.find({ accountId: userDoc._id }).select('_id');
     const userOrderIds = userOrders.map(order => order._id);
-    query.order_id = query.order_id
-      ? { $in: userOrderIds.filter(id => query.order_id.$in ? query.order_id.$in.includes(id) : id === query.order_id) }
+    query.orderId = query.orderId
+      ? { $in: userOrderIds.filter(id => query.orderId.$in ? query.orderId.$in.includes(id) : id === query.orderId) }
       : { $in: userOrderIds };
   }
 
@@ -75,8 +75,8 @@ exports.searchOrderDetails = async (queryParams, user) => {
     }
     const orders = await Orders.find({ orderDate: dateQuery }).select('_id');
     const orderIds = orders.map(order => order._id);
-    query.order_id = query.order_id
-      ? { $in: orderIds.filter(id => query.order_id.$in ? query.order_id.$in.includes(id) : id === query.order_id) }
+    query.orderId = query.orderId
+      ? { $in: orderIds.filter(id => query.orderId.$in ? query.orderId.$in.includes(id) : id === query.orderId) }
       : { $in: orderIds };
   }
 
@@ -93,12 +93,12 @@ exports.searchOrderDetails = async (queryParams, user) => {
 
   return await OrderDetails.find(query)
     .populate({
-      path: 'order_id',
-      select: 'orderDate totalPrice acc_id feedback_order',
-      populate: { path: 'acc_id', select: 'username image' },
+      path: 'orderId',
+      select: 'orderDate totalPrice accountId feedback_order',
+      populate: { path: 'accountId', select: 'username image' },
     })
     .populate({
-      path: 'variant_id',
+      path: 'variantId',
       select: 'productId productColorId productSizeId',
       populate: [
         {
@@ -106,19 +106,19 @@ exports.searchOrderDetails = async (queryParams, user) => {
           select: 'productName imageURL',
           options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
         },
-        { path: 'productColorId', select: 'color_name' },
-        { path: 'productSizeId', select: 'size_name' },
+        { path: 'productColorId', select: 'productColorName' },
+        { path: 'productSizeId', select: 'productSizeName' },
       ],
     });
 };
 
 exports.createOrderDetail = async (data, user) => {
-  const { order_id, variant_id, UnitPrice, Quantity, feedback } = data;
+  const { orderId, variantId, unitPrice, Quantity, feedback } = data;
 
-  if (!order_id || !variant_id || !UnitPrice || !Quantity) {
+  if (!orderId || !variantId || !unitPrice || !Quantity) {
     return { status: 400, response: { message: 'Missing required fields' } };
   }
-  if (UnitPrice < 0) {
+  if (unitPrice < 0) {
     return { status: 400, response: { message: 'Unit price cannot be negative' } };
   }
   if (Quantity < 1) {
@@ -131,60 +131,60 @@ exports.createOrderDetail = async (data, user) => {
     return { status: 400, response: { message: 'Rating must be between 1 and 5' } };
   }
 
-  const order = await Orders.findById(order_id);
+  const order = await Orders.findById(orderId);
   if (!order) {
     return { status: 404, response: { message: 'Order not found' } };
   }
-  if (user.role !== 'admin' && user.role !== 'manager' && order.acc_id.toString() !== user.id) {
+  if (user.role !== 'admin' && user.role !== 'manager' && order.accountId.toString() !== user.id) {
     return { status: 403, response: { message: 'Access denied: Can only create order detail for own order' } };
   }
-  const variant = await newProductVariants.findById(variant_id);
+  const variant = await ProductVariant.findById(variantId);
   if (!variant) {
     return { status: 404, response: { message: 'Product variant not found' } };
   }
   const orderDetail = new OrderDetails({
-    order_id,
-    variant_id,
-    UnitPrice,
+    orderId,
+    variantId,
+    unitPrice,
     Quantity,
     feedback: {
       content: feedback?.content || '',
       rating: feedback?.rating || null,
-      created_at: feedback?.created_at || null,
-      updated_at: feedback?.updated_at || null,
-      is_deleted: false
+      createdAt: feedback?.createdAt || null,
+      updatedAt: feedback?.updatedAt || null,
+      isDeleted: false
     }
   });
   const savedOrderDetail = await orderDetail.save();
   return { status: 201, response: { message: 'Order detail created successfully', orderDetail: savedOrderDetail } };
 };
 
-exports.getAllOrderDetails = async (user, order_id) => {
+exports.getAllOrderDetails = async (user, orderId) => {
   const query = {};
 
   if (user.role !== 'admin' && user.role !== 'manager') {
-    const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
+    const userOrders = await Orders.find({ accountId: user.id }).select('_id');
     const userOrderIds = userOrders.map(order => order._id);
-    query.order_id = { $in: userOrderIds };
+    query.orderId = { $in: userOrderIds };
   }
 
-  if (order_id) {
-    if (!mongoose.isValidObjectId(order_id)) {
+  if (orderId) {
+    if (!mongoose.isValidObjectId(orderId)) {
       const err = new Error("Invalid order ID");
       err.status = 400;
       throw err;
     }
-    query.order_id = order_id;
+    query.orderId = orderId;
   }
 
   return await OrderDetails.find(query)
     .populate({
-      path: 'order_id',
+      path: 'orderId',
       select: 'orderDate totalPrice feedback_order',
-      populate: { path: 'acc_id', select: 'username image' },
+      populate: { path: 'accountId', select: 'username image' },
     })
     .populate({
-      path: 'variant_id',
+      path: 'variantId',
       select: 'productId productColorId productSizeId',
       populate: [
         {
@@ -192,8 +192,8 @@ exports.getAllOrderDetails = async (user, order_id) => {
           select: 'productName imageURL',
           options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
         },
-        { path: 'productColorId', select: 'color_name' },
-        { path: 'productSizeId', select: 'size_name' },
+        { path: 'productColorId', select: 'productColorName' },
+        { path: 'productSizeId', select: 'productSizeName' },
       ],
     });
 };
@@ -207,14 +207,14 @@ exports.updateOrderDetail = async (id, data, user) => {
     return { status: 404, response: { message: 'Order detail not found' } };
   }
   if (user.role !== 'admin' && user.role !== 'manager') {
-    const order = await Orders.findById(orderDetail.order_id);
-    if (order.acc_id.toString() !== user.id) {
+    const order = await Orders.findById(orderDetail.orderId);
+    if (order.accountId.toString() !== user.id) {
       return { status: 403, response: { message: 'Access denied: Can only update own order detail' } };
     }
   }
-  const { order_id, variant_id, UnitPrice, Quantity, feedback } = data;
+  const { orderId, variantId, unitPrice, Quantity, feedback } = data;
 
-  if (UnitPrice !== undefined && UnitPrice < 0) {
+  if (unitPrice !== undefined && unitPrice < 0) {
     return { status: 400, response: { message: 'Unit price cannot be negative' } };
   }
   if (Quantity !== undefined && Quantity < 1) {
@@ -226,36 +226,36 @@ exports.updateOrderDetail = async (id, data, user) => {
   if (feedback && feedback.rating && (feedback.rating < 1 || feedback.rating > 5)) {
     return { status: 400, response: { message: 'Rating must be between 1 and 5' } };
   }
-  if (order_id) {
-    if (!mongoose.isValidObjectId(order_id)) {
+  if (orderId) {
+    if (!mongoose.isValidObjectId(orderId)) {
       return { status: 400, response: { message: 'Invalid order ID' } };
     }
-    const order = await Orders.findById(order_id);
+    const order = await Orders.findById(orderId);
     if (!order) {
       return { status: 404, response: { message: 'Order not found' } };
     }
   }
-  if (variant_id) {
-    if (!mongoose.isValidObjectId(variant_id)) {
+  if (variantId) {
+    if (!mongoose.isValidObjectId(variantId)) {
       return { status: 400, response: { message: 'Invalid variant ID' } };
     }
-    const variant = await newProductVariants.findById(variant_id);
+    const variant = await ProductVariant.findById(variantId);
     if (!variant) {
       return { status: 404, response: { message: 'Product variant not found' } };
     }
   }
 
   const updateData = {};
-  if (order_id) updateData.order_id = order_id;
-  if (variant_id) updateData.variant_id = variant_id;
-  if (UnitPrice !== undefined) updateData.UnitPrice = UnitPrice;
+  if (orderId) updateData.orderId = orderId;
+  if (variantId) updateData.variantId = variantId;
+  if (unitPrice !== undefined) updateData.unitPrice = unitPrice;
   if (Quantity !== undefined) updateData.Quantity = Quantity;
   if (feedback) {
     if (feedback.content !== undefined) updateData['feedback.content'] = feedback.content;
     if (feedback.rating !== undefined) updateData['feedback.rating'] = feedback.rating;
-    if (feedback.created_at !== undefined) updateData['feedback.created_at'] = feedback.created_at;
-    if (feedback.updated_at !== undefined) updateData['feedback.updated_at'] = feedback.updated_at;
-    if (feedback.is_deleted !== undefined) updateData['feedback.is_deleted'] = feedback.is_deleted;
+    if (feedback.createdAt !== undefined) updateData['feedback.createdAt'] = feedback.createdAt;
+    if (feedback.updatedAt !== undefined) updateData['feedback.updatedAt'] = feedback.updatedAt;
+    if (feedback.isDeleted !== undefined) updateData['feedback.isDeleted'] = feedback.isDeleted;
   }
 
   const updatedOrderDetail = await OrderDetails.findByIdAndUpdate(
@@ -264,12 +264,12 @@ exports.updateOrderDetail = async (id, data, user) => {
     { new: true, runValidators: true }
   )
     .populate({
-      path: 'order_id',
+      path: 'orderId',
       select: 'orderDate totalPrice feedback_order',
-      populate: { path: 'acc_id', select: 'username image' },
+      populate: { path: 'accountId', select: 'username image' },
     })
     .populate({
-      path: 'variant_id',
+      path: 'variantId',
       select: 'productId productColorId productSizeId',
       populate: [
         {
@@ -277,8 +277,8 @@ exports.updateOrderDetail = async (id, data, user) => {
           select: 'productName imageURL',
           options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
         },
-        { path: 'productColorId', select: 'color_name' },
-        { path: 'productSizeId', select: 'size_name' },
+        { path: 'productColorId', select: 'productColorName' },
+        { path: 'productSizeId', select: 'productSizeName' },
       ],
     });
   return { status: 200, response: { message: 'Order detail updated successfully', orderDetail: updatedOrderDetail } };
@@ -293,8 +293,8 @@ exports.deleteOrderDetail = async (id, user) => {
     return { status: 404, response: { message: 'Order detail not found' } };
   }
   if (user.role !== 'admin' && user.role !== 'manager') {
-    const order = await Orders.findById(orderDetail.order_id);
-    if (order.acc_id.toString() !== user.id) {
+    const order = await Orders.findById(orderDetail.orderId);
+    if (order.accountId.toString() !== user.id) {
       return { status: 403, response: { message: 'Access denied: Can only delete own order detail' } };
     }
   }
@@ -308,19 +308,19 @@ exports.getOrderDetailsByProduct = async (productId) => {
     err.status = 400;
     throw err;
   }
-  const variants = await newProductVariants.find({ productId }).select('_id');
+  const variants = await ProductVariant.find({ productId }).select('_id');
   const variantIds = variants.map(variant => variant._id);
   return await OrderDetails.find({
-    variant_id: { $in: variantIds },
+    variantId: { $in: variantIds },
     'feedback.content': { $nin: ['', null] },
   })
     .populate({
-      path: 'order_id',
+      path: 'orderId',
       select: 'orderDate totalPrice feedback_order',
-      populate: { path: 'acc_id', select: 'username image' },
+      populate: { path: 'accountId', select: 'username image' },
     })
     .populate({
-      path: 'variant_id',
+      path: 'variantId',
       select: 'productId productColorId productSizeId',
       populate: [
         {
@@ -328,8 +328,8 @@ exports.getOrderDetailsByProduct = async (productId) => {
           select: 'productName imageURL',
           options: { toJSON: { virtuals: true }, toObject: { virtuals: true } }
         },
-        { path: 'productColorId', select: 'color_name' },
-        { path: 'productSizeId', select: 'size_name' },
+        { path: 'productColorId', select: 'productColorName' },
+        { path: 'productSizeId', select: 'productSizeName' },
       ],
     });
 };

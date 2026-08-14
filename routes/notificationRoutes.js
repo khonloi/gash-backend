@@ -7,19 +7,19 @@ router.get("/user/:userId", notificationController.getUserNotifications);
 router.put("/mark-read/:id", notificationController.markAsRead);
 router.delete("/clear/:userId", notificationController.clearAll);
 
-// 🆕 USER XOÁ 1 THÔNG BÁO CỤ THỂ
+// User delete specific notification
 router.delete("/user/:userId/:id", notificationController.deleteUserNotification);
 
 // ====================== ADMIN ROUTES ======================
 router.post("/admin/create", notificationController.createNotification);
 router.get("/admin/all", notificationController.getAllNotifications);
 router.delete("/admin/:id", notificationController.deleteNotification);
-// 🧩 Edit an existing notification
+// Edit an existing notification
 router.patch("/admin/:id", notificationController.updateNotification);
 
-// ====================== 🆕 BỔ SUNG THÊM CHO LINH HOẠT ======================
+// ====================== ADDITIONAL UTILITY ROUTES ======================
 
-// 🧩 Gửi thông báo cho TẤT CẢ USER (broadcast)
+// Send broadcast notification to ALL users
 router.post(
   "/admin/broadcast",
   async (req, res, next) => {
@@ -29,7 +29,7 @@ router.post(
   notificationController.createNotification
 );
 
-// 🧩 Gửi thông báo cho 1 USER CỤ THỂ bằng userId trong URL
+// Send notification to SPECIFIC user via URL param
 router.post(
   "/admin/send/:userId",
   async (req, res, next) => {
@@ -40,7 +40,7 @@ router.post(
   notificationController.createNotification
 );
 
-// ====================== 🆕 TEMPLATE MANAGEMENT ======================
+// ====================== TEMPLATE MANAGEMENT ======================
 router.get("/admin/templates", notificationController.getAllTemplates);
 router.post("/admin/templates", notificationController.createTemplate);
 router.patch("/admin/templates/:id", notificationController.updateTemplate);

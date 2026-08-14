@@ -23,9 +23,9 @@ exports.register = async (data) => {
     phone,
     address,
     password,
-    image: image || 'http://localhost:4000/default-pfp.jpg',
+    image: image || 'https://i.redd.it/1to4yvt3i88c1.png',
     role: 'user',
-    acc_status: 'active'
+    accountStatus: 'active'
   });
   const savedAccount = await account.save();
   const token = jwt.sign(
@@ -47,7 +47,7 @@ exports.register = async (data) => {
         address: savedAccount.address,
         image: savedAccount.image,
         role: savedAccount.role,
-        acc_status: savedAccount.acc_status
+        accountStatus: savedAccount.accountStatus
       }
     }
   };
@@ -75,12 +75,30 @@ exports.requestForgotPasswordOtp = async (data) => {
     return { status: 404, response: { message: 'No account found with this email' } };
   }
   const otp = generateOTP();
-  const stored = storeOTP(email, otp);
-  if (!stored) {
+  const result = storeOTP(email, otp);
+  if (!result.stored) {
+    if (result.rateLimited) {
+      const retryAfterSeconds = Math.ceil((result.retryAfterMs || 0) / 1000);
+      return {
+        status: 429,
+        response: {
+          message: `Too many OTP requests. Please try again in ${retryAfterSeconds} seconds.`,
+          retryAfterSeconds,
+        },
+      };
+    }
     throw new Error('Failed to store OTP');
   }
-  return { status: 200, response: { message: 'OTP generated successfully', otp } };
+  // NOTE: Email is sent by the frontend via EmailJS.
+  // In production the OTP is NOT returned in the response — the frontend uses EmailJS to
+  // send it to the user. In development it is returned so engineers can test without email setup.
+  const responseBody = { message: 'OTP generated successfully' };
+  if (process.env.NODE_ENV !== 'production') {
+    responseBody.otp = otp; // development/testing only
+  }
+  return { status: 200, response: responseBody };
 };
+
 
 exports.verifyForgotPasswordOtp = async (data) => {
   const { email, otp } = data;
@@ -125,7 +143,7 @@ exports.login = async (data) => {
   if (!isMatch) {
     return { status: 401, response: { message: 'Invalid username or password' } };
   }
-  if (account.acc_status !== 'active') {
+  if (account.accountStatus !== 'active') {
     return { status: 403, response: { message: 'Account is inactive or suspended' } };
   }
   const token = jwt.sign(
@@ -147,7 +165,7 @@ exports.login = async (data) => {
         address: account.address,
         image: account.image,
         role: account.role,
-        acc_status: account.acc_status
+        accountStatus: account.accountStatus
       }
     }
   };
@@ -169,18 +187,18 @@ exports.googleLogin = async (data) => {
       username,
       name: name || username,
       email,
-      image: picture || 'http://localhost:4000/default-pfp.jpg',
+      image: picture || 'https://i.redd.it/1to4yvt3i88c1.png',
       googleId,
       password: randomPassword,
       role: 'user',
-      acc_status: 'active'
+      accountStatus: 'active'
     });
     await account.save();
   } else if (!account.googleId) {
     account.googleId = googleId;
     await account.save();
   }
-  if (account.acc_status !== 'active') {
+  if (account.accountStatus !== 'active') {
     return { status: 403, response: { message: 'Account is inactive or suspended' } };
   }
   const jwtToken = jwt.sign(
@@ -202,7 +220,7 @@ exports.googleLogin = async (data) => {
         address: account.address,
         image: account.image,
         role: account.role,
-        acc_status: account.acc_status
+        accountStatus: account.accountStatus
       }
     }
   };
@@ -218,9 +236,76 @@ exports.requestRegisterOtp = async (data) => {
     return { status: 400, response: { message: 'Email already registered' } };
   }
   const otp = generateOTP();
-  const stored = storeOTP(email, otp);
-  if (!stored) {
+  const result = storeOTP(email, otp);
+  if (!result.stored) {
+    if (result.rateLimited) {
+      const retryAfterSeconds = Math.ceil((result.retryAfterMs || 0) / 1000);
+      return {
+        status: 429,
+        response: {
+          message: `Too many OTP requests. Please try again in ${retryAfterSeconds} seconds.`,
+          retryAfterSeconds,
+        },
+      };
+    }
     throw new Error('Failed to store OTP');
   }
-  return { status: 200, response: { message: 'OTP generated successfully', otp } };
+  // NOTE: Email is sent by the frontend via EmailJS.
+  // In production the OTP is NOT returned in the response — the frontend uses EmailJS to
+  // send it to the user. In development it is returned so engineers can test without email setup.
+  const responseBody = { message: 'OTP generated successfully' };
+  if (process.env.NODE_ENV !== 'production') {
+    responseBody.otp = otp; // development/testing only
+  }
+  return { status: 200, response: responseBody };
+};
+
+
+// Verify password for checkout authentication
+exports.verifyPassword = async (userId, password) => {
+  try {
+    const account = await Accounts.findById(userId).select('+password');
+    if (!account) {
+      return { status: 404, response: { message: 'User not found' } };
+    }
+    
+    // Check if user has a password (not a Google-only user)
+    if (!account.password) {
+      return { status: 400, response: { message: 'Password authentication not available for this account' } };
+    }
+    
+    const isMatch = await account.comparePassword(password);
+    if (!isMatch) {
+      return { status: 401, response: { message: 'Invalid password' } };
+    }
+    
+    return { status: 200, response: { message: 'Password verified successfully', verified: true } };
+  } catch (error) {
+    console.error('Error verifying password:', error);
+    return { status: 500, response: { message: 'Error verifying password', error: error.message } };
+  }
+};
+
+// Update requireAuthForCheckout setting
+exports.updateCheckoutAuthSetting = async (userId, requireAuth) => {
+  try {
+    const account = await Accounts.findById(userId);
+    if (!account) {
+      return { status: 404, response: { message: 'User not found' } };
+    }
+    
+    account.requireAuthForCheckout = requireAuth;
+    await account.save();
+    
+    return { 
+      status: 200, 
+      response: { 
+        message: 'Checkout authentication setting updated successfully',
+        requireAuthForCheckout: account.requireAuthForCheckout
+      } 
+    };
+  } catch (error) {
+    console.error('Error updating checkout auth setting:', error);
+    return { status: 500, response: { message: 'Error updating setting', error: error.message } };
+  }
 }; 

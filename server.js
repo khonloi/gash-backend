@@ -1,87 +1,85 @@
-const http = require('http');
-const mongoose = require('mongoose');
-const { Server } = require('socket.io');
+// Load and validate environment variables first — before any other imports.
 require('dotenv').config();
+const env = require('./config/env');
+env.validate();
+
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = require('./app');
-const chatSocket = require('./sockets/chat');
-const productSocket = require('./sockets/productSocket');
+const { CORS_ORIGINS } = require('./app');
+const { connectDatabase, disconnectDatabase } = require('./config/database');
+const vnpayExpiryService = require('./services/vnpayExpiryService');
+
+const chatSocket         = require('./sockets/chat');
+const productSocket      = require('./sockets/productSocket');
 const notificationSocket = require('./sockets/notificationSocket');
-const orderSocket = require('./sockets/orderSocket');
+const orderSocket        = require('./sockets/orderSocket');
 
-// ===== LiveKit Service (SIMPLE) =====
-const livestreamService = require('./services/livestreamService');
-
-// Tạo HTTP server với timeout cho upload nhiều file
+// ===== HTTP Server =====
+// Longer timeouts for multi-file upload support
 const server = http.createServer(app);
-server.timeout = 300000; // 5 phút (300 giây) cho upload nhiều file
-server.keepAliveTimeout = 65000; // 65 giây
-server.headersTimeout = 66000; // 66 giây
+server.timeout          = 300_000; // 5 minutes for large uploads
+server.keepAliveTimeout = 65_000;  // > load balancer timeout (60s)
+server.headersTimeout   = 66_000;  // slightly above keepAliveTimeout
 
-// Socket.IO
+// ===== Socket.IO =====
+// Shares CORS origin list with Express app (single source of truth in app.js)
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://gash-pi.vercel.app'
-    ],
+    origin: CORS_ORIGINS,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   },
 });
 app.set('io', io);
 
-// Kết nối MongoDB
-const mongoURI = 'mongodb://localhost:27017/gash-db';
-mongoose.connect(mongoURI)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB error:', err.message));
-
-// Socket chat
+// ===== Socket Handlers =====
 chatSocket(io);
-// Socket product
 productSocket(io);
-// 🔔 Socket notification
 notificationSocket(io);
-// 📦 Socket order
 orderSocket(io);
 
+// ===== Database =====
+// connectDatabase() registers Mongoose connection event listeners and exits
+// on initial failure. VNPay expiry checker starts after connection is established.
+connectDatabase().then(() => {
+  vnpayExpiryService.startExpiryChecker();
+});
 
-// ===== Initialize LiveKit Service (SIMPLE) =====
-console.log('🚀 LiveKit service ready');
-
-// ===== Graceful Shutdown (SIMPLE) =====
+// ===== Graceful Shutdown =====
 const gracefulShutdown = (signal) => {
-  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
 
-  // Close server
-  server.close(() => {
-    console.log('✅ HTTP server closed');
+  server.close(async () => {
+    console.log('HTTP server closed');
+    io.close();
+    await disconnectDatabase();
     process.exit(0);
   });
+
+  // Force-kill if graceful shutdown takes too long (e.g., hung connections)
+  setTimeout(() => {
+    console.error('Graceful shutdown timed out — forcing exit');
+    process.exit(1);
+  }, 10_000).unref(); // .unref() prevents the timer from keeping the process alive
 };
 
-// Error handlers
 process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
+  console.error('Uncaught Exception:', error);
   gracefulShutdown('uncaughtException');
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
   gracefulShutdown('unhandledRejection');
 });
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 
-// Start server
-const PORT = process.env.PORT || 5000;
+// ===== Start Server =====
+const PORT = env.PORT;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`🚀 LiveKit livestream: READY`);
+  console.log(`Server running on port ${PORT} [${env.NODE_ENV}]`);
 });

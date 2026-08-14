@@ -1,5 +1,5 @@
-const LiveComment = require('../models/liveComment');
-const LiveProduct = require('../models/liveProduct');
+const LiveComment = require('../models/LiveComment');
+const LiveProduct = require('../models/LiveProduct');
 const Livestream = require('../models/Livestream');
 const { getIO } = require('../sockets/productSocket');
 
@@ -37,23 +37,25 @@ exports.addComment = async (liveId, senderId, commentText) => {
         });
 
         // Emit realtime event with optimized payload (only necessary fields for websocket)
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = liveId?.toString?.() || String(liveId);
         const commentPayload = {
-            _id: liveComment._id,
-            liveId: liveComment.liveId,
+            _id: liveComment._id?.toString?.() || liveComment._id,
+            liveId: liveComment.liveId?.toString?.() || liveComment.liveId,
             commentText: liveComment.commentText,
             createdAt: liveComment.createdAt,
             isPinned: liveComment.isPinned,
             isDeleted: false, // Always false for new comments
             sender: {
-                _id: liveComment.senderId._id,
+                _id: liveComment.senderId._id?.toString?.() || liveComment.senderId._id,
                 name: liveComment.senderId.name,
                 username: liveComment.senderId.username,
                 image: liveComment.senderId.image
             }
         };
 
-        getIO().to(`live_${liveId}`).emit('comment:added', {
-            liveId,
+        getIO().to(`live_${liveIdStr}`).emit('comment:added', {
+            liveId: liveIdStr,
             comment: commentPayload
         });
 
@@ -72,29 +74,27 @@ exports.addComment = async (liveId, senderId, commentText) => {
 };
 
 // Get comments for a livestream (used in getLiveNow and direct API)
-// Admin: xem hết (có thể dùng skip/limit cho pagination), User: limit vừa phải (50) cho performance
+// Admin: see all (can use skip/limit for pagination), User: moderate limit (50) for performance
 exports.getLiveComments = async (liveId, userRole = 'user', limit = 50, skip = 0) => {
     try {
-        // Admin can see all comments, users ONLY see non-deleted (CHỈ TRẢ VỀ CMT KO BỊ DELETE)
+        // Admin can see all comments, users ONLY see non-deleted
         const isAdmin = userRole === 'admin' || userRole === 'manager';
         const query = isAdmin
             ? { liveId }  // Admin: get all comments (including deleted)
-            : { liveId, isDeleted: false };  // User: CHỈ non-deleted (bắt buộc filter)
+            : { liveId, isDeleted: false };  // User: ONLY non-deleted
 
         // Get total count for reference
         const totalCount = await LiveComment.countDocuments(query);
 
-        // WebSocket sẽ push comments mới real-time, nên initial load không cần tất cả
+        // WebSocket will push new comments real-time, so initial load doesn't need all
         const commentsQuery = LiveComment.find(query)
             .populate('senderId', 'name username image') // Removed 'role' - not needed for display
             .populate('deletedBy', 'name username') // Populate deletedBy for admin
-            .populate('pinBy', 'name username') // Removed 'role' - not needed
-            .populate('unpinBy', 'name username') // Removed 'role' - not needed
             .sort({ isPinned: -1, createdAt: -1 }) // Pinned comments first, then by creation date
             .skip(parseInt(skip)) // Skip for pagination
             .lean(); // Use lean() early for better performance
 
-        // Apply limit (cho cả admin và user khi dùng pagination)
+        // Apply limit (for both admin and user when using pagination)
         if (limit > 0) {
             commentsQuery.limit(parseInt(limit));
         }
@@ -109,7 +109,7 @@ exports.getLiveComments = async (liveId, userRole = 'user', limit = 50, skip = 0
             totalCount: totalCount, // Total available comments
             skip: parseInt(skip),
             limit: parseInt(limit),
-            hasMore: skip + comments.length < totalCount // Còn comments để load thêm không
+            hasMore: skip + comments.length < totalCount // Are there more comments to load
         };
     } catch (error) {
         return {
@@ -140,7 +140,7 @@ exports.hideComment = async (commentId, userId, userRole) => {
             };
         }
 
-        // Check permissions - Sender hoặc Admin/Manager có thể hide comment
+        // Check permissions - Sender or Admin/Manager can hide comment
         const isAdmin = userRole === 'admin' || userRole === 'manager';
         const isSender = comment.senderId.toString() === userId.toString();
 
@@ -161,9 +161,12 @@ exports.hideComment = async (commentId, userId, userRole) => {
         await comment.populate('deletedBy', 'name username role');
 
         // Emit realtime event to all viewers
-        getIO().to(`live_${comment.liveId}`).emit('comment:deleted', {
-            liveId: comment.liveId,
-            commentId: commentId
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = comment.liveId?.toString?.() || String(comment.liveId);
+        const commentIdStr = commentId?.toString?.() || String(commentId);
+        getIO().to(`live_${liveIdStr}`).emit('comment:deleted', {
+            liveId: liveIdStr,
+            commentId: commentIdStr
         });
 
         return {
@@ -184,7 +187,7 @@ exports.hideComment = async (commentId, userId, userRole) => {
     }
 };
 
-// Pin comment (admin only) - unpins all other comments and products in the livestream
+// Pin comment (admin only) - unpins all other comments in the livestream (products are independent)
 exports.pinComment = async (commentId, liveId, userId, userRole) => {
     try {
         // Check permissions - only admin/manager can pin
@@ -218,9 +221,9 @@ exports.pinComment = async (commentId, liveId, userId, userRole) => {
             };
         }
 
-        // QUAN TRỌNG: Chỉ cho phép 1 comment được pin tại 1 thời điểm
-        // Unpin tất cả comments khác trong livestream này (đảm bảo chỉ có 1 comment pinned)
-        // Lấy danh sách comments sẽ bị unpin để emit events
+        // IMPORTANT: Only allow 1 comment to be pinned at a time
+        // Unpin all other comments in this livestream (ensure only 1 comment is pinned)
+        // Get list of comments to be unpinned to emit events
         const commentsToUnpin = await LiveComment.find({
             liveId: liveId,
             isPinned: true,
@@ -231,57 +234,46 @@ exports.pinComment = async (commentId, liveId, userId, userRole) => {
         await LiveComment.updateMany(
             {
                 liveId: liveId,
-                isPinned: true, // Chỉ unpin các comment đang được pin
+                isPinned: true, // Only unpin comments currently pinned
                 _id: { $ne: commentId } // Exclude the comment being pinned
             },
-            { isPinned: false, unpinBy: userId }
+            { isPinned: false }
         );
 
-        // Unpin tất cả products trong livestream (vì chỉ có thể pin comment HOẶC product, không thể cả 2)
-        await LiveProduct.updateMany(
-            {
-                liveId: liveId,
-                isPinned: true // Chỉ unpin các product đang được pin
-            },
-            { isPinned: false, unpinBy: userId }
-        );
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = liveId?.toString?.() || String(liveId);
+        const commentIdStr = commentId?.toString?.() || String(commentId);
 
-        // Emit events cho các comments/products bị unpin (để frontend cập nhật UI)
+        // Emit events for unpinned comments (for frontend UI update)
+        // NOTE: Pin product and pin comment work independently, without affecting each other
         commentsToUnpin.forEach(commentToUnpin => {
-            getIO().to(`live_${liveId}`).emit('comment:unpinned', {
-                liveId,
-                commentId: commentToUnpin._id,
+            const unpinnedCommentId = commentToUnpin._id?.toString?.() || commentToUnpin._id;
+            getIO().to(`live_${liveIdStr}`).emit('comment:unpinned', {
+                liveId: liveIdStr,
+                commentId: unpinnedCommentId,
                 isPinned: false
             });
         });
 
         // Pin the specified comment
         comment.isPinned = true;
-        comment.pinBy = userId;
-        comment.unpinBy = null;
         await comment.save();
 
         // Populate comment data
         await comment.populate('senderId', 'name username image role');
         await comment.populate('deletedBy', 'name username');
-        await comment.populate('pinBy', 'name username role');
 
         // Emit realtime event with optimized payload
         const pinnedPayload = {
-            _id: comment._id,
-            liveId: comment.liveId,
+            _id: comment._id?.toString?.() || comment._id,
+            liveId: comment.liveId?.toString?.() || comment.liveId,
             commentText: comment.commentText,
-            isPinned: true,
-            pinnedBy: {
-                _id: comment.pinBy._id,
-                name: comment.pinBy.name,
-                username: comment.pinBy.username
-            }
+            isPinned: true
         };
 
-        getIO().to(`live_${liveId}`).emit('comment:pinned', {
-            liveId,
-            commentId: commentId,
+        getIO().to(`live_${liveIdStr}`).emit('comment:pinned', {
+            liveId: liveIdStr,
+            commentId: commentIdStr,
             comment: pinnedPayload
         });
 
@@ -332,21 +324,21 @@ exports.removePinComment = async (commentId, liveId, userId, userRole) => {
             };
         }
 
-        // Unpin the comment (keep pinBy for statistics)
+        // Unpin the comment
         comment.isPinned = false;
-        comment.unpinBy = userId;
-        // Keep pinBy to track who originally pinned it
         await comment.save();
 
         // Populate comment data
         await comment.populate('senderId', 'name username image role');
         await comment.populate('deletedBy', 'name username');
-        await comment.populate('unpinBy', 'name username role');
 
         // Emit realtime event (minimal payload - only IDs)
-        getIO().to(`live_${liveId}`).emit('comment:unpinned', {
-            liveId,
-            commentId: commentId,
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = liveId?.toString?.() || String(liveId);
+        const commentIdStr = commentId?.toString?.() || String(commentId);
+        getIO().to(`live_${liveIdStr}`).emit('comment:unpinned', {
+            liveId: liveIdStr,
+            commentId: commentIdStr,
             isPinned: false
         });
 

@@ -3,29 +3,20 @@ const router = express.Router();
 const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
 const statisticController = require('../controllers/statisticController');
 
-// View Customer Statistics (Admin/Manager only)
-// router.get('/customers', authenticateJWT, authorizeRole(['admin']), statisticController.viewCustomerStats);
-
-// View Revenue Statistics (Admin/Manager only)
-// router.get('/revenue', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueStats);
-
-// View Order Statistics (Admin/Manager only)
-// router.get('/orders', authenticateJWT, authorizeRole(['admin']), statisticController.viewOrderStats);
-
 // View Revenue by Week (Admin/Manager only)
-router.get('/revenue/revenue-by-week', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByWeek);
+router.get('/revenue/revenue-by-week', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByWeek);
 
 // View Revenue by Month (Admin/Manager only)
-router.get('/revenue/revenue-by-month', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByMonth);
+router.get('/revenue/revenue-by-month', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByMonth);
 
 // View Revenue by Year (Admin/Manager only)
-router.get('/revenue/revenue-by-year', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByYear);
+router.get('/revenue/revenue-by-year', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByYear);
 
 // View Revenue by Day (Admin/Manager only)
-router.get('/revenue/revenue-by-day', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByDay);
+router.get('/revenue/revenue-by-day', authenticateJWT, authorizeRole(['admin', 'manager']), statisticController.viewRevenueByDay);
 
 // ========================================================================
-// 🆕 THÊM CÁC ROUTE MỚI TỪ FILE THỨ HAI (CUSTOMER + PRODUCT STATISTICS)
+// CUSTOMER + PRODUCT STATISTICS
 // ========================================================================
 const {
   getProductStatistics,
@@ -37,72 +28,74 @@ const {
 const {
   getCustomerStatistics,
   exportCustomerStatistics,
-} = require('../controllers/customerStatisticsController');
+  getTopCustomers,
+  getCustomerSparkline,
+} = statisticController;
 
 // ===============================
-// 🧍 CUSTOMER STATISTICS
+// CUSTOMER STATISTICS
 // ===============================
 router.get(
   '/customers',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getCustomerStatistics
 );
 
 router.get(
   '/customers/export',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   exportCustomerStatistics
 );
 
-// 🏆 Top Customers
+// Top Customers
 router.get(
   '/customers/top',
   authenticateJWT,
-  authorizeRole(['admin']),
-  require('../controllers/customerStatisticsController').getTopCustomers
+  authorizeRole(['admin', 'manager']),
+  getTopCustomers
 );
 
-// 📈 Sparkline Data
+// Sparkline Data
 router.get(
   '/customers/sparkline',
   authenticateJWT,
-  authorizeRole(['admin']),
-  require('../controllers/customerStatisticsController').getCustomerSparkline
+  authorizeRole(['admin', 'manager']),
+  getCustomerSparkline
 );
 
 
 // ===============================
-// 📦 PRODUCT STATISTICS
+// PRODUCT STATISTICS
 // ===============================
 router.get(
   '/products',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getProductStatistics
 );
 
 router.get(
   '/products/categories',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getCategoryDistribution
 );
 
 router.get(
   '/products/top',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   getTopProducts
 );
 
 router.get(
   '/products/export',
   authenticateJWT,
-  authorizeRole(['admin']),
+  authorizeRole(['admin', 'manager']),
   exportProductStatistics
 );
 
-// ✅ Export cuối cùng (đặt sau cùng để router hoạt động đúng)
+// Export router
 module.exports = router;

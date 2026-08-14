@@ -35,7 +35,7 @@ exports.createAccount = async (data) => {
     gender,
     dob,
     role: role || "user",
-    acc_status: "active",
+    accountStatus: "active",
   });
   const savedAccount = await account.save();
   return {
@@ -53,7 +53,7 @@ exports.createAccount = async (data) => {
         gender: savedAccount.gender,
         dob: savedAccount.dob,
         role: savedAccount.role,
-        acc_status: savedAccount.acc_status,
+        accountStatus: savedAccount.accountStatus,
       },
     },
   };
@@ -65,18 +65,18 @@ exports.getAllAccounts = async () => {
 };
 
 exports.searchAccountsService = async (queryParams) => {
-  const { q, role, acc_status, hasImage, dateFrom, dateTo } = queryParams;
+  const { q, role, accountStatus, hasImage, dateFrom, dateTo } = queryParams;
   let query = {};
   if (role) {
     query.role = role;
   }
-  if (acc_status) {
-    query.acc_status = acc_status;
+  if (accountStatus) {
+    query.accountStatus = accountStatus;
   }
   if (hasImage === "true") {
-    query.image = { $ne: "http://localhost:4000/default-pfp.jpg" };
+    query.image = { $ne: "https://i.redd.it/1to4yvt3i88c1.png" };
   } else if (hasImage === "false") {
-    query.image = "http://localhost:4000/default-pfp.jpg";
+    query.image = "https://i.redd.it/1to4yvt3i88c1.png";
   }
   if (dateFrom || dateTo) {
     query.createdAt = {};
@@ -104,7 +104,7 @@ exports.searchAccountsService = async (queryParams) => {
       { phone: { $regex: trimmedQuery, $options: "i" } },
       { address: { $regex: trimmedQuery, $options: "i" } },
       { role: { $regex: trimmedQuery, $options: "i" } },
-      { acc_status: { $regex: trimmedQuery, $options: "i" } },
+      { accountStatus: { $regex: trimmedQuery, $options: "i" } },
     ];
     if (mongoose.isValidObjectId(trimmedQuery)) {
       query.$or.push({ _id: new mongoose.Types.ObjectId(trimmedQuery) });
@@ -141,7 +141,7 @@ exports.updateAccount = async (id, data, user) => {
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.is_deleted === true) {
+  if (account.accountStatus === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot update a deleted account" },
@@ -187,14 +187,14 @@ exports.updateProfile = async (id, data, user) => {
     return { status: 404, response: { message: "Account not found" } };
   }
 
-  if (account.is_deleted === true) {
+  if (account.accountStatus === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot update a deleted account" },
     };
   }
 
-  // Không cho cập nhật trực tiếp password ở đây
+  // Do not allow updating password directly here
   const { username, email, password, ...updateData } = data;
 
   if (username || email) {
@@ -221,16 +221,16 @@ exports.updateProfile = async (id, data, user) => {
   const { password: _, ...accountObj } = account.toObject();
   return {
     status: 200,
-    response: { message: "Profile updated successfully", account: accountObj },
+    response: { message: "Profile edit successfully", account: accountObj },
   };
 };
 
-// Đổi mật khẩu
+// Change password
 exports.updatePassword = async (id, oldPassword, newPassword, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
     return {
       status: 403,
-      response: { message: "Access denied: Can only update own password" },
+      response: { message: "Access denied: Can only edit own password" },
     };
   }
 
@@ -239,14 +239,14 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
     return { status: 404, response: { message: "Account not found" } };
   }
 
-  if (account.is_deleted === true) {
+  if (account.accountStatus === "inactive") {
     return {
       status: 403,
-      response: { message: "Cannot update a deleted account" },
+      response: { message: "Cannot edit a deleted account" },
     };
   }
 
-  // Nếu không phải admin thì phải check mật khẩu cũ
+  // If not admin, check old password
   if (user.role !== "admin") {
     const isMatch = await account.comparePassword(oldPassword);
     if (!isMatch) {
@@ -257,12 +257,12 @@ exports.updatePassword = async (id, oldPassword, newPassword, user) => {
     }
   }
 
-  account.password = newPassword; // sẽ được hash bởi pre-save hook
+  account.password = newPassword; // Will be hashed by pre-save hook
   await account.save();
 
   return {
     status: 200,
-    response: { message: "Password updated successfully" },
+    response: { message: "Password edited successfully" },
   };
 };
 
@@ -270,26 +270,25 @@ exports.softDeleteAccount = async (id, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
     return {
       status: 403,
-      response: { message: "Access denied: Can only soft delete own account" },
+      response: { message: "Access denied: Can only delete own account" },
     };
   }
   const account = await Accounts.findById(id);
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.is_deleted === true) {
+  if (account.accountStatus === "inactive") {
     return {
       status: 403,
-      response: { message: "Account is already soft-deleted" },
+      response: { message: "Account is already deleted" },
     };
   }
-  account.is_deleted = true;
   account.role = "user";
-  account.acc_status = "deleted";
+  account.accountStatus = "inactive";
   await account.save();
   return {
     status: 200,
-    response: { message: "Account soft deleted successfully" },
+    response: { message: "Account deleted successfully" },
   };
 };
 
@@ -304,13 +303,13 @@ exports.disableAccount = async (id, user) => {
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.acc_status === "inactive") {
+  if (account.accountStatus === "inactive") {
     return {
       status: 403,
       response: { message: "Account is already disabled" },
     };
   }
-  account.acc_status = "inactive";
+  account.accountStatus = "inactive";
   await account.save();
   return {
     status: 200,
@@ -329,7 +328,7 @@ exports.deleteAccount = async (id, user) => {
   if (!account) {
     return { status: 404, response: { message: "Account not found" } };
   }
-  if (account.acc_status === "deleted" && account.is_deleted === true) {
+  if (account.accountStatus === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot hard delete a soft-deleted account" },
@@ -366,7 +365,7 @@ exports.editStaffInformation = async (id, data, user) => {
     };
   }
 
-  if (account.is_deleted === true) {
+  if (account.accountStatus === "inactive") {
     return {
       status: 403,
       response: { message: "Cannot edit information of a deleted account" },
@@ -418,15 +417,15 @@ exports.getAccountOrderStatistics = async (id) => {
     };
   }
 
-  const orders = await Orders.find({ acc_id: id })
-    .select('order_status finalPrice totalPrice');
+  const orders = await Orders.find({ accountId: id })
+    .select('orderStatus finalPrice totalPrice');
 
   const totalOrders = orders.length;
   const totalSpent = orders.reduce((sum, order) => {
     return sum + (order.finalPrice || order.totalPrice || 0);
   }, 0);
   const activeOrders = orders.filter(order =>
-    ['pending', 'confirmed', 'shipping'].includes(order.order_status)
+    ['pending', 'confirmed', 'shipping'].includes(order.orderStatus)
   ).length;
 
   return {

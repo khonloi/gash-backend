@@ -31,7 +31,7 @@ db.once('open', async () => {
 
     console.log(`Updated ${result2.modifiedCount} variants with null/empty variantStatus to 'active'`);
 
-    console.log('Migration completed successfully!');
+    console.log('Migration completed successfully');
   } catch (error) {
     console.error('Error during migration:', error);
   } finally {

@@ -2,13 +2,17 @@ const Orders = require("../models/Orders");
 const Accounts = require("../models/Accounts");
 const mongoose = require("mongoose");
 const OrderDetails = require("../models/OrderDetails");
+const ProductVariant = require("../models/ProductVariant");
+const Cart = require("../models/Cart");
+const voucherService = require("./voucherService");
+const { createOrderNotification, emitOrderNotification } = require("../utils/orderNotificationHelper");
 
 async function searchOrdersService(queryParams, user) {
   const {
     q,
-    acc_id,
-    order_status,
-    pay_status,
+    accountId,
+    orderStatus,
+    payStatus,
     dateFrom,
     dateTo,
     minPrice,
@@ -16,27 +20,27 @@ async function searchOrdersService(queryParams, user) {
   } = queryParams;
   let query = {};
   if (user.role !== "admin" && user.role !== "manager") {
-    query.acc_id = user.id;
-  } else if (acc_id) {
-    if (!mongoose.isValidObjectId(acc_id)) {
+    query.accountId = user.id;
+  } else if (accountId) {
+    if (!mongoose.isValidObjectId(accountId)) {
       const err = new Error("Invalid account ID");
       err.status = 400;
       throw err;
     }
-    query.acc_id = acc_id;
+    query.accountId = accountId;
   }
-  if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
+  if (orderStatus && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(orderStatus)) {
     const err = new Error("Invalid order status");
     err.status = 400;
     throw err;
   }
-  if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
+  if (payStatus && !['unpaid', 'paid'].includes(payStatus)) {
     const err = new Error("Invalid pay status");
     err.status = 400;
     throw err;
   }
-  if (order_status) query.order_status = order_status;
-  if (pay_status) query.pay_status = pay_status;
+  if (orderStatus) query.orderStatus = orderStatus;
+  if (payStatus) query.payStatus = payStatus;
   if (dateFrom || dateTo) {
     query.orderDate = {};
     if (dateFrom) {
@@ -73,20 +77,41 @@ async function searchOrdersService(queryParams, user) {
       const endDate = new Date(year, month, day, 23, 59, 59, 999);
       query.orderDate = { $gte: startDate, $lte: endDate };
     } else {
-      const matchingDetails = await OrderDetails.find().populate({
-        path: "variant_id",
-        populate: {
-          path: "productId",
-          model: "newProducts",
-          match: { productName: { $regex: trimmedQuery, $options: "i" } },
+      // FIX: Replaced full-table-scan N+1 query with a targeted aggregation pipeline.
+      // Old code: loaded ALL OrderDetails, populated variants+products in memory, then filtered in JS.
+      // New code: let MongoDB do the join and filter — only matching documents are transferred.
+      const matchingDetails = await OrderDetails.aggregate([
+        {
+          $lookup: {
+            from: 'newproductvariants',
+            localField: 'variantId',
+            foreignField: '_id',
+            as: 'variant',
+          },
         },
-      });
-      orderIdsByProduct = matchingDetails
-        .filter((d) => d.variant_id && d.variant_id.productId)
-        .map((d) => d.order_id.toString());
+        { $unwind: { path: '$variant', preserveNullAndEmptyArrays: false } },
+        {
+          $lookup: {
+            from: 'newproducts',
+            localField: 'variant.productId',
+            foreignField: '_id',
+            as: 'product',
+          },
+        },
+        { $unwind: { path: '$product', preserveNullAndEmptyArrays: false } },
+        {
+          $match: {
+            'product.productName': { $regex: trimmedQuery, $options: 'i' },
+          },
+        },
+        { $project: { orderId: 1 } },
+      ]);
+
+      orderIdsByProduct = matchingDetails.map((d) => d.orderId);
+
       query.$or = [
-        { order_status: { $regex: trimmedQuery, $options: "i" } },
-        { pay_status: { $regex: trimmedQuery, $options: "i" } },
+        { orderStatus: { $regex: trimmedQuery, $options: "i" } },
+        { payStatus: { $regex: trimmedQuery, $options: "i" } },
         { addressReceive: { $regex: trimmedQuery, $options: "i" } },
         { phone: { $regex: trimmedQuery, $options: "i" } },
       ];
@@ -94,11 +119,12 @@ async function searchOrdersService(queryParams, user) {
         query.$or.push({ _id: new mongoose.Types.ObjectId(trimmedQuery) });
       }
       if (orderIdsByProduct.length > 0) {
-        query.$or.push({ _id: { $in: orderIdsByProduct.map(id => new mongoose.Types.ObjectId(id)) } });
+        query.$or.push({ _id: { $in: orderIdsByProduct } });
       }
     }
   }
-  return await Orders.find(query).populate("acc_id", "username name");
+  return await Orders.find(query).populate("accountId", "username name");
+
 }
 
 async function getOrderByIdService(id, user) {
@@ -110,31 +136,35 @@ async function getOrderByIdService(id, user) {
 
   const order = await Orders.findById(id)
     .populate({
-      path: 'acc_id',
+      path: 'accountId',
       select: 'username name email phone address image'
     })
     .populate({
-      path: 'voucher_id',
+      path: 'voucherId',
       select: 'code voucher_name discountType discountValue discount_percentage discount_amount minOrderValue maxDiscountAmount usedCount usageLimit startDate endDate isActive'
     })
     .populate({
       path: 'orderDetails',
-      select: 'variant_id UnitPrice Quantity feedback',
+      select: 'variantId unitPrice Quantity feedback',
       populate: {
-        path: 'variant_id',
+        path: 'variantId',
         select: 'productId productColorId productSizeId variantImage',
+        // Include all variants (discontinued, inactive, etc.) so customers can view their order history
+        match: {}, // No filter - include all variants regardless of status
         populate: [
           {
             path: 'productId',
-            select: 'productName'
+            select: 'productName',
+            // Include all products (discontinued, inactive, etc.) so customers can view their order history
+            match: {} // No filter - include all products regardless of status
           },
           {
             path: 'productColorId',
-            select: 'color_name'
+            select: 'productColorName'
           },
           {
             path: 'productSizeId',
-            select: 'size_name'
+            select: 'productSizeName'
           }
         ]
       }
@@ -149,7 +179,7 @@ async function getOrderByIdService(id, user) {
   if (
     user.role !== "admin" &&
     user.role !== "manager" &&
-    order.acc_id._id.toString() !== user.id
+    order.accountId._id.toString() !== user.id
   ) {
     const err = new Error("Access denied: Can only view own order");
     err.status = 403;
@@ -170,15 +200,15 @@ async function updateOrderService(id, updateData, user) {
   if (
     user.role !== "admin" &&
     user.role !== "manager" &&
-    order.acc_id.toString() !== user.id
+    order.accountId.toString() !== user.id
   ) {
     const err = new Error("Access denied: Can only update own order");
     err.status = 403;
     throw err;
   }
 
-  const { acc_id, username, ...rest } = updateData;
-  if (acc_id || username) {
+  const { accountId, username, ...rest } = updateData;
+  if (accountId || username) {
     const err = new Error("Updating account info is not allowed");
     err.status = 400;
     throw err;
@@ -190,11 +220,11 @@ async function updateOrderService(id, updateData, user) {
   // 2. Order is cancelled AND paid AND refunded (VNPAY only - fully processed)
   // Note: Cancelled + paid orders can still be updated for refund management
   const isFinalized =
-    order.order_status === "delivered" ||
-    (order.payment_method === "VNPAY" &&
-      order.order_status === "cancelled" &&
-      order.pay_status === "paid" &&
-      order.refund_status === "refunded");
+    order.orderStatus === "delivered" ||
+    (order.paymentMethod === "VNPAY" &&
+      order.orderStatus === "cancelled" &&
+      order.payStatus === "paid" &&
+      order.refundStatus === "refunded");
 
   if (isFinalized) {
     const err = new Error("This order is finalized and cannot be updated");
@@ -211,34 +241,34 @@ async function updateOrderService(id, updateData, user) {
   };
 
   // For VNPAY orders, if unpaid, only allow cancellation
-  if (order.payment_method === "VNPAY" && order.pay_status === "unpaid") {
-    if (rest.order_status && rest.order_status !== "cancelled") {
+  if (order.paymentMethod === "VNPAY" && order.payStatus === "unpaid") {
+    if (rest.orderStatus && rest.orderStatus !== "cancelled") {
       const err = new Error("VNPAY unpaid orders can only be cancelled");
       err.status = 400;
       throw err;
     }
   }
 
-  const currentStatus = order.order_status;
+  const currentStatus = order.orderStatus;
   if (
-    rest.order_status &&
-    !allowedTransitions[currentStatus].includes(rest.order_status)
+    rest.orderStatus &&
+    !allowedTransitions[currentStatus].includes(rest.orderStatus)
   ) {
     const err = new Error(
-      `Invalid status transition: ${currentStatus} → ${rest.order_status}. Allowed: ${allowedTransitions[currentStatus].join(", ") || "none"}`
+      `Invalid status transition: ${currentStatus} → ${rest.orderStatus}. Allowed: ${allowedTransitions[currentStatus].join(", ") || "none"}`
     );
     err.status = 400;
     throw err;
   }
 
-  const newStatus = rest.order_status || order.order_status;
-  let newPayStatus = rest.pay_status || order.pay_status;
-  let newRefund = rest.refund_status || order.refund_status;
+  const newStatus = rest.orderStatus || order.orderStatus;
+  let newPayStatus = rest.payStatus || order.payStatus;
+  let newRefund = rest.refundStatus || order.refundStatus;
 
   // Validate cancelReason only when transitioning TO cancelled (not when already cancelled)
-  // If order is already cancelled and we're only updating refund_proof or refund_status, don't require cancelReason
-  const isTransitioningToCancelled = rest.order_status === "cancelled" && order.order_status !== "cancelled";
-  const isOnlyUpdatingRefund = !rest.order_status && !rest.pay_status && (rest.refund_status || rest.refund_proof);
+  // If order is already cancelled and we're only updating refundProof or refundStatus, don't require cancelReason
+  const isTransitioningToCancelled = rest.orderStatus === "cancelled" && order.orderStatus !== "cancelled";
+  const isOnlyUpdatingRefund = !rest.orderStatus && !rest.payStatus && (rest.refundStatus || rest.refundProof);
 
   if (isTransitioningToCancelled) {
     // Only require cancelReason when actually cancelling the order
@@ -259,7 +289,7 @@ async function updateOrderService(id, updateData, user) {
     newPayStatus = "paid";
   }
 
-  if (order.payment_method === "COD") {
+  if (order.paymentMethod === "COD") {
     if (
       ["pending", "confirmed", "shipping"].includes(newStatus) &&
       newPayStatus === "paid"
@@ -270,7 +300,7 @@ async function updateOrderService(id, updateData, user) {
     }
   }
 
-  if (order.payment_method === "VNPAY") {
+  if (order.paymentMethod === "VNPAY") {
     if (newStatus !== "cancelled" && newPayStatus !== "paid") {
       const err = new Error("VNPAY orders must remain paid unless cancelled");
       err.status = 400;
@@ -278,13 +308,13 @@ async function updateOrderService(id, updateData, user) {
     }
 
     if (newStatus === "cancelled" && newPayStatus === "paid") {
-      if (order.refund_status === "pending_refund") {
+      if (order.refundStatus === "pending_refund") {
         const keys = Object.keys(rest);
-        const allowedKeys = ["refund_status", "refund_proof", "cancelReason"];
+        const allowedKeys = ["refundStatus", "refundProof", "cancelReason"];
         const hasInvalidUpdate = keys.some((k) => !allowedKeys.includes(k));
         if (hasInvalidUpdate) {
           const err = new Error(
-            "When order is cancelled+paid (pending_refund), only refund_status, refund_proof, or cancelReason can be updated"
+            "When order is cancelled+paid (pending_refund), only refundStatus, refundProof, or cancelReason can be updated"
           );
           err.status = 400;
           throw err;
@@ -299,7 +329,7 @@ async function updateOrderService(id, updateData, user) {
       } else {
         if (!["pending_refund", "refunded"].includes(newRefund)) {
           const err = new Error(
-            "Cancelled paid VNPAY orders must have refund_status = pending_refund or refunded"
+            "Cancelled paid VNPAY orders must have refundStatus = pending_refund or refunded"
           );
           err.status = 400;
           throw err;
@@ -308,14 +338,14 @@ async function updateOrderService(id, updateData, user) {
     }
   }
 
-  rest.pay_status = newPayStatus;
-  rest.refund_status = newRefund;
+  rest.payStatus = newPayStatus;
+  rest.refundStatus = newRefund;
 
   const updatedOrder = await Orders.findByIdAndUpdate(
     id,
     { ...rest },
     { new: true, runValidators: true }
-  ).populate("acc_id", "username name phone");
+  ).populate("accountId", "username name phone");
 
   return updatedOrder;
 }
@@ -330,13 +360,13 @@ async function deleteOrderService(id, user) {
   if (
     user.role !== "admin" &&
     user.role !== "manager" &&
-    order.acc_id.toString() !== user.id
+    order.accountId.toString() !== user.id
   ) {
     const err = new Error("Access denied: Can only delete own order");
     err.status = 403;
     throw err;
   }
-  if (order.order_status !== 'pending') {
+  if (order.orderStatus !== 'pending') {
     const err = new Error("Orders can only be deleted when the status is pending");
     err.status = 400;
     throw err;
@@ -347,45 +377,49 @@ async function deleteOrderService(id, user) {
 
 async function getAllOrdersForAdminService() {
   const orders = await Orders.find()
-    .populate("acc_id", "username name email phone")
+    .populate("accountId", "username name email phone")
     .sort({ orderDate: -1 });
 
   return orders;
 }
 
-async function getUserOrdersService(acc_id) {
-  if (!mongoose.isValidObjectId(acc_id)) {
+async function getUserOrdersService(accountId) {
+  if (!mongoose.isValidObjectId(accountId)) {
     const err = new Error("Invalid account ID");
     err.status = 400;
     throw err;
   }
-  const orders = await Orders.find({ acc_id })
+  const orders = await Orders.find({ accountId })
     .populate({
-      path: 'acc_id',
+      path: 'accountId',
       select: 'username name email phone address image'
     })
     .populate({
-      path: 'voucher_id',
+      path: 'voucherId',
       select: 'code voucher_name discountType discountValue discount_percentage discount_amount'
     })
     .populate({
       path: 'orderDetails',
-      select: 'variant_id UnitPrice Quantity feedback',
+      select: 'variantId unitPrice Quantity feedback',
       populate: {
-        path: 'variant_id',
+        path: 'variantId',
         select: 'productId productColorId productSizeId variantImage',
+        // Include all variants (discontinued, inactive, etc.) so customers can view their order history
+        match: {}, // No filter - include all variants regardless of status
         populate: [
           {
             path: 'productId',
-            select: 'productName'
+            select: 'productName',
+            // Include all products (discontinued, inactive, etc.) so customers can view their order history
+            match: {} // No filter - include all products regardless of status
           },
           {
             path: 'productColorId',
-            select: 'color_name'
+            select: 'productColorName'
           },
           {
             path: 'productSizeId',
-            select: 'size_name'
+            select: 'productSizeName'
           }
         ]
       }
@@ -398,7 +432,453 @@ module.exports = {
   getAllOrdersForAdminService,
   searchOrdersService,
   getOrderByIdService,
-  updateOrderService,
   deleteOrderService,
-  getUserOrdersService
+  getUserOrdersService,
+  checkoutService,
+  exportBillService,
+  cancelOrderService
 };
+
+async function checkoutService(userId, body, io) {
+  const { name, addressReceive, phone, totalPrice, paymentMethod, voucherCode, items } = body;
+
+  if (!name || !addressReceive || !phone || !totalPrice || !paymentMethod || !items || !Array.isArray(items) || items.length === 0) {
+    const error = new Error('Missing required fields: name, addressReceive, phone, totalPrice, paymentMethod, items');
+    error.status = 400;
+    throw error;
+  }
+  if (!['COD', 'VNPAY'].includes(paymentMethod)) {
+    const error = new Error('Invalid payment method');
+    error.status = 400;
+    throw error;
+  }
+
+  const account = await Accounts.findById(userId);
+  if (!account) {
+    const error = new Error('Account not found');
+    error.status = 404;
+    throw error;
+  }
+
+  let voucher = null;
+  let discountAmount = 0;
+  let finalPrice = totalPrice;
+
+  if (voucherCode) {
+    try {
+      const result = await voucherService.applyVoucherLogic(voucherCode, totalPrice);
+      if (result.success && result.data) {
+        voucher = result.data.voucher;
+        discountAmount = result.data.discountAmount;
+        finalPrice = result.data.finalPrice;
+      }
+    } catch (err) {
+      // Ignore voucher error, keep original price
+    }
+  }
+
+  const newOrder = new Orders({
+    accountId: userId,
+    name,
+    addressReceive,
+    phone,
+    totalPrice,
+    voucherId: voucher ? voucher._id : null,
+    discountAmount,
+    finalPrice,
+    orderStatus: 'pending',
+    payStatus: 'unpaid',
+    paymentMethod,
+  });
+
+  const savedOrder = await newOrder.save();
+
+  if (voucher) {
+    voucher.usedCount += 1;
+    await voucher.save();
+  }
+
+  const orderDetailsToSave = [];
+  const boughtVariantIds = [];
+  for (const item of items) {
+    const { variantId, unitPrice, Quantity, feedback_details } = item;
+
+    if (!variantId || !unitPrice || !Quantity) {
+      const err = new Error('Invalid item in order details'); err.status = 400; throw err;
+    }
+    if (unitPrice < 0) {
+      const err = new Error('Unit price cannot be negative'); err.status = 400; throw err;
+    }
+    if (Quantity < 1) {
+      const err = new Error('Quantity must be at least 1'); err.status = 400; throw err;
+    }
+    if (feedback_details && feedback_details.length > 500) {
+      const err = new Error('Feedback cannot exceed 500 characters'); err.status = 400; throw err;
+    }
+
+    const updatedVariant = await ProductVariant.findOneAndUpdate(
+      { _id: variantId, stockQuantity: { $gte: Quantity } },
+      [
+        {
+          $set: {
+            stockQuantity: { $subtract: ['$stockQuantity', Quantity] },
+            variantStatus: {
+              $cond: [
+                { $eq: [{ $subtract: ['$stockQuantity', Quantity] }, 0] },
+                'inactive',
+                '$variantStatus',
+              ],
+            },
+          },
+        },
+      ],
+      { new: true }
+    );
+
+    if (!updatedVariant) {
+      await savedOrder.deleteOne();
+      if (voucher) {
+        voucher.usedCount -= 1;
+        await voucher.save();
+      }
+      const err = new Error(`Insufficient stock for variant ${variantId}. The item may have just sold out.`);
+      err.status = 400;
+      throw err;
+    }
+
+    const orderDetail = new OrderDetails({
+      orderId: savedOrder._id,
+      variantId,
+      unitPrice,
+      Quantity,
+    });
+    const savedDetail = await orderDetail.save();
+    orderDetailsToSave.push(savedDetail);
+    boughtVariantIds.push(variantId.toString());
+  }
+
+  const orderDetailsIds = orderDetailsToSave.map(detail => detail._id);
+  savedOrder.orderDetails = orderDetailsIds;
+  await savedOrder.save();
+
+  const objectUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+  const objectVariantIds = boughtVariantIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
+  await Cart.deleteMany({
+    accountId: objectUserId,
+    variantId: { $in: objectVariantIds },
+  });
+
+  if (io && userId) {
+    io.to(`user_${userId.toString()}`).emit('cartUpdated', {
+      action: 'cleared',
+      accountId: userId
+    });
+
+    const populatedOrder = await Orders.findById(savedOrder._id)
+      .populate('accountId', 'username name email phone')
+      .lean();
+
+    const formattedOrderForSocket = {
+      _id: populatedOrder._id,
+      accountId: populatedOrder.accountId,
+      name: populatedOrder.name,
+      addressReceive: populatedOrder.addressReceive,
+      phone: populatedOrder.phone,
+      totalPrice: populatedOrder.totalPrice,
+      voucherId: populatedOrder.voucherId,
+      discountAmount: populatedOrder.discountAmount,
+      finalPrice: populatedOrder.finalPrice,
+      orderStatus: populatedOrder.orderStatus,
+      payStatus: populatedOrder.payStatus,
+      paymentMethod: populatedOrder.paymentMethod,
+      orderDate: populatedOrder.orderDate,
+      createdAt: populatedOrder.createdAt,
+      updatedAt: populatedOrder.updatedAt || populatedOrder.createdAt,
+      orderDetails: orderDetailsIds
+    };
+
+    io.to(`user_${userId.toString()}`).emit('orderUpdated', {
+      userId: userId.toString(),
+      order: formattedOrderForSocket
+    });
+    io.to('order_admins').emit('orderUpdated', {
+      userId: userId.toString(),
+      order: formattedOrderForSocket
+    });
+
+    try {
+      const notification = await createOrderNotification({
+        userId: userId.toString(),
+        orderId: savedOrder._id.toString(),
+        orderStatus: savedOrder.orderStatus,
+        payStatus: savedOrder.payStatus,
+        messageType: 'created'
+      });
+      emitOrderNotification(io, notification, userId.toString());
+    } catch (notifError) {
+      console.error('Error creating order creation notification:', notifError);
+    }
+  }
+
+  return {
+    order: {
+      _id: savedOrder._id,
+      accountId: savedOrder.accountId,
+      addressReceive: savedOrder.addressReceive,
+      phone: savedOrder.phone,
+      totalPrice: savedOrder.totalPrice,
+      voucherId: savedOrder.voucherId,
+      discountAmount: savedOrder.discountAmount,
+      finalPrice: savedOrder.finalPrice,
+      orderStatus: savedOrder.orderStatus,
+      payStatus: savedOrder.payStatus,
+      paymentMethod: savedOrder.paymentMethod,
+      orderDate: savedOrder.orderDate,
+      orderDetails: orderDetailsIds
+    },
+    orderDetails: orderDetailsToSave.map(detail => ({
+      _id: detail._id,
+      orderId: detail.orderId,
+      variantId: detail.variantId,
+      unitPrice: detail.unitPrice,
+      Quantity: detail.Quantity,
+      feedback: detail.feedback
+    }))
+  };
+}
+
+async function exportBillService(orderId, user) {
+  if (!mongoose.isValidObjectId(orderId)) {
+    const error = new Error('Invalid order ID');
+    error.status = 400;
+    throw error;
+  }
+
+  const order = await Orders.findById(orderId)
+    .populate({
+      path: 'accountId',
+      select: 'username name email phone address'
+    })
+    .populate({
+      path: 'voucherId',
+      select: 'code voucher_name discountType discountValue discount_percentage discount_amount minOrderValue maxDiscountAmount usedCount usageLimit startDate endDate isActive'
+    });
+
+  if (!order) {
+    const error = new Error('Order not found');
+    error.status = 404;
+    throw error;
+  }
+
+  if (user.role !== 'admin' && user.role !== 'manager' &&
+    order.accountId._id.toString() !== user.id) {
+    const error = new Error('Access denied. You can only view your own order bills.');
+    error.status = 403;
+    throw error;
+  }
+
+  const orderDetails = await OrderDetails.find({ orderId: orderId })
+    .populate({
+      path: 'variantId',
+      select: 'productId productColorId productSizeId variantImage',
+      populate: [
+        { path: 'productId', select: 'productName' },
+        { path: 'productColorId', select: 'productColorName' },
+        { path: 'productSizeId', select: 'productSizeName' }
+      ]
+    });
+
+  const billData = {
+    order: {
+      orderId: order._id,
+      orderDate: order.orderDate,
+      orderStatus: order.orderStatus,
+      totalPrice: order.totalPrice,
+      finalPrice: order.finalPrice,
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.payStatus,
+      shippingAddress: order.addressReceive
+    },
+    customer: {
+      name: order.name,
+      email: order.accountId.email,
+      phone: order.phone,
+      address: order.addressReceive
+    },
+    items: orderDetails.map(detail => ({
+      productName: detail.variantId?.productId?.productName || 'N/A',
+      color: detail.variantId?.productColorId?.productColorName || 'N/A',
+      size: detail.variantId?.productSizeId?.productSizeName || 'N/A',
+      image: detail.variantId?.variantImage || null,
+      unitPrice: detail.unitPrice,
+      quantity: detail.Quantity,
+      totalPrice: detail.unitPrice * detail.Quantity
+    })),
+    discount: order.voucherId ? {
+      voucher: {
+        _id: order.voucherId._id,
+        code: order.voucherId.code,
+        voucher_name: order.voucherId.voucher_name,
+        discountType: order.voucherId.discountType,
+        discountValue: order.voucherId.discountValue,
+        discount_percentage: order.voucherId.discount_percentage,
+        discount_amount: order.voucherId.discount_amount,
+        minOrderValue: order.voucherId.minOrderValue,
+        maxDiscountAmount: order.voucherId.maxDiscountAmount,
+        usedCount: order.voucherId.usedCount,
+        usageLimit: order.voucherId.usageLimit,
+        startDate: order.voucherId.startDate,
+        endDate: order.voucherId.endDate,
+        isActive: order.voucherId.isActive
+      },
+      appliedDiscount: order.discountAmount || 0
+    } : {
+      voucher: null,
+      appliedDiscount: 0
+    },
+    summary: {
+      subtotal: orderDetails.reduce((sum, detail) => sum + (detail.unitPrice * detail.Quantity), 0),
+      discount: order.discountAmount || 0,
+      totalAmount: order.finalPrice
+    }
+  };
+
+  return billData;
+}
+
+const Voucher = require("../models/Voucher");
+
+async function cancelOrderService(orderId, cancelReason, user, io) {
+  if (cancelReason && (typeof cancelReason !== 'string' || cancelReason.length > 500)) {
+    const error = new Error('Invalid cancel reason. Must be a string up to 500 characters.');
+    error.status = 400;
+    throw error;
+  }
+
+  const order = await getOrderByIdService(orderId, user);
+  if (!order) {
+    const error = new Error('Order not found');
+    error.status = 404;
+    throw error;
+  }
+
+  if (order.orderStatus !== 'pending') {
+    const error = new Error('Only pending orders can be cancelled');
+    error.status = 400;
+    throw error;
+  }
+
+  if (order.voucherId) {
+    const voucher = await Voucher.findById(order.voucherId);
+    if (voucher && voucher.usedCount > 0) {
+      voucher.usedCount -= 1;
+      await voucher.save();
+    }
+  }
+
+  if (order.orderDetails && order.orderDetails.length > 0) {
+    for (const orderDetail of order.orderDetails) {
+      if (orderDetail.variantId) {
+        const variant = await ProductVariant.findById(orderDetail.variantId._id || orderDetail.variantId);
+        if (variant) {
+          const oldStockQuantity = variant.stockQuantity;
+          variant.stockQuantity += orderDetail.Quantity;
+          if (oldStockQuantity === 0 && variant.stockQuantity > 0) {
+            variant.variantStatus = 'active';
+          }
+          await variant.save();
+        }
+      }
+    }
+  }
+
+  let updateData = {
+    orderStatus: 'cancelled',
+    cancelReason
+  };
+
+  if (order.paymentMethod === 'VNPAY' && order.payStatus === 'paid') {
+    updateData.refundStatus = 'pending_refund';
+  }
+
+  const updatedOrder = await updateOrderService(
+    orderId,
+    updateData,
+    user
+  );
+
+  if (io && updatedOrder && updatedOrder.accountId) {
+    const userId = typeof updatedOrder.accountId === 'object' && updatedOrder.accountId._id
+      ? updatedOrder.accountId._id.toString()
+      : updatedOrder.accountId.toString();
+
+    const formattedOrder = {
+      ...updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder,
+      accountId: updatedOrder.accountId,
+      name: updatedOrder.name,
+      orderDate: updatedOrder.orderDate,
+      updatedAt: updatedOrder.updatedAt || updatedOrder.createdAt,
+      createdAt: updatedOrder.createdAt,
+      cancelReason: updatedOrder.cancelReason
+    };
+
+    io.to(`user_${userId}`).emit('orderUpdated', { userId, order: formattedOrder });
+    io.to('order_admins').emit('orderUpdated', { userId, order: formattedOrder });
+
+    try {
+      const notification = await createOrderNotification({
+        userId,
+        orderId: orderId.toString(),
+        orderStatus: updatedOrder.orderStatus,
+        payStatus: updatedOrder.payStatus,
+        messageType: 'cancelled'
+      });
+      setTimeout(() => {
+        emitOrderNotification(io, notification, userId);
+      }, 100);
+    } catch (notifError) {
+      console.error('Error creating order cancellation notification:', notifError);
+    }
+  }
+
+  return {
+    updatedOrder,
+    voucherRefunded: order.voucherId ? true : false,
+    stockRestored: order.orderDetails ? order.orderDetails.length : 0
+  };
+}
+
+async function getOrderByIdForUserService(orderId, user) {
+  if (!mongoose.isValidObjectId(orderId)) {
+    const error = new Error('Invalid order ID');
+    error.status = 400;
+    throw error;
+  }
+
+  const order = await Orders.findById(orderId)
+    .populate('accountId', 'username name')
+    .populate('voucherId', 'code discountType discountValue');
+
+  if (!order) {
+    const error = new Error('Order not found');
+    error.status = 404;
+    throw error;
+  }
+
+  if (user.role !== 'admin' && user.role !== 'manager' && order.accountId._id.toString() !== user.id) {
+    const error = new Error('Access denied: Can only view own order');
+    error.status = 403;
+    throw error;
+  }
+
+  return order;
+}
+
+async function getOrderForEmitService(orderId) {
+  return await Orders.findById(orderId)
+    .populate('accountId', 'username name email phone')
+    .lean();
+}
+
+module.exports.getOrderByIdForUserService = getOrderByIdForUserService;
+module.exports.getOrderForEmitService = getOrderForEmitService;

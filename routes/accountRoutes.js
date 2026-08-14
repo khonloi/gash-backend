@@ -21,10 +21,10 @@ router.get('/:id', authenticateJWT, accountController.getAccountById);
 // Update an account (Admin or self)
 router.put('/:id', authenticateJWT, accountController.updateAccount);
 
-// Cập nhật thông tin profile (Admin hoặc chính chủ)
+// Update profile information (Admin or self)
 router.put('/change-profile/:id', authenticateJWT, accountController.updateProfile);
 
-// Đổi mật khẩu (Admin hoặc chính chủ)
+// Change password (Admin or self)
 router.put('/change-password/:id', authenticateJWT, accountController.updatePassword);
 
 // Soft delete an account (Admin or self)

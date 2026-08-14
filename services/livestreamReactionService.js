@@ -48,20 +48,22 @@ exports.addReaction = async (liveId, userId, reactionType) => {
         });
 
         // Emit realtime event with optimized payload (only necessary fields)
+        // Ensure liveId is string for consistent comparison
+        const liveIdStr = liveId?.toString?.() || String(liveId);
         const reactionPayload = {
-            _id: liveReaction._id,
+            _id: liveReaction._id?.toString?.() || liveReaction._id,
             reactionType: liveReaction.reactionType,
             createdAt: liveReaction.createdAt,
             user: {
-                _id: liveReaction.userId._id,
+                _id: liveReaction.userId._id?.toString?.() || liveReaction.userId._id,
                 name: liveReaction.userId.name,
                 username: liveReaction.userId.username,
                 image: liveReaction.userId.image
             }
         };
 
-        getIO().to(`live_${liveId}`).emit('reaction:added', {
-            liveId,
+        getIO().to(`live_${liveIdStr}`).emit('reaction:added', {
+            liveId: liveIdStr,
             reaction: reactionPayload
         });
 
@@ -79,9 +81,9 @@ exports.addReaction = async (liveId, userId, reactionType) => {
     }
 };
 
-// Get reaction counts for a livestream (User và Admin dùng chung - vì reaction ko có xóa)
-// Trả về counts (aggregate) thay vì array đầy đủ để tối ưu performance
-// Real-time updates qua WebSocket nên không cần pagination/limit
+// Get reaction counts for a livestream (Shared by User and Admin - since reactions are not deleted)
+// Returns counts (aggregate) instead of full array for performance optimization
+// Real-time updates via WebSocket so no pagination/limit needed
 exports.getLiveReactions = async (liveId) => {
     try {
         // Get reaction counts by type (aggregate)

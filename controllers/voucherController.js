@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 // Get all vouchers for admin
 exports.getAllVouchersForAdmin = async (req, res) => {
     try {
-        // Check phân quyền
+        // Check authorization
         if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
@@ -31,7 +31,7 @@ exports.getAllVouchersForAdmin = async (req, res) => {
 // Create voucher for admin
 exports.createVoucher = async (req, res) => {
     try {
-        // Check phân quyền
+        // Check authorization
         if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
@@ -79,7 +79,7 @@ exports.createVoucher = async (req, res) => {
 // Update voucher for admin
 exports.updateVoucher = async (req, res) => {
     try {
-        // Check phân quyền
+        // Check authorization
         if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
@@ -136,7 +136,7 @@ exports.updateVoucher = async (req, res) => {
 // Disable voucher for admin (soft delete)
 exports.deleteVoucher = async (req, res) => {
     try {
-        // Check phân quyền
+        // Check authorization
         if (!req.user || !['admin', 'manager'].includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
@@ -166,23 +166,23 @@ exports.deleteVoucher = async (req, res) => {
 };
 
 // Get all vouchers for user (only active)
-// exports.getAllVouchersForUser = async (req, res) => {
-//     try {
-//         const result = await voucherService.getAllVouchersForUser();
+exports.getAllVouchersForUser = async (req, res) => {
+    try {
+        const result = await voucherService.getAllVouchersForUser();
 
-//         if (result.success) {
-//             res.status(200).json(result);
-//         } else {
-//             res.status(400).json(result);
-//         }
-//     } catch (error) {
-//         res.status(500).json({
-//             success: false,
-//             message: 'Internal server error',
-//             error: error.message
-//         });
-//     }
-// };
+        if (result.success) {
+            res.status(200).json(result);
+        } else {
+            res.status(400).json(result);
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
 
 // Preview voucher (calculate discount without applying)
 exports.previewVoucher = async (req, res) => {

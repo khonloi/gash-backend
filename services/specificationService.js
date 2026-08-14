@@ -1,16 +1,16 @@
 const ProductSizes = require("../models/ProductSizes");
 const ProductColors = require("../models/ProductColors");
-const newProductImage = require("../models/newProductImage");
-const newProductVariant = require('../models/newProductVariant');
+const ProductImage = require("../models/ProductImage");
+const ProductVariant = require('../models/ProductVariant');
 const mongoose = require("mongoose");
 
 // --- Product Colors ---
 // Create product color
-exports.createProductColorService = async ({ color_name }) => {
+exports.createProductColorService = async ({ productColorName }) => {
     try {
         // 1. Input validation
         // 1.0 Check for blank/empty required fields
-        if (!color_name || color_name.trim() === '') {
+        if (!productColorName || productColorName.trim() === '') {
             return {
                 success: false,
                 message: 'Please fill in all required fields',
@@ -19,33 +19,33 @@ exports.createProductColorService = async ({ color_name }) => {
         }
 
         // 1.1 Color name validation
-        const trimmedName = color_name.trim();
-        const colorNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9 ]+$/;
+        const trimmedName = productColorName.trim();
+        const productColorNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9 ]+$/;
 
         if (
             trimmedName.length < 2 ||
             trimmedName.length > 30 ||
-            !colorNamePattern.test(trimmedName) ||
-            /^[0-9]+$/.test(trimmedName) // không cho phép chỉ toàn số
+            !productColorNamePattern.test(trimmedName) ||
+            /^[0-9]+$/.test(trimmedName) // do not allow numbers only
         ) {
             return {
                 success: false,
                 message: 'Color name must be 2 to 30 characters long, contain letters or numbers, and not be only numbers',
-                error: 'INVALID_COLOR_NAME_FORMAT'
+                error: 'INVALID_productColorName_FORMAT'
             };
         }
 
 
-        // 2. Check duplicate - chỉ check với các color chưa bị xóa (isDeleted: false)
-        const existingColor = await ProductColors.findOne({ color_name: trimmedName, isDeleted: false });
+        // 2. Check duplicate - only check active colors (isDeleted: false)
+        const existingColor = await ProductColors.findOne({ productColorName: trimmedName, isDeleted: false });
         if (existingColor) {
             return {
                 success: false,
                 message: 'Color name already exists',
-                error: 'DUPLICATE_COLOR_NAME'
+                error: 'DUPLICATE_productColorName'
             };
         }
-        const color = new ProductColors({ color_name: trimmedName });
+        const color = new ProductColors({ productColorName: trimmedName });
         const savedColor = await color.save();
 
         return {
@@ -65,7 +65,7 @@ exports.createProductColorService = async ({ color_name }) => {
             return {
                 success: false,
                 message: 'Color name already exists',
-                error: 'DUPLICATE_COLOR_NAME'
+                error: 'DUPLICATE_productColorName'
             };
         }
         return {
@@ -128,7 +128,7 @@ exports.getProductColorByIdService = async (id) => {
 };
 
 // Update product color
-exports.updateProductColorService = async (id, { color_name }) => {
+exports.updateProductColorService = async (id, { productColorName }) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return {
@@ -158,7 +158,7 @@ exports.updateProductColorService = async (id, { color_name }) => {
 
         // 1. Input validation
         // 1.0 Check for blank/empty field when provided
-        if (color_name !== undefined && (!color_name || color_name.trim() === '')) {
+        if (productColorName !== undefined && (!productColorName || productColorName.trim() === '')) {
             return {
                 success: false,
                 message: 'Please fill in all required fields',
@@ -167,30 +167,30 @@ exports.updateProductColorService = async (id, { color_name }) => {
         }
 
         // 1.1 Color name validation
-        if (color_name) {
-            const trimmedName = color_name.trim();
-            const colorNamePattern = /^[a-zA-ZÀ-ỹ0-9]+$/;
-            if (trimmedName.length < 2 || trimmedName.length > 30 || !colorNamePattern.test(trimmedName)) {
+        if (productColorName) {
+            const trimmedName = productColorName.trim();
+            const productColorNamePattern = /^[a-zA-ZÀ-ỹ0-9]+(?: [a-zA-ZÀ-ỹ0-9]+)*$/;
+            if (trimmedName.length < 2 || trimmedName.length > 30 || !productColorNamePattern.test(trimmedName)) {
                 return {
                     success: false,
                     message: 'Color name must be 2 to 30 characters long and contain only letters and numbers',
-                    error: 'INVALID_COLOR_NAME_FORMAT'
+                    error: 'INVALID_productColorName_FORMAT'
                 };
             }
 
             // 2. Check duplicate
-            const existingColor = await ProductColors.findOne({ color_name: trimmedName, _id: { $ne: id }, isDeleted: false });
+            const existingColor = await ProductColors.findOne({ productColorName: trimmedName, _id: { $ne: id }, isDeleted: false });
             if (existingColor) {
                 return {
                     success: false,
                     message: 'Color name already exists',
-                    error: 'DUPLICATE_COLOR_NAME'
+                    error: 'DUPLICATE_productColorName'
                 };
             }
         }
 
         // 3. Prevent update if any variant is using this color
-        const inUseCount = await newProductVariant.countDocuments({ productColorId: id });
+        const inUseCount = await ProductVariant.countDocuments({ productColorId: id });
         if (inUseCount > 0) {
             return {
                 success: false,
@@ -199,7 +199,7 @@ exports.updateProductColorService = async (id, { color_name }) => {
             };
         }
 
-        const updateData = color_name ? { color_name: color_name.trim() } : { color_name };
+        const updateData = productColorName ? { productColorName: productColorName.trim() } : { productColorName };
         const updatedColor = await ProductColors.findByIdAndUpdate(
             id,
             updateData,
@@ -257,7 +257,7 @@ exports.deleteProductColorService = async (id) => {
         }
 
         // Prevent delete if any variant is using this color
-        const inUseCount = await newProductVariant.countDocuments({ productColorId: id });
+        const inUseCount = await ProductVariant.countDocuments({ productColorId: id });
         if (inUseCount > 0) {
             return {
                 success: false,
@@ -275,7 +275,7 @@ exports.deleteProductColorService = async (id) => {
             message: 'Product color deleted successfully',
             data: {
                 id: color._id,
-                color_name: color.color_name,
+                productColorName: color.productColorName,
                 status: 'deleted',
                 updatedAt: color.updatedAt
             }
@@ -291,11 +291,11 @@ exports.deleteProductColorService = async (id) => {
 
 // --- Product Sizes ---
 // Create product size
-exports.createProductSizeService = async ({ size_name }) => {
+exports.createProductSizeService = async ({ productSizeName }) => {
     try {
         // 1. Input validation
         // 1.0 Check for blank/empty required fields
-        if (!size_name || size_name.trim() === '') {
+        if (!productSizeName || productSizeName.trim() === '') {
             return {
                 success: false,
                 message: 'Please fill in all required fields',
@@ -303,25 +303,25 @@ exports.createProductSizeService = async ({ size_name }) => {
             };
         }
 
-        const trimmedName = size_name.trim();
-        const sizeNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9 ]+$/;
+        const trimmedName = productSizeName.trim();
+        const productSizeNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9 ]+$/;
 
         if (
             trimmedName.length < 1 ||
             trimmedName.length > 12 ||
-            !sizeNamePattern.test(trimmedName)
+            !productSizeNamePattern.test(trimmedName)
         ) {
             return {
                 success: false,
                 message: 'Size name must be 1 to 12 characters long and contain only letters and numbers',
-                error: 'INVALID_SIZE_NAME_FORMAT'
+                error: 'INVALID_productSizeName_FORMAT'
             };
         }
 
-        // Nếu chỉ là số → kiểm tra giới hạn
+        // If numbers only -> check boundaries
         if (/^[0-9]+$/.test(trimmedName)) {
             const numericValue = parseInt(trimmedName, 10);
-            if (numericValue < 20 || numericValue > 60) { // ngưỡng an toàn chung
+            if (numericValue < 20 || numericValue > 60) { // general safe threshold
                 return {
                     success: false,
                     message: 'Numeric size must be between 20 and 60',
@@ -330,16 +330,16 @@ exports.createProductSizeService = async ({ size_name }) => {
             }
         }
 
-        // 2. Check duplicate - chỉ check với các size chưa bị xóa (isDeleted: false)
-        const existingSize = await ProductSizes.findOne({ size_name: trimmedName, isDeleted: false });
+        // 2. Check duplicate - only check active sizes (isDeleted: false)
+        const existingSize = await ProductSizes.findOne({ productSizeName: trimmedName, isDeleted: false });
         if (existingSize) {
             return {
                 success: false,
                 message: 'Size name already exists',
-                error: 'DUPLICATE_SIZE_NAME'
+                error: 'DUPLICATE_productSizeName'
             };
         }
-        const size = new ProductSizes({ size_name: trimmedName });
+        const size = new ProductSizes({ productSizeName: trimmedName });
         const savedSize = await size.save();
 
         return {
@@ -359,7 +359,7 @@ exports.createProductSizeService = async ({ size_name }) => {
             return {
                 success: false,
                 message: 'Size name already exists',
-                error: 'DUPLICATE_SIZE_NAME'
+                error: 'DUPLICATE_productSizeName'
             };
         }
         return {
@@ -422,7 +422,7 @@ exports.getProductSizeByIdService = async (id) => {
 };
 
 // Update product size
-exports.updateProductSizeService = async (id, { size_name }) => {
+exports.updateProductSizeService = async (id, { productSizeName }) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return {
@@ -452,7 +452,7 @@ exports.updateProductSizeService = async (id, { size_name }) => {
 
         // 1. Input validation
         // 1.0 Check for blank/empty field when provided
-        if (size_name !== undefined && (!size_name || size_name.trim() === '')) {
+        if (productSizeName !== undefined && (!productSizeName || productSizeName.trim() === '')) {
             return {
                 success: false,
                 message: 'Please fill in all required fields',
@@ -461,30 +461,30 @@ exports.updateProductSizeService = async (id, { size_name }) => {
         }
 
         // 1.1 Size name validation
-        if (size_name) {
-            const trimmedName = size_name.trim();
-            const sizeNamePattern = /^[a-zA-ZÀ-ỹ0-9]+$/;
-            if (trimmedName.length < 1 || trimmedName.length > 12 || !sizeNamePattern.test(trimmedName)) {
+        if (productSizeName) {
+            const trimmedName = productSizeName.trim();
+            const productSizeNamePattern = /^[a-zA-ZÀ-ỹ0-9]+$/;
+            if (trimmedName.length < 1 || trimmedName.length > 12 || !productSizeNamePattern.test(trimmedName)) {
                 return {
                     success: false,
                     message: 'Size name must be 1 to 12 characters long and contain only letters and numbers',
-                    error: 'INVALID_SIZE_NAME_FORMAT'
+                    error: 'INVALID_productSizeName_FORMAT'
                 };
             }
 
             // 2. Check duplicate
-            const existingSize = await ProductSizes.findOne({ size_name: trimmedName, _id: { $ne: id }, isDeleted: false });
+            const existingSize = await ProductSizes.findOne({ productSizeName: trimmedName, _id: { $ne: id }, isDeleted: false });
             if (existingSize) {
                 return {
                     success: false,
                     message: 'Size name already exists',
-                    error: 'DUPLICATE_SIZE_NAME'
+                    error: 'DUPLICATE_productSizeName'
                 };
             }
         }
 
         // 3. Prevent update if any variant is using this size
-        const inUseCount = await newProductVariant.countDocuments({ productSizeId: id });
+        const inUseCount = await ProductVariant.countDocuments({ productSizeId: id });
         if (inUseCount > 0) {
             return {
                 success: false,
@@ -493,7 +493,7 @@ exports.updateProductSizeService = async (id, { size_name }) => {
             };
         }
 
-        const updateData = size_name ? { size_name: size_name.trim() } : { size_name };
+        const updateData = productSizeName ? { productSizeName: productSizeName.trim() } : { productSizeName };
         const updatedSize = await ProductSizes.findByIdAndUpdate(
             id,
             updateData,
@@ -551,7 +551,7 @@ exports.deleteProductSizeService = async (id) => {
         }
 
         // Prevent delete if any variant is using this size
-        const inUseCount = await newProductVariant.countDocuments({ productSizeId: id });
+        const inUseCount = await ProductVariant.countDocuments({ productSizeId: id });
         if (inUseCount > 0) {
             return {
                 success: false,
@@ -569,7 +569,7 @@ exports.deleteProductSizeService = async (id) => {
             message: 'Product size deleted successfully',
             data: {
                 id: size._id,
-                size_name: size.size_name,
+                productSizeName: size.productSizeName,
                 status: 'deleted',
                 updatedAt: size.updatedAt
             }
@@ -597,15 +597,15 @@ exports.searchSpecificationsService = async ({ q, type }) => {
                 query.$or = [{ _id: new mongoose.Types.ObjectId(trimmedQuery) }];
             } else {
                 if (type === "color") {
-                    query.color_name = { $regex: trimmedQuery, $options: "i" };
+                    query.productColorName = { $regex: trimmedQuery, $options: "i" };
                 } else if (type === "size") {
-                    query.size_name = { $regex: trimmedQuery, $options: "i" };
+                    query.productSizeName = { $regex: trimmedQuery, $options: "i" };
                 } else if (type === "image") {
                     query.imageUrl = { $regex: trimmedQuery, $options: "i" };
                 } else {
                     query.$or = [
-                        { color_name: { $regex: trimmedQuery, $options: "i" } },
-                        { size_name: { $regex: trimmedQuery, $options: "i" } },
+                        { productColorName: { $regex: trimmedQuery, $options: "i" } },
+                        { productSizeName: { $regex: trimmedQuery, $options: "i" } },
                         { imageUrl: { $regex: trimmedQuery, $options: "i" } }
                     ];
                 }
@@ -621,7 +621,7 @@ exports.searchSpecificationsService = async ({ q, type }) => {
             results.push(...sizes.map(size => ({ ...size.toObject(), type: "size" })));
         }
         if (!type || type === "image") {
-            const images = await newProductImage.find(query).populate("productId", "productName");
+            const images = await ProductImage.find(query).populate("productId", "productName");
             results.push(...images.map(image => ({ ...image.toObject(), type: "image" })));
         }
         return {

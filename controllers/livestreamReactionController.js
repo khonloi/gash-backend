@@ -1,5 +1,6 @@
 const livestreamReactionService = require('../services/livestreamReactionService');
 const mongoose = require('mongoose');
+const Livestream = require('../models/Livestream');
 
 // Add reaction to livestream
 exports.addReaction = async (req, res) => {
@@ -21,6 +22,22 @@ exports.addReaction = async (req, res) => {
             });
         }
 
+        // Check if livestream exists and is not ended
+        const livestream = await Livestream.findById(liveId);
+        if (!livestream) {
+            return res.status(404).json({
+                success: false,
+                message: 'Livestream not found'
+            });
+        }
+
+        if (livestream.status === 'ended') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot react to ended livestream'
+            });
+        }
+
         const result = await livestreamReactionService.addReaction(liveId, userId, reactionType);
 
         if (result.success) {
@@ -37,9 +54,9 @@ exports.addReaction = async (req, res) => {
     }
 };
 
-// Get reaction counts for a livestream (User và Admin dùng chung)
-// Trả về counts (aggregate) thay vì array - tối ưu performance
-// Real-time updates qua WebSocket nên không cần pagination/limit
+// Get reaction counts for a livestream (Shared by User and Admin)
+// Returns counts (aggregate) instead of array - performance optimization
+// Real-time updates via WebSocket so no pagination/limit needed
 exports.getLiveReactions = async (req, res) => {
     try {
         const { liveId } = req.params;

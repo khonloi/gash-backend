@@ -1,117 +1,152 @@
-const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
-const bodyParser = require('body-parser');
-const cookieParser = require('cookie-parser');
-const path = require('path');
+const express = require("express");
+const cors = require("cors");
+const morgan = require("morgan");
+const helmet = require("helmet");
+const compression = require("compression");
+const cookieParser = require("cookie-parser");
+const path = require("path");
+const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
 
 // ===== CORS =====
+// Shared origin list — also used in server.js for Socket.IO.
+// Update this list to add new allowed origins.
+const CORS_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://gash-pi.vercel.app",
+];
+module.exports.CORS_ORIGINS = CORS_ORIGINS;
+
 app.use(
   cors({
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://gash-pi.vercel.app',
-    ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    origin: CORS_ORIGINS,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
-  })
+  }),
 );
 
-// ===== Middleware =====
-// Only log in development or when DEBUG=true (reduce log spam in production)
-if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
-  app.use(morgan('dev'));
+// ===== Security Headers (helmet) =====
+// crossOriginResourcePolicy relaxed to allow images/assets served from Cloudinary CDN.
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false, // managed by the frontend (Vite/Vercel)
+  }),
+);
+
+// ===== Response Compression =====
+app.use(compression());
+
+// ===== Request Logging =====
+if (process.env.NODE_ENV === "development" || process.env.DEBUG === "true") {
+  app.use(morgan("dev"));
 } else {
-  // Only log errors in production
-  app.use(morgan('combined', {
-    skip: (req, res) => res.statusCode < 400
-  }));
+  // Production: only log errors (4xx/5xx)
+  app.use(morgan("combined", { skip: (req, res) => res.statusCode < 400 }));
 }
-// Tăng body size limit cho upload nhiều file
-app.use(express.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: false, limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// ===== Body Parsing =====
+// NOTE: body-parser is not needed — express.json() and express.urlencoded() cover everything
+// since Express 4.16+. 50MB limit is required for multi-file uploads.
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ===== Static Files =====
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ===== Routes =====
-const authRoutes = require('./routes/authRoutes');
-const accountsRoutes = require('./routes/accountRoutes');
-const categoriesRoutes = require('./routes/categoryRoutes');
-const ordersRoutes = require('./routes/orderRoutes');
-const orderDetailsRoutes = require('./routes/orderDetailRoutes');
-const favoritesRoutes = require('./routes/favoriteRoutes');
-const productSpecRoutes = require('./routes/specificationRoutes');
-const statisticsRoutes = require('./routes/statisticRoutes');
-const uploadRoutes = require('./routes/uploadRoutes');
-const voucherRoutes = require('./routes/voucherRoutes');
-const conversationRoutes = require('./routes/conversationRoutes');
-const messageRoutes = require('./routes/messageRoutes');
-const billRoutes = require('./routes/billRoutes');
-const feedbackRoutes = require('./routes/feedbackRoutes');
+// All route imports and mounts are consolidated here, grouped by domain.
 
-// ===== Mount routes =====
-app.use('/auth', authRoutes);
-app.use('/accounts', accountsRoutes);
-app.use('/categories', categoriesRoutes);
-app.use('/orders', ordersRoutes);
-app.use('/order-details', orderDetailsRoutes);
-app.use('/favorites', favoritesRoutes);
-app.use('/specifications', productSpecRoutes);
-app.use('/statistics', statisticsRoutes);
-app.use('/upload', uploadRoutes);
-app.use('/vouchers', voucherRoutes);
-app.use('/conversations', conversationRoutes);
-app.use('/conversations', messageRoutes);
-app.use('/bills', billRoutes);
-app.use('/messages', messageRoutes);
-app.use('/feedback', feedbackRoutes);
+// -- Auth & Accounts --
+const authRoutes = require("./routes/authRoutes");
+const accountsRoutes = require("./routes/accountRoutes");
+const passkeyRoutes = require("./routes/passkeyRoutes");
 
-// ===== New Product and Variant Routes =====
-const newProductRoutes = require('./routes/newProductRoutes');
-const newProductVariantRoutes = require('./routes/newProductVariantRoutes');
-app.use('/new-products', newProductRoutes);
-app.use('/new-variants', newProductVariantRoutes);
+// -- Catalog --
+const productRoutes = require("./routes/productRoutes");
+const productSpecRoutes = require("./routes/specificationRoutes");
+const favoritesRoutes = require("./routes/favoriteRoutes");
 
-// ===== New Stat Routes =====
-const newStatisticsRoutes = require('./routes/statRoutes');
-app.use('/new-statistics', newStatisticsRoutes);
+// -- Cart & Orders --
+const cartRoutes = require("./routes/cartRoutes");
+const ordersRoutes = require("./routes/orderRoutes");
+const billRoutes = require("./routes/billRoutes");
+const voucherRoutes = require("./routes/voucherRoutes");
+const feedbackRoutes = require("./routes/feedbackRoutes");
 
-// ===== New Cart Routes =====
-const newCartRoutes = require('./routes/newCartRoutes');
-app.use('/new-carts', newCartRoutes);
+// -- Messaging --
+const conversationRoutes = require("./routes/conversationRoutes");
+const messageRoutes = require("./routes/messageRoutes");
 
-// ===== Notification Routes =====
-const notificationRoutes = require('./routes/notificationRoutes');
-app.use('/notifications', notificationRoutes);
+// -- Notifications --
+const notificationRoutes = require("./routes/notificationRoutes");
 
-// ===== Livestream Routes =====
-const livestreamRoutes = require('./routes/livestreamRoutes');
-const livestreamProductRoutes = require('./routes/livestreamProductRoutes');
-const livestreamCommentRoutes = require('./routes/livestreamCommentRoutes');
-const livestreamReactionRoutes = require('./routes/livestreamReactionRoutes');
-app.use('/livestream', livestreamRoutes);
-app.use('/livestream-products', livestreamProductRoutes);
-app.use('/livestream-comments', livestreamCommentRoutes);
-app.use('/livestream-reactions', livestreamReactionRoutes);
+// -- Livestream --
+const livestreamRoutes = require("./routes/livestreamRoutes");
 
-// ===== 404 handler =====
-app.use((req, res, next) => {
-  res.status(404).json({ success: false, message: 'Not Found' });
+// -- Statistics --
+const statisticsRoutes = require("./routes/statisticRoutes");
+// -- Upload --
+const uploadRoutes = require("./routes/uploadRoutes");
+
+// ===== Mount Routes =====
+
+// Auth & Accounts
+app.use("/auth", authRoutes);
+app.use("/accounts", accountsRoutes);
+app.use("/passkeys", passkeyRoutes);
+
+// Catalog
+app.use("/categories", productSpecRoutes);
+app.use("/products", productRoutes);
+app.use("/variants", productRoutes);
+app.use("/specifications", productSpecRoutes);
+app.use("/favorites", favoritesRoutes);
+
+// Cart & Orders
+app.use("/carts", cartRoutes);
+app.use("/orders", ordersRoutes);
+app.use("/order-details", ordersRoutes);
+app.use("/bills", billRoutes);
+app.use("/vouchers", voucherRoutes);
+app.use("/feedback", feedbackRoutes);
+
+// Messaging
+// NOTE: messageRoutes mounted ONLY on /messages — previously it was erroneously
+// also mounted on /conversations (shadowing conversationRoutes).
+app.use("/conversations", conversationRoutes);
+app.use("/messages", messageRoutes);
+
+// Notifications
+app.use("/notifications", notificationRoutes);
+
+// Livestream
+app.use("/livestream", livestreamRoutes);
+app.use("/livestream-products", livestreamRoutes);
+app.use("/livestream-comments", livestreamRoutes);
+app.use("/livestream-reactions", livestreamRoutes);
+
+// Statistics
+app.use("/statistics", statisticsRoutes);
+
+// Upload
+app.use("/upload", uploadRoutes);
+
+// ===== 404 Handler =====
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: "Route not found" });
 });
 
-// ===== Error handler =====
-app.use((err, req, res, next) => {
-  console.error('🔥 Error:', err.message);
-  res
-    .status(err.status || 500)
-    .json({ success: false, message: err.message });
-});
+// ===== Global Error Handler =====
+// Handles AppError, Mongoose errors, JWT errors, and unexpected crashes.
+// Must be the LAST middleware — Express identifies error handlers by their 4-argument signature.
+app.use(errorHandler);
 
 module.exports = app;

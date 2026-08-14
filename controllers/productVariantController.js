@@ -1,4 +1,4 @@
-const productVariantService = require('../services/newProductVariantService');
+const productVariantService = require('../services/productVariantService');
 
 const createProductVariant = async (req, res) => {
   try {
@@ -7,15 +7,16 @@ const createProductVariant = async (req, res) => {
     const wasUpdated = result.wasUpdated || false;
 
     // Emit real-time event based on whether it was updated or created
+    const io = req.app.get('io');
     if (wasUpdated) {
-      req.app.get('io').to('variantRoom').emit('variantUpdated', variant);
+      if (io) io.to('variantRoom').emit('variantUpdated', variant);
       res.status(200).json({
         success: true,
         data: variant,
         message: `Product variant updated successfully. Stock quantity: ${result.oldStockQuantity} + ${req.body.stockQuantity} = ${result.newStockQuantity}`
       });
     } else {
-      req.app.get('io').to('variantRoom').emit('variantCreated', variant);
+      if (io) io.to('variantRoom').emit('variantCreated', variant);
       res.status(201).json({
         success: true,
         data: variant,
@@ -67,7 +68,8 @@ const updateProductVariant = async (req, res) => {
   try {
     const variant = await productVariantService.updateProductVariant(req.params.id, req.body);
     // Emit real-time event
-    req.app.get('io').to('variantRoom').emit('variantUpdated', variant);
+    const io = req.app.get('io');
+    if (io) io.to('variantRoom').emit('variantUpdated', variant);
     res.status(200).json({
       success: true,
       data: variant,
@@ -85,7 +87,8 @@ const deleteProductVariant = async (req, res) => {
   try {
     await productVariantService.deleteProductVariant(req.params.id);
     // Emit real-time event
-    req.app.get('io').to('variantRoom').emit('variantDeleted', req.params.id);
+    const io = req.app.get('io');
+    if (io) io.to('variantRoom').emit('variantDeleted', req.params.id);
     res.status(200).json({
       success: true,
       message: 'Product variant discontinued successfully'
@@ -101,10 +104,13 @@ const deleteProductVariant = async (req, res) => {
 const bulkCreateProductVariants = async (req, res) => {
   try {
     const variants = await productVariantService.bulkCreateProductVariants(req.body);
-    // Emit real-time events for each created variant
-    variants.forEach(variant => {
-      req.app.get('io').to('variantRoom').emit('variantCreated', variant);
-    });
+    // Emit real-time events for each updated variant
+    const io = req.app.get('io');
+    if (io) {
+      variants.forEach(v => {
+        io.to('variantRoom').emit('variantCreated', v);
+      });
+    }
     res.status(201).json({
       success: true,
       data: variants,

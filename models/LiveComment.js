@@ -37,16 +37,6 @@ const LiveCommentSchema = new Schema(
     isPinned: {
       type: Boolean,
       default: false
-    },
-    pinBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'Accounts',
-      default: null
-    },
-    unpinBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'Accounts',
-      default: null
     }
   }
 );

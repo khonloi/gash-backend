@@ -1,5 +1,5 @@
-const LiveProduct = require('../models/liveProduct');
-const LiveComment = require('../models/liveComment');
+const LiveProduct = require('../models/LiveProduct');
+const LiveComment = require('../models/LiveComment');
 const Livestream = require('../models/Livestream');
 const { getIO } = require('../sockets/productSocket');
 
@@ -46,31 +46,42 @@ exports.addProductToLive = async (liveId, productId, userId = null) => {
             populate: [
                 {
                     path: 'categoryId',
-                    select: 'cat_name'
+                    select: 'categoryName'
                 },
                 {
                     path: 'productImageIds',
                     select: 'imageUrl isMain',
-                    options: { limit: 1, sort: { isMain: -1 } } // Only first/main image
+                    options: { limit: 5, sort: { isMain: -1 } } // Get up to 5 images, main image first
                 }
             ]
         });
 
         // Emit realtime event with optimized payload
+        // Include productImageIds with isMain flag for proper image display
         const productPayload = {
             _id: liveProduct._id,
             liveId: liveProduct.liveId,
-            productId: liveProduct.productId._id,
+            productId: {
+                _id: liveProduct.productId._id,
+                productName: liveProduct.productId.productName,
+                categoryId: liveProduct.productId.categoryId ? {
+                    categoryName: liveProduct.productId.categoryId.categoryName
+                } : null,
+                // Send full productImageIds array with isMain flag
+                productImageIds: liveProduct.productId.productImageIds || []
+            },
             addedAt: liveProduct.addedAt,
             isPinned: liveProduct.isPinned,
             isActive: true,
+            addBy: liveProduct.addBy,
+            // Keep backward compatibility with old frontend code
             product: {
                 productName: liveProduct.productId.productName,
                 category: liveProduct.productId.categoryId ? {
-                    cat_name: liveProduct.productId.categoryId.cat_name
+                    categoryName: liveProduct.productId.categoryId.categoryName
                 } : null,
                 image: liveProduct.productId.productImageIds && liveProduct.productId.productImageIds.length > 0
-                    ? liveProduct.productId.productImageIds[0].imageUrl
+                    ? (liveProduct.productId.productImageIds.find(img => img.isMain === true)?.imageUrl || liveProduct.productId.productImageIds[0].imageUrl)
                     : null
             }
         };
@@ -136,7 +147,7 @@ exports.removeProductFromLive = async (liveId, productId, userId = null) => {
                 });
                 await anyProduct.populate({
                     path: 'productId.categoryId',
-                    select: 'cat_name'
+                    select: 'categoryName'
                 });
 
                 return {
@@ -161,7 +172,7 @@ exports.removeProductFromLive = async (liveId, productId, userId = null) => {
 
         return {
             success: true,
-            message: 'Product removed from livestream successfully!',
+            message: 'Product removed from livestream successfully',
             data: liveProduct
         };
     } catch (error) {
@@ -188,7 +199,7 @@ exports.getActiveLiveProducts = async (liveId) => {
                 populate: [
                     {
                         path: 'categoryId',
-                        select: 'cat_name'
+                        select: 'categoryName'
                     },
                     {
                         path: 'productImageIds',
@@ -200,11 +211,11 @@ exports.getActiveLiveProducts = async (liveId) => {
                         populate: [
                             {
                                 path: 'productColorId',
-                                select: 'color_name color_code'
+                                select: 'productColorName color_code'
                             },
                             {
                                 path: 'productSizeId',
-                                select: 'size_name'
+                                select: 'productSizeName'
                             }
                         ],
                         select: 'variantImage variantPrice stockQuantity variantStatus'
@@ -241,13 +252,13 @@ exports.getAllLiveProductsForAdmin = async (liveId) => {
                 path: 'productId',
                 select: 'productName description categoryId productImageIds productVariantIds',
                 populate: [
-                    { path: 'categoryId', select: 'cat_name' },
+                    { path: 'categoryId', select: 'categoryName' },
                     { path: 'productImageIds', select: 'imageUrl isMain', limit: 5 },
                     {
                         path: 'productVariantIds',
                         populate: [
-                            { path: 'productColorId', select: 'color_name color_code' },
-                            { path: 'productSizeId', select: 'size_name' }
+                            { path: 'productColorId', select: 'productColorName color_code' },
+                            { path: 'productSizeId', select: 'productSizeName' }
                         ],
                         select: 'variantImage variantPrice stockQuantity variantStatus'
                     }
@@ -271,7 +282,7 @@ exports.getAllLiveProductsForAdmin = async (liveId) => {
     }
 };
 
-// Pin product (admin only) - unpins all other products and comments in the livestream
+// Pin product (admin only) - unpins all other products in the livestream (comments are independent)
 exports.pinProduct = async (productId, liveId, userId, userRole) => {
     try {
         // Check permissions - only admin/manager can pin
@@ -305,9 +316,9 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
             };
         }
 
-        // QUAN TRỌNG: Chỉ cho phép 1 product được pin tại 1 thời điểm
-        // Unpin tất cả products khác trong livestream này (đảm bảo chỉ có 1 product pinned)
-        // Lấy danh sách products sẽ bị unpin để emit events
+        // IMPORTANT: Only allow 1 product to be pinned at a time
+        // Unpin all other products in this livestream (ensure only 1 product is pinned)
+        // Get list of products to be unpinned to emit events
         const productsToUnpin = await LiveProduct.find({
             liveId: liveId,
             isPinned: true,
@@ -318,41 +329,19 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
         await LiveProduct.updateMany(
             {
                 liveId: liveId,
-                isPinned: true, // Chỉ unpin các product đang được pin
+                isPinned: true, // Only unpin products currently pinned
                 _id: { $ne: productId } // Exclude the product being pinned
             },
             { isPinned: false, removeBy: userId }
         );
 
-        // Unpin tất cả comments trong livestream (vì chỉ có thể pin comment HOẶC product, không thể cả 2)
-        const commentsToUnpin = await LiveComment.find({
-            liveId: liveId,
-            isPinned: true,
-            isDeleted: false
-        }).select('_id');
-
-        await LiveComment.updateMany(
-            {
-                liveId: liveId,
-                isPinned: true // Chỉ unpin các comment đang được pin
-            },
-            { isPinned: false, removeBy: userId }
-        );
-
-        // Emit events cho các products/comments bị unpin (để frontend cập nhật UI)
+        // Emit events for unpinned products (for frontend UI update)
+        // NOTE: Pin product and pin comment work independently, without affecting each other
         productsToUnpin.forEach(liveProductToUnpin => {
             getIO().to(`live_${liveId}`).emit('product:unpinned', {
                 liveId,
                 productId: liveProductToUnpin.productId,
                 liveProductId: liveProductToUnpin._id,
-                isPinned: false
-            });
-        });
-
-        commentsToUnpin.forEach(commentToUnpin => {
-            getIO().to(`live_${liveId}`).emit('comment:unpinned', {
-                liveId,
-                commentId: commentToUnpin._id,
                 isPinned: false
             });
         });
@@ -370,7 +359,7 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
             populate: [
                 {
                     path: 'categoryId',
-                    select: 'cat_name'
+                    select: 'categoryName'
                 },
                 {
                     path: 'productImageIds',
@@ -381,11 +370,11 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
                     populate: [
                         {
                             path: 'productColorId',
-                            select: 'color_name color_code'
+                            select: 'productColorName color_code'
                         },
                         {
                             path: 'productSizeId',
-                            select: 'size_name'
+                            select: 'productSizeName'
                         }
                     ],
                     select: 'variantImage variantPrice stockQuantity variantStatus'
@@ -394,18 +383,30 @@ exports.pinProduct = async (productId, liveId, userId, userRole) => {
         });
 
         // Emit realtime event with optimized payload (only essential fields)
+        // Include productImageIds with isMain flag for proper image display
         const pinnedPayload = {
             _id: liveProduct._id,
             liveId: liveProduct.liveId,
-            productId: liveProduct.productId._id,
+            productId: {
+                _id: liveProduct.productId._id,
+                productName: liveProduct.productId.productName,
+                categoryId: liveProduct.productId.categoryId ? {
+                    categoryName: liveProduct.productId.categoryId.categoryName
+                } : null,
+                // Send full productImageIds array with isMain flag
+                productImageIds: liveProduct.productId.productImageIds || []
+            },
             isPinned: true,
+            addedAt: liveProduct.addedAt,
+            addBy: liveProduct.addBy,
+            // Keep backward compatibility with old frontend code
             product: {
                 productName: liveProduct.productId.productName,
                 category: liveProduct.productId.categoryId ? {
-                    cat_name: liveProduct.productId.categoryId.cat_name
+                    categoryName: liveProduct.productId.categoryId.categoryName
                 } : null,
                 image: liveProduct.productId.productImageIds && liveProduct.productId.productImageIds.length > 0
-                    ? liveProduct.productId.productImageIds[0].imageUrl
+                    ? (liveProduct.productId.productImageIds.find(img => img.isMain === true)?.imageUrl || liveProduct.productId.productImageIds[0].imageUrl)
                     : null
             },
             pinnedBy: {
@@ -481,7 +482,7 @@ exports.removePinProduct = async (productId, liveId, userId, userRole) => {
             populate: [
                 {
                     path: 'categoryId',
-                    select: 'cat_name'
+                    select: 'categoryName'
                 },
                 {
                     path: 'productImageIds',
@@ -492,11 +493,11 @@ exports.removePinProduct = async (productId, liveId, userId, userRole) => {
                     populate: [
                         {
                             path: 'productColorId',
-                            select: 'color_name color_code'
+                            select: 'productColorName color_code'
                         },
                         {
                             path: 'productSizeId',
-                            select: 'size_name'
+                            select: 'productSizeName'
                         }
                     ],
                     select: 'variantImage variantPrice stockQuantity variantStatus'

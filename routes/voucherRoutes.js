@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getAllVouchersForAdmin, createVoucher, updateVoucher, deleteVoucher, getAllVouchersForUser, previewVoucher } = require('../controllers/voucherController');
-const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
+const { authenticateJWT } = require('../middleware/authMiddleware');
 
 
 //get all vouchers for admin
@@ -15,7 +15,7 @@ router.delete('/disable-voucher/:id', authenticateJWT, deleteVoucher);
 
 
 //get all vouchers for users
-// router.get('/get-all', getAllVouchersForUser);
+router.get('/get-all', getAllVouchersForUser);
 //preview voucher 
 router.post('/apply-voucher', previewVoucher);
 

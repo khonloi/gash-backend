@@ -1,5 +1,6 @@
 const livestreamCommentService = require('../services/livestreamCommentService');
 const mongoose = require('mongoose');
+const Livestream = require('../models/Livestream');
 
 // Add comment to livestream
 exports.addComment = async (req, res) => {
@@ -14,10 +15,33 @@ exports.addComment = async (req, res) => {
             });
         }
 
+        if (commentText.length > 500) {
+            return res.status(400).json({
+                success: false,
+                message: 'Comment text cannot exceed 500 characters'
+            });
+        }
+
         if (!mongoose.Types.ObjectId.isValid(liveId)) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid liveId format'
+            });
+        }
+
+        // Check if livestream exists and is not ended
+        const livestream = await Livestream.findById(liveId);
+        if (!livestream) {
+            return res.status(404).json({
+                success: false,
+                message: 'Livestream not found'
+            });
+        }
+
+        if (livestream.status === 'ended') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot comment on ended livestream'
             });
         }
 
@@ -39,14 +63,14 @@ exports.addComment = async (req, res) => {
 
 // Get comments for a livestream (User - only non-deleted comments)
 // Supports pagination with query params: ?skip=0&limit=50
-// Default limit: 50 (tối ưu performance cho user)
-// Max limit: 100 (bảo vệ server khỏi request quá lớn)
+// Default limit: 50 (performance optimization for user)
+// Max limit: 100 (protect server from overly large requests)
 exports.getUserLiveComments = async (req, res) => {
     try {
         const { liveId } = req.params;
         const skip = parseInt(req.query.skip) || 0;
         let limit = parseInt(req.query.limit) || 50; // Default 50 for users
-        const MAX_LIMIT = 100; // Max limit để bảo vệ performance
+        const MAX_LIMIT = 100; // Max limit for performance safety
 
         if (!liveId) {
             return res.status(400).json({
@@ -70,23 +94,23 @@ exports.getUserLiveComments = async (req, res) => {
             });
         }
 
-        // Enforce max limit để tối ưu performance
+        // Enforce max limit for performance optimization
         if (limit > MAX_LIMIT) {
             limit = MAX_LIMIT;
         }
 
-        // Users can ONLY see non-deleted comments (CHỈ TRẢ VỀ CMT KO BỊ DELETE)
+        // Users can ONLY see non-deleted comments
         const result = await livestreamCommentService.getLiveComments(liveId, 'user', limit, skip);
 
         if (result.success) {
-            // Double-check: Filter out any deleted comments (phòng ngừa - đảm bảo 100% không có deleted)
+            // Double-check: Filter out any deleted comments (precautionary - ensure 100% no deleted)
             const filteredComments = result.data.filter(comment => !comment.isDeleted);
 
             res.status(200).json({
                 ...result,
-                data: filteredComments, // CHỈ TRẢ VỀ CMT KO BỊ DELETE
+                data: filteredComments, // ONLY RETURN NON-DELETED COMMENTS
                 count: filteredComments.length // Update count after filter
-                // totalCount giữ nguyên từ service (đã đúng với query isDeleted: false)
+                // totalCount remains from service (already correct for isDeleted: false)
             });
         } else {
             res.status(400).json(result);
@@ -102,14 +126,14 @@ exports.getUserLiveComments = async (req, res) => {
 
 // Get comments for a livestream (Admin - all comments, including deleted)
 // Supports pagination with query params: ?skip=0&limit=200
-// Default limit: 200 (tối ưu cho admin dashboard - xem được nhiều hơn user)
-// Max limit: 500 (bảo vệ server khỏi request quá lớn, có thể load more nếu cần)
+// Default limit: 200 (optimized for admin dashboard - see more than user)
+// Max limit: 500 (protect server from overly large requests, can load more if needed)
 exports.getAdminLiveComments = async (req, res) => {
     try {
         const { liveId } = req.params;
         const skip = parseInt(req.query.skip) || 0;
-        let limit = parseInt(req.query.limit) || 200; // Default 200 for admin (nhiều hơn user)
-        const MAX_LIMIT = 500; // Max limit để bảo vệ performance
+        let limit = parseInt(req.query.limit) || 200; // Default 200 for admin (more than user)
+        const MAX_LIMIT = 500; // Max limit for performance safety
 
         if (!liveId) {
             return res.status(400).json({
@@ -133,7 +157,7 @@ exports.getAdminLiveComments = async (req, res) => {
             });
         }
 
-        // Enforce max limit để tối ưu performance (admin có thể load more nếu cần)
+        // Enforce max limit for performance optimization (admin can load more if needed)
         if (limit > MAX_LIMIT) {
             limit = MAX_LIMIT;
         }

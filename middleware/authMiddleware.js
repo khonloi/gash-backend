@@ -1,12 +1,26 @@
 const jwt = require('jsonwebtoken');
 const Accounts = require('../models/Accounts');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+// Fail fast if JWT_SECRET is not set — a hardcoded fallback is a critical security risk.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set. Server cannot start securely.');
+  process.exit(1);
+}
 
-const authenticateJWT = async (req, res, next) => {
+/**
+ * Core JWT authentication logic — shared by all auth middlewares.
+ * Verifies the Bearer token, loads the account, checks active status.
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ * @param {string} [contextLabel] - Label for error messages (e.g. 'LiveKit', 'Livestream')
+ */
+const _verifyJWT = async (req, res, next, contextLabel = '') => {
+  const prefix = contextLabel ? `${contextLabel} ` : '';
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Authentication token required' });
+    return res.status(401).json({ message: `${prefix}Authentication token required` });
   }
 
   const token = authHeader.split(' ')[1];
@@ -14,109 +28,93 @@ const authenticateJWT = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     const account = await Accounts.findById(decoded.id).select('-password');
     if (!account) {
-      return res.status(401).json({ message: 'Invalid token: Account not found' });
+      return res.status(401).json({ message: `${prefix}Invalid token: Account not found` });
     }
-    if (account.acc_status !== 'active') {
-      return res.status(403).json({ message: 'Account is inactive or suspended' });
+    if (account.accountStatus !== 'active') {
+      return res.status(403).json({ message: `Account is inactive or suspended` });
     }
-    req.user = { id: account._id.toString(), username: account.username, role: account.role }; // Convert ObjectId to string
+    req.user = {
+      id: account._id.toString(),
+      username: account.username,
+      role: account.role,
+    };
     next();
   } catch (error) {
-    res.status(401).json({ message: 'Invalid or expired token', error: error.message });
+    res.status(401).json({ message: `${prefix}Invalid or expired token`, error: error.message });
   }
 };
 
+/**
+ * Standard JWT authentication middleware.
+ */
+const authenticateJWT = (req, res, next) => _verifyJWT(req, res, next);
+
+/**
+ * Optional authentication — attaches req.user if a valid token is present,
+ * but does NOT reject the request if no token is provided.
+ */
+const optionalAuth = (req, res, next) => {
+  if (req.headers.authorization) {
+    return _verifyJWT(req, res, next);
+  }
+  next();
+};
+
+/**
+ * Authorization middleware — restricts access to specific roles.
+ * Must be used AFTER authenticateJWT.
+ * @param {string[]} roles - Array of allowed roles (e.g. ['admin', 'manager'])
+ */
 const authorizeRole = (roles) => (req, res, next) => {
-  if (!roles.includes(req.user.role)) {
+  if (!req.user || !roles.includes(req.user.role)) {
     return res.status(403).json({ message: 'Access denied: Not authorized' });
   }
   next();
 };
 
-// Middleware tùy chỉnh để xử lý authentication optional
-const optionalAuth = (req, res, next) => {
-  // Nếu có token thì authenticate, nếu không thì bỏ qua
-  if (req.headers.authorization) {
-    return authenticateJWT(req, res, next);
-  }
-  // Không có token thì tiếp tục mà không có req.user
-  next();
-};
-
-// LiveKit specific middleware (ADDED)
+/**
+ * LiveKit-specific authentication. Same as authenticateJWT but sets req.livekit = true.
+ * Kept separate to allow LiveKit-specific logic in controllers if needed.
+ */
 const authenticateLiveKit = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'LiveKit authentication token required' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const account = await Accounts.findById(decoded.id).select('-password');
-
-    if (!account) {
-      return res.status(401).json({ message: 'Invalid LiveKit token: Account not found' });
-    }
-
-    if (account.acc_status !== 'active') {
-      return res.status(403).json({ message: 'Account is inactive for LiveKit access' });
-    }
-
-    req.user = { id: account._id.toString(), username: account.username, role: account.role };
-    req.livekit = true; // Flag for LiveKit requests
-    next();
-  } catch (error) {
-    res.status(401).json({ message: 'Invalid or expired LiveKit token', error: error.message });
-  }
+  await _verifyJWT(req, res, (err) => {
+    if (!err) req.livekit = true;
+    next(err);
+  }, 'LiveKit');
 };
 
-// Performance monitoring middleware (ADDED)
-const monitorPerformance = (req, res, next) => {
-  const startTime = Date.now();
+/**
+ * Livestream-specific authentication. Same as authenticateJWT but sets req.livestream = true.
+ */
+const authenticateLivestream = async (req, res, next) => {
+  await _verifyJWT(req, res, (err) => {
+    if (!err) req.livestream = true;
+    next(err);
+  }, 'Livestream');
+};
 
+/**
+ * Performance monitoring middleware — logs method, path, status code, and duration.
+ * Only active in development or when DEBUG=true.
+ */
+const monitorPerformance = (req, res, next) => {
+  if (process.env.NODE_ENV !== 'development' && process.env.DEBUG !== 'true') {
+    return next();
+  }
+  const startTime = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - startTime;
-    console.log(`📊 ${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
+    console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
   });
-
   next();
-};
-
-// Livestream specific middleware (ADDED)
-const authenticateLivestream = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Livestream authentication token required' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const account = await Accounts.findById(decoded.id).select('-password');
-
-    if (!account) {
-      return res.status(401).json({ message: 'Invalid livestream token: Account not found' });
-    }
-
-    if (account.acc_status !== 'active') {
-      return res.status(403).json({ message: 'Account is inactive for livestream access' });
-    }
-
-    req.user = { id: account._id.toString(), username: account.username, role: account.role };
-    req.livestream = true; // Flag for livestream requests
-    next();
-  } catch (error) {
-    res.status(401).json({ message: 'Invalid or expired livestream token', error: error.message });
-  }
 };
 
 module.exports = {
+  JWT_SECRET, // Still exported for services that directly sign tokens (authService, passkeyService)
   authenticateJWT,
   authorizeRole,
-  JWT_SECRET,
   optionalAuth,
-  authenticateLiveKit, // ADDED
-  monitorPerformance, // ADDED
-  authenticateLivestream // ADDED
+  authenticateLiveKit,
+  authenticateLivestream,
+  monitorPerformance,
 };

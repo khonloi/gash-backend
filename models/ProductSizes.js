@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const ProductSizesSchema = new mongoose.Schema({
-  size_name: {
+  productSizeName: {
     type: String,
     required: [true, 'Size name is required'],
     minlength: [1, 'Size name must be at least 1 character'],

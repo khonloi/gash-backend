@@ -1,21 +1,24 @@
-const newCartService = require('../services/newCartService');
+const cartService = require("../services/cartService");
 
-class NewCartController {
-  // POST /api/newCart - Create
+class CartController {
+  // POST /api/cart - Create
   async createCartItem(req, res) {
     try {
       const cartData = req.body; // Expects { accountId, variantId, productQuantity }
-      const newCartItem = await newCartService.createCartItem(req.user.id, cartData);
+      const newCartItem = await cartService.createCartItem(
+        req.user.id,
+        cartData,
+      );
       const response = { ...newCartItem.toObject(), cartId: newCartItem._id };
       delete response._id;
 
-      // 🔔 Emit Socket.IO event for cart update
-      const io = req.app.get('io');
+      // Emit Socket.IO event for cart update
+      const io = req.app.get("io");
       if (io && cartData.accountId) {
         // Emit to user's room for instant badge update
-        io.to(cartData.accountId.toString()).emit('cartUpdated', {
-          action: 'created',
-          accountId: cartData.accountId
+        io.to(cartData.accountId.toString()).emit("cartUpdated", {
+          action: "created",
+          accountId: cartData.accountId,
         });
       }
 
@@ -25,23 +28,29 @@ class NewCartController {
     }
   }
 
-  // GET /api/newCart/account/:accountId - Get by account
+  // GET /api/cart/account/:accountId - Get by account
   async getCartByAccount(req, res) {
     try {
       const { accountId } = req.params;
-      const cartItems = await newCartService.getCartByAccountId(req.user.id, accountId);
-      const response = cartItems.map(item => ({ ...item.toObject(), cartId: item._id }));
+      const cartItems = await cartService.getCartByAccountId(
+        req.user.id,
+        accountId,
+      );
+      const response = cartItems.map((item) => ({
+        ...item.toObject(),
+        cartId: item._id,
+      }));
       res.json({ success: true, data: response });
     } catch (error) {
       res.status(403).json({ success: false, message: error.message });
     }
   }
 
-  // GET /api/newCart/:cartId - Get by ID
+  // GET /api/cart/:cartId - Get by ID
   async getCartItemById(req, res) {
     try {
       const { cartId } = req.params;
-      const cartItem = await newCartService.getCartItemById(req.user.id, cartId);
+      const cartItem = await cartService.getCartItemById(req.user.id, cartId);
       const response = { ...cartItem.toObject(), cartId: cartItem._id };
       delete response._id;
       res.json({ success: true, data: response });
@@ -50,21 +59,28 @@ class NewCartController {
     }
   }
 
-  // PUT /api/newCart/:cartId - Update
+  // PUT /api/cart/:cartId - Update
   async updateCartItem(req, res) {
     try {
       const { cartId } = req.params;
       const updateData = req.body; // Expects { productQuantity?, selected? }
-      const updatedCartItem = await newCartService.updateCartItem(req.user.id, cartId, updateData);
-      const response = { ...updatedCartItem.toObject(), cartId: updatedCartItem._id };
+      const updatedCartItem = await cartService.updateCartItem(
+        req.user.id,
+        cartId,
+        updateData,
+      );
+      const response = {
+        ...updatedCartItem.toObject(),
+        cartId: updatedCartItem._id,
+      };
       delete response._id;
 
-      // 🔔 Emit Socket.IO event for cart update
-      const io = req.app.get('io');
+      // Emit Socket.IO event for cart update
+      const io = req.app.get("io");
       if (io && updatedCartItem.accountId) {
-        io.to(updatedCartItem.accountId.toString()).emit('cartUpdated', {
-          action: 'updated',
-          accountId: updatedCartItem.accountId
+        io.to(updatedCartItem.accountId.toString()).emit("cartUpdated", {
+          action: "updated",
+          accountId: updatedCartItem.accountId,
         });
       }
 
@@ -74,16 +90,15 @@ class NewCartController {
     }
   }
 
-  // DELETE /api/newCart/:cartId - Delete
+  // DELETE /api/cart/:cartId - Delete
   async deleteCartItem(req, res) {
     try {
       const { cartId } = req.params;
-      
+
       // Get cart item before deletion to emit event
-      const newCartService = require('../services/newCartService');
       let accountId = null;
       try {
-        const cartItem = await newCartService.getCartItemById(req.user.id, cartId);
+        const cartItem = await cartService.getCartItemById(req.user.id, cartId);
         if (cartItem && cartItem.accountId) {
           accountId = cartItem.accountId.toString();
         }
@@ -91,14 +106,14 @@ class NewCartController {
         // Ignore error if cart item not found
       }
 
-      const result = await newCartService.deleteCartItem(req.user.id, cartId);
+      const result = await cartService.deleteCartItem(req.user.id, cartId);
 
-      // 🔔 Emit Socket.IO event for cart update
-      const io = req.app.get('io');
+      // Emit Socket.IO event for cart update
+      const io = req.app.get("io");
       if (io && accountId) {
-        io.to(accountId).emit('cartUpdated', {
-          action: 'deleted',
-          accountId: accountId
+        io.to(accountId).emit("cartUpdated", {
+          action: "deleted",
+          accountId: accountId,
         });
       }
 
@@ -109,4 +124,4 @@ class NewCartController {
   }
 }
 
-module.exports = new NewCartController();
+module.exports = new CartController();

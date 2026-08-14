@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const upload = require('../middleware/cloudinaryUtils'); // sử dụng Cloudinary middleware
+const upload = require('../middleware/cloudinaryUtils'); // use Cloudinary middleware
 
 const router = express.Router();
 
@@ -15,7 +15,7 @@ router.post('/', upload.single('image'), (req, res) => {
     res.json({
       success: true,
       message: 'File uploaded successfully',
-      url: req.file.path, // link ảnh Cloudinary
+      url: req.file.path, // Cloudinary image link
       filename: req.file.filename, // public_id
     });
   } catch (err) {
@@ -23,14 +23,14 @@ router.post('/', upload.single('image'), (req, res) => {
   }
 });
 
-// API upload nhiều file (key: images)
+// API upload multiple files (key: images)
 router.post('/multiple', upload.array('images', 10), (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: 'No files uploaded' });
     }
     const files = req.files.map((file) => ({
-      url: file.path, // link ảnh Cloudinary
+      url: file.path, // Cloudinary image link
       filename: file.filename, // public_id
     }));
     res.json({
@@ -43,7 +43,7 @@ router.post('/multiple', upload.array('images', 10), (req, res, next) => {
     next(err);
   }
 }, (err, req, res, next) => {
-  // Xử lý lỗi multer
+  // Handle multer error
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
@@ -62,7 +62,7 @@ router.post('/multiple', upload.array('images', 10), (req, res, next) => {
       message: `Upload error: ${err.message}`
     });
   }
-  // Xử lý lỗi Cloudinary timeout
+  // Handle Cloudinary timeout error
   if (err && (err.name === 'TimeoutError' || err.http_code === 499)) {
     console.error('Cloudinary timeout error:', err);
     return res.status(504).json({
@@ -81,10 +81,10 @@ router.post('/multiple', upload.array('images', 10), (req, res, next) => {
 });
 
 // ======================
-// 🔥 ADD: CÁC API MỞ RỘNG
+// EXTENDED UPLOAD APIS
 // ======================
 
-// 👉 Upload emoji riêng (key: emoji)
+// Upload emoji (key: emoji)
 router.post('/emoji', upload.single('emoji'), (req, res) => {
   try {
     if (!req.file) {
@@ -102,7 +102,7 @@ router.post('/emoji', upload.single('emoji'), (req, res) => {
   }
 });
 
-// 👉 Upload sticker riêng (key: sticker)
+// Upload sticker (key: sticker)
 router.post('/sticker', upload.single('sticker'), (req, res) => {
   try {
     if (!req.file) {
@@ -139,6 +139,6 @@ router.post('/file', upload.single('file'), (req, res) => {
 });
 
 // ======================
-// ✅ EXPORT ROUTER
+// EXPORT ROUTER
 // ======================
 module.exports = router;

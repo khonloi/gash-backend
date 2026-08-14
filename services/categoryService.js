@@ -1,12 +1,12 @@
 const Categories = require('../models/Categories');
-const newProduct = require('../models/newProduct');
+const Product = require('../models/Product');
 const mongoose = require('mongoose');
 
 // Create category
-exports.createCategoryService = async ({ cat_name }) => {
+exports.createCategoryService = async ({ categoryName }) => {
   try {
     // 1. Input validation
-    if (!cat_name || cat_name.trim() === '') {
+    if (!categoryName || categoryName.trim() === '') {
       return {
         success: false,
         message: 'Please fill in all required fields',
@@ -15,8 +15,8 @@ exports.createCategoryService = async ({ cat_name }) => {
     }
 
     // 2. Category name validation
-    const trimmedName = cat_name.trim();
-    // Cho phép chữ cái (có dấu tiếng Việt), số và dấu gạch ngang
+    const trimmedName = categoryName.trim();
+    // Allow letters (including Vietnamese accents), numbers, hyphens, and spaces
     const categoryNamePattern = /^[a-zA-ZÀ-Ỵà-ỹ0-9\- ]+$/;
     const hasLetter = /[a-zA-ZÀ-Ỵà-ỹ]/.test(trimmedName);
 
@@ -24,7 +24,7 @@ exports.createCategoryService = async ({ cat_name }) => {
       trimmedName.length < 2 ||
       trimmedName.length > 30 ||
       !categoryNamePattern.test(trimmedName) ||
-      !hasLetter // không cho phép chỉ toàn số
+      !hasLetter // do not allow numbers only
     ) {
       return {
         success: false,
@@ -34,8 +34,8 @@ exports.createCategoryService = async ({ cat_name }) => {
     }
 
 
-    // 3. Check duplicate - chỉ check với các category chưa bị xóa (isDeleted: false)
-    const existingCategory = await Categories.findOne({ cat_name: trimmedName, isDeleted: false });
+    // 3. Check duplicate - only check active categories (isDeleted: false)
+    const existingCategory = await Categories.findOne({ categoryName: trimmedName, isDeleted: false });
     if (existingCategory) {
       return {
         success: false,
@@ -45,7 +45,7 @@ exports.createCategoryService = async ({ cat_name }) => {
     }
 
     // 4. Create category
-    const category = new Categories({ cat_name: trimmedName });
+    const category = new Categories({ categoryName: trimmedName });
     const savedCategory = await category.save();
 
     return {
@@ -128,7 +128,7 @@ exports.getCategoryByIdService = async (id) => {
 };
 
 // Update category
-exports.updateCategoryService = async (id, { cat_name }) => {
+exports.updateCategoryService = async (id, { categoryName }) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return {
@@ -158,7 +158,7 @@ exports.updateCategoryService = async (id, { cat_name }) => {
 
     // Prevent update if any product belongs to this category
     const objectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
-    const productCount = await newProduct.countDocuments({
+    const productCount = await Product.countDocuments({
       $or: [
         ...(objectId ? [{ categoryId: objectId }] : []),
         { categoryId: id }
@@ -174,7 +174,7 @@ exports.updateCategoryService = async (id, { cat_name }) => {
 
     // 1. Input validation
     // 1.0 Check for blank/empty field when provided
-    if (cat_name !== undefined && (!cat_name || cat_name.trim() === '')) {
+    if (categoryName !== undefined && (!categoryName || categoryName.trim() === '')) {
       return {
         success: false,
         message: 'Please fill in all required fields',
@@ -183,9 +183,11 @@ exports.updateCategoryService = async (id, { cat_name }) => {
     }
 
     // 1.1 Category name validation
-    if (cat_name) {
-      const trimmedName = cat_name.trim();
-      const categoryNamePattern = /^[a-zA-ZÀ-ỹ0-9\-]+$/;
+    if (categoryName) {
+      const trimmedName = categoryName.trim();
+      const categoryNamePattern =
+        /^[a-zA-ZÀ-ỹ0-9\-]+(?:[ -][a-zA-ZÀ-ỹ0-9\-]+)*$/;
+
       const hasLetter = /[a-zA-ZÀ-ỹ]/.test(trimmedName);
       if (trimmedName.length < 3 || trimmedName.length > 30 || !categoryNamePattern.test(trimmedName) || !hasLetter) {
         return {
@@ -196,7 +198,7 @@ exports.updateCategoryService = async (id, { cat_name }) => {
       }
 
       // 2. Check duplicate
-      const existingCategory = await Categories.findOne({ cat_name: trimmedName, _id: { $ne: id }, isDeleted: false });
+      const existingCategory = await Categories.findOne({ categoryName: trimmedName, _id: { $ne: id }, isDeleted: false });
       if (existingCategory) {
         return {
           success: false,
@@ -206,7 +208,7 @@ exports.updateCategoryService = async (id, { cat_name }) => {
       }
     }
 
-    const updateData = cat_name ? { cat_name: cat_name.trim() } : { cat_name };
+    const updateData = categoryName ? { categoryName: categoryName.trim() } : { categoryName };
     const updatedCategory = await Categories.findByIdAndUpdate(
       id,
       updateData,
@@ -265,7 +267,7 @@ exports.deleteCategoryService = async (id, user) => {
 
     // Check if any product is using this category
     const objectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
-    const productCount = await newProduct.countDocuments({
+    const productCount = await Product.countDocuments({
       $or: [
         ...(objectId ? [{ categoryId: objectId }] : []),
         { categoryId: id }
@@ -288,7 +290,7 @@ exports.deleteCategoryService = async (id, user) => {
       message: 'Category deleted successfully',
       data: {
         id: category._id,
-        cat_name: category.cat_name,
+        categoryName: category.categoryName,
         status: 'deleted',
         updatedAt: category.updatedAt
       }

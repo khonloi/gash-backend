@@ -1,10 +1,10 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const newProductImageSchema = new Schema({
+const productImageSchema = new Schema({
   productId: {
     type: Schema.Types.ObjectId,
-    ref: 'newProducts'
+    ref: 'Product'
   },
   imageUrl: {
     type: String,
@@ -25,9 +25,9 @@ const newProductImageSchema = new Schema({
 });
 
 // Update updatedAt field before saving
-newProductImageSchema.pre('save', function(next) {
+productImageSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
 
-module.exports = mongoose.model('newProductImages', newProductImageSchema);
+module.exports = mongoose.model('ProductImage', productImageSchema, 'productimages');

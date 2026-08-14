@@ -25,7 +25,7 @@ const LiveReactionSchema = new Schema(
     }
 );
 
-// Index để query nhanh hơn
+// Index for faster queries
 LiveReactionSchema.index({ liveId: 1 });
 LiveReactionSchema.index({ liveId: 1, userId: 1 }); // Index for querying user reactions
 

@@ -432,7 +432,7 @@ exports.updateVoucher = async (id, updateData) => {
 // Disable voucher for admin (soft delete)
 exports.deleteVoucher = async (id) => {
     try {
-        // Kiểm tra định dạng ID hợp lệ
+        // Validate ID format
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return {
                 success: false,
@@ -441,7 +441,7 @@ exports.deleteVoucher = async (id) => {
             };
         }
 
-        // Tìm voucher kể cả soft delete
+        // Find voucher including soft deleted
         const voucher = await Voucher.findById(id);
         if (!voucher) {
             return {
@@ -451,7 +451,7 @@ exports.deleteVoucher = async (id) => {
             };
         }
 
-        // Nếu voucher đã bị xóa mềm rồi
+        // If voucher is already soft deleted
         if (voucher.isDeleted) {
             return {
                 success: false,
@@ -460,11 +460,11 @@ exports.deleteVoucher = async (id) => {
             };
         }
 
-        // Gắn cờ xóa mềm
+        // Flag as soft deleted
         voucher.isDeleted = true;
         await voucher.save();
 
-        // Trả về kết quả
+        // Return result
         return {
             success: true,
             message: 'Voucher disabled successfully',
@@ -485,31 +485,31 @@ exports.deleteVoucher = async (id) => {
 };
 
 // Get all vouchers for user (only active)
-// exports.getAllVouchersForUser = async () => {
-//     try {
-//         // Chỉ lấy voucher chưa bị xóa (isDeleted: false)
-//         const vouchers = await Voucher.find({ isDeleted: false })
-//             .sort({ createdAt: -1 });
+exports.getAllVouchersForUser = async () => {
+    try {
+        // Only fetch vouchers that are not deleted (isDeleted: false)
+        const vouchers = await Voucher.find({ isDeleted: false })
+            .sort({ createdAt: -1 });
 
-//         const result = vouchers.map(v => {
-//             const obj = v.toJSON();
-//             obj.status = 'active';
-//             return obj;
-//         });
+        const result = vouchers.map(v => {
+            const obj = v.toJSON();
+            obj.status = 'active';
+            return obj;
+        });
 
-//         return {
-//             success: true,
-//             message: 'Vouchers retrieved successfully',
-//             data: result
-//         };
-//     } catch (error) {
-//         return {
-//             success: false,
-//             message: 'Failed to retrieve vouchers',
-//             error: error.message
-//         };
-//     }
-// };
+        return {
+            success: true,
+            message: 'Vouchers retrieved successfully',
+            data: result
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: 'Failed to retrieve vouchers',
+            error: error.message
+        };
+    }
+};
 
 // Apply voucher (used in order processing)
 exports.applyVoucher = async (voucherCode, totalPrice) => {
@@ -522,7 +522,7 @@ exports.applyVoucher = async (voucherCode, totalPrice) => {
             };
         }
 
-        // Không nhập voucher
+        // No voucher code provided
         if (!voucherCode) {
             return {
                 success: true,
@@ -535,7 +535,7 @@ exports.applyVoucher = async (voucherCode, totalPrice) => {
             };
         }
 
-        // Tìm voucher
+        // Find voucher
         const voucher = await Voucher.findOne({ code: voucherCode });
         if (!voucher || voucher.isDeleted) {
             return {
@@ -578,7 +578,7 @@ exports.applyVoucher = async (voucherCode, totalPrice) => {
             };
         }
 
-        // Tính discount
+        // Calculate discount
         let discountAmount = 0;
         if (voucher.discountType === 'percentage') {
             discountAmount = (totalPrice * voucher.discountValue) / 100;

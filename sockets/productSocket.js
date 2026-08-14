@@ -1,18 +1,33 @@
 let ioInstance = null;
+const mongoose = require('mongoose');
 
 // Track active livestream rooms and their viewer counts
-const activeLivestreamRooms = new Map(); // liveId -> { socketCount: number, lastViewerCount: number, intervalId: number, lastChangeTime: number, stableCount: number }
+const activeLivestreamRooms = new Map();
+
+// Rate limiting for room join events
+const RATE_LIMIT_WINDOW_MS = 10_000;
+const RATE_LIMIT_MAX_EVENTS = 20;
+const rateLimitMap = new Map();
+
+function checkRateLimit(socketId) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(socketId) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+  if (now > entry.resetAt) { entry.count = 1; entry.resetAt = now + RATE_LIMIT_WINDOW_MS; }
+  else { entry.count += 1; }
+  rateLimitMap.set(socketId, entry);
+  return entry.count <= RATE_LIMIT_MAX_EVENTS;
+}
 
 // Adaptive viewer count intervals (milliseconds)
 const VIEWER_COUNT_INTERVALS = {
-  ACTIVE: 5000,      // 5s when count is changing frequently
-  STABLE: 10000,     // 10s when count is stable
-  VERY_STABLE: 15000 // 15s when count hasn't changed for a while
+  ACTIVE: 5000,
+  STABLE: 10000,
+  VERY_STABLE: 15000
 };
 
 // Time thresholds (milliseconds)
-const STABLE_THRESHOLD = 30000;    // 30s without change = stable
-const VERY_STABLE_THRESHOLD = 60000; // 60s without change = very stable
+const STABLE_THRESHOLD = 30000;
+const VERY_STABLE_THRESHOLD = 60000;
 
 const initializeProductSocket = (io) => {
   ioInstance = io;
@@ -49,8 +64,11 @@ const initializeProductSocket = (io) => {
     });
 
     // Join livestream room for comments and viewer count updates
-    socket.on("joinLivestreamRoom", async (liveId) => {
-      if (!liveId) return;
+    socket.on('joinLivestreamRoom', async (liveId) => {
+      if (!liveId || !mongoose.isValidObjectId(liveId.toString())) return;
+      if (!checkRateLimit(socket.id)) {
+        return socket.emit('error', 'Rate limit exceeded. Please slow down.');
+      }
 
       const room = `live_${liveId}`;
       socket.join(room);
@@ -92,8 +110,8 @@ const initializeProductSocket = (io) => {
     });
 
     // Leave livestream room
-    socket.on("leaveLivestreamRoom", (liveId) => {
-      if (!liveId) return;
+    socket.on('leaveLivestreamRoom', (liveId) => {
+      if (!liveId || !mongoose.isValidObjectId(liveId.toString())) return;
 
       const room = `live_${liveId}`;
       socket.leave(room);
@@ -120,10 +138,10 @@ const initializeProductSocket = (io) => {
       }
     });
 
-    socket.on("disconnect", () => {
-      // Clean up when socket disconnects - will be handled by leaveLivestreamRoom
+    socket.on('disconnect', () => {
+      rateLimitMap.delete(socket.id);
       if (process.env.DEBUG === 'true') {
-        console.log("Client disconnected:", socket.id);
+        console.log('Client disconnected:', socket.id);
       }
     });
   });
