@@ -23,6 +23,21 @@ exports.addReaction = async (liveId, userId, reactionType) => {
             };
         }
 
+        const livestream = await Livestream.findById(liveId);
+        if (!livestream) {
+            return {
+                success: false,
+                message: 'Livestream not found'
+            };
+        }
+
+        if (livestream.status === 'ended') {
+            return {
+                success: false,
+                message: 'Cannot react to ended livestream'
+            };
+        }
+
         // Create new reaction (allow multiple reactions per user in one livestream)
         const liveReaction = new LiveReaction({
             liveId,

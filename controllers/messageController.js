@@ -1,20 +1,13 @@
 const messageService = require('../services/messageService');
+const catchAsync = require('./utils/catchAsync');
 
-exports.getMessages = async (req, res) => {
-    try {
-        const result = await messageService.getMessagesService(req.params.conversationId, req.query);
-        res.json({ success: true, ...result });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-};
+exports.getMessages = catchAsync(async (req, res) => {
+    const result = await messageService.getMessagesService(req.params.conversationId, req.query);
+    res.status(200).json({ success: true, ...result });
+});
 
-exports.sendMessage = async (req, res) => {
-    try {
-        const { senderId, messageText } = req.body;
-        const message = await messageService.sendMessageService(req.params.conversationId, senderId, messageText);
-        res.json({ success: true, data: message });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-};
+exports.sendMessage = catchAsync(async (req, res) => {
+    const { senderId, messageText } = req.body;
+    const message = await messageService.sendMessageService(req.params.conversationId, senderId, messageText);
+    res.status(201).json({ success: true, data: message });
+});

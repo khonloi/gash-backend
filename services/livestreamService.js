@@ -2,6 +2,8 @@ const { generateAccessToken, createRoom, deleteRoom, roomService, LIVEKIT_CONFIG
 const Livestream = require('../models/Livestream');
 const LiveProduct = require('../models/LiveProduct');
 const LiveComment = require('../models/LiveComment');
+const Notification = require('../models/Notification');
+const Accounts = require('../models/Accounts');
 const livestreamReactionService = require('./livestreamReactionService');
 
 // Cache for viewer counts (to reduce API calls)
@@ -922,6 +924,41 @@ exports.getLiveNow = async () => {
             message: `Failed to get live streams: ${error.message}`,
             error: error.message
         };
+    }
+};
+
+exports.notifyLivestreamStarted = async (livestreamId, title, io) => {
+    try {
+        const notificationTitle = 'Livestream Started!';
+        const notificationMessage = `A new livestream "${title}" has just started. Join now to watch!`;
+        
+        // Get all users
+        const users = await Accounts.find({}, '_id');
+        const docs = users.map(user => ({
+            title: notificationTitle,
+            message: notificationMessage,
+            userId: user._id,
+            type: 'livestream',
+            livestreamId: livestreamId,
+            createdAt: new Date(),
+            isTemplate: false,
+        }));
+        const notifications = await Notification.insertMany(docs);
+
+        // Emit notifications via Socket.IO
+        if (io && notifications?.length) {
+            for (const n of notifications) {
+                if (n.userId) {
+                    const targetId = n.userId.toString();
+                    io.to(targetId).emit('newNotification', n);
+                } else {
+                    io.emit('newNotification', n);
+                }
+            }
+        }
+        return notifications;
+    } catch (notifError) {
+        console.error('Error creating livestream start notification:', notifError);
     }
 };
 

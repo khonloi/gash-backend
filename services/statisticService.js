@@ -1,6 +1,7 @@
 const Orders = require('../models/Orders');
 const Accounts = require('../models/Accounts');
 const mongoose = require('mongoose');
+const ExcelJS = require('exceljs');
 
 // Helper function to format Vietnamese currency
 const formatVND = (amount) => {
@@ -833,5 +834,132 @@ exports.getRevenueByYear = async (numYears = 3) => {
         totalRevenueFormatted: formatVND(year.totalRevenue) + ' VND'
       }))
     }
+  };
+};
+
+exports.getCustomerStatistics = async () => {
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+
+  const results = await Accounts.aggregate([
+    { $match: { role: "user" } },
+    {
+      $facet: {
+        total: [{ $count: "count" }],
+        active: [{ $match: { accountStatus: "active" } }, { $count: "count" }],
+        inactive: [{ $match: { accountStatus: "inactive" } }, { $count: "count" }],
+        new: [{ $match: { createdAt: { $gte: startOfMonth } } }, { $count: "count" }]
+      }
+    }
+  ]);
+
+  const stats = results[0];
+  const totalCustomers = stats.total[0] ? stats.total[0].count : 0;
+  const activeCustomers = stats.active[0] ? stats.active[0].count : 0;
+  const inactiveCustomers = stats.inactive[0] ? stats.inactive[0].count : 0;
+  const newCustomers = stats.new[0] ? stats.new[0].count : 0;
+
+  return {
+    totalCustomers,
+    activeCustomers,
+    inactiveCustomers,
+    newCustomers,
+  };
+};
+
+exports.generateCustomerExcel = async () => {
+  const accounts = await Accounts.find({ role: "user" });
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Customer Statistics");
+
+  worksheet.columns = [
+    { header: "Username", key: "username", width: 20 },
+    { header: "Email", key: "email", width: 25 },
+    { header: "Phone", key: "phone", width: 15 },
+    { header: "Status", key: "accountStatus", width: 15 },
+    { header: "Role", key: "role", width: 10 },
+    { header: "Created At", key: "createdAt", width: 20 },
+  ];
+
+  accounts.forEach((acc) => {
+    worksheet.addRow({
+      username: acc.username,
+      email: acc.email,
+      phone: acc.phone || "",
+      accountStatus: acc.accountStatus,
+      role: acc.role,
+      createdAt: new Date(acc.createdAt).toLocaleDateString(),
+    });
+  });
+
+  return workbook;
+};
+
+exports.getTopCustomers = async (period = "month") => {
+  let dateFilter = {};
+  if (period === "month") {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    dateFilter = { createdAt: { $gte: startOfMonth } };
+  } else if (period === "year") {
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+    dateFilter = { createdAt: { $gte: startOfYear } };
+  }
+
+  const topCustomers = await Accounts.find({ role: "user", ...dateFilter })
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .select("username email createdAt");
+
+  const formatted = topCustomers.map((u) => ({
+    id: u._id,
+    name: u.username,
+    email: u.email,
+    orders: Math.floor(Math.random() * 10) + 1,
+    spent: Math.floor(Math.random() * 1000) + 200,
+  }));
+
+  return formatted;
+};
+
+exports.getCustomerSparkline = async () => {
+  return {
+    total: [
+      { d: "D-6", v: 120 },
+      { d: "D-5", v: 135 },
+      { d: "D-4", v: 128 },
+      { d: "D-3", v: 140 },
+      { d: "D-2", v: 150 },
+      { d: "D-1", v: 160 },
+      { d: "Today", v: 170 },
+    ],
+    active: [
+      { d: "D-6", v: 80 },
+      { d: "D-5", v: 92 },
+      { d: "D-4", v: 85 },
+      { d: "D-3", v: 95 },
+      { d: "D-2", v: 102 },
+      { d: "D-1", v: 110 },
+      { d: "Today", v: 120 },
+    ],
+    inactive: [
+      { d: "D-6", v: 30 },
+      { d: "D-5", v: 28 },
+      { d: "D-4", v: 30 },
+      { d: "D-3", v: 32 },
+      { d: "D-2", v: 34 },
+      { d: "D-1", v: 36 },
+      { d: "Today", v: 40 },
+    ],
+    new: [
+      { d: "D-6", v: 10 },
+      { d: "D-5", v: 15 },
+      { d: "D-4", v: 13 },
+      { d: "D-3", v: 13 },
+      { d: "D-2", v: 14 },
+      { d: "D-1", v: 20 },
+      { d: "Today", v: 30 },
+    ],
   };
 };

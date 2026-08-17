@@ -4,11 +4,16 @@ const orderService = require('../services/orderService');
 const vnpayService = require('../services/vnpayService');
 const feedbackService = require('../services/feedbackService');
 const { createOrderNotification, emitOrderNotification } = require('../utils/orderNotificationHelper');
+const catchAsync = require('./utils/catchAsync');
+const AppError = require('../utils/AppError');
 
 // Models used in checkout, cancelOrder, feedback, and VNPay handlers
 const Accounts = require('../models/Accounts');
 const Voucher = require('../models/Voucher');
 const Cart = require('../models/Cart');
+const Product = require('../models/Product');
+const ProductVariant = require('../models/ProductVariant');
+const OrderDetails = require('../models/OrderDetails');
 const { applyVoucher } = require('./voucherController');
 
 // ===== Shared Socket Emit Helper =====
@@ -57,417 +62,323 @@ async function emitOrderUpdate(io, order, messageType, opts = {}) {
   }
 }
 
-exports.searchOrders = async (req, res) => {
-  try {
-    const orders = await orderService.searchOrdersService(req.query, req.user);
-    res.status(200).json(orders);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error searching orders' });
-  }
-};
+exports.searchOrders = catchAsync(async (req, res) => {
+  const orders = await orderService.searchOrdersService(req.query, req.user);
+  res.status(200).json(orders);
+});
 
-exports.getOrderById = async (req, res) => {
-  try {
-    const order = await orderService.getOrderByIdService(req.params.id, req.user);
+exports.getOrderById = catchAsync(async (req, res) => {
+  const order = await orderService.getOrderByIdService(req.params.id, req.user);
 
-    // Format response data
-    const formattedOrder = {
-      _id: order._id,
-      orderDate: order.orderDate,
-      addressReceive: order.addressReceive,
-      name: order.name,
-      phone: order.phone,
-      totalPrice: order.totalPrice,
-      discountAmount: order.discountAmount,
-      finalPrice: order.finalPrice,
-      orderStatus: order.orderStatus,
-      payStatus: order.payStatus,
-      paymentMethod: order.paymentMethod,
-      refundStatus: order.refundStatus,
-      refundProof: order.refundProof,
-      cancelReason: order.cancelReason, // Added cancelReason to response
-      vnpay_payment_url: order.vnpay_payment_url,
-      vnpay_expiry_time: order.vnpay_expiry_time,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
+  // Format response data
+  const formattedOrder = {
+    _id: order._id,
+    orderDate: order.orderDate,
+    addressReceive: order.addressReceive,
+    name: order.name,
+    phone: order.phone,
+    totalPrice: order.totalPrice,
+    discountAmount: order.discountAmount,
+    finalPrice: order.finalPrice,
+    orderStatus: order.orderStatus,
+    payStatus: order.payStatus,
+    paymentMethod: order.paymentMethod,
+    refundStatus: order.refundStatus,
+    refundProof: order.refundProof,
+    cancelReason: order.cancelReason, // Added cancelReason to response
+    vnpay_payment_url: order.vnpay_payment_url,
+    vnpay_expiry_time: order.vnpay_expiry_time,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
 
-      // Customer information
-      customer: {
-        _id: order.accountId._id,
-        username: order.accountId.username,
-        name: order.accountId.name,
-        email: order.accountId.email,
-        phone: order.accountId.phone,
-        address: order.accountId.address,
-        image: order.accountId.image
-      },
+    // Customer information
+    customer: {
+      _id: order.accountId._id,
+      username: order.accountId.username,
+      name: order.accountId.name,
+      email: order.accountId.email,
+      phone: order.accountId.phone,
+      address: order.accountId.address,
+      image: order.accountId.image
+    },
 
-      // Voucher information (if exists)
-      voucher: order.voucherId ? {
-        _id: order.voucherId._id,
-        code: order.voucherId.code,
-        voucher_name: order.voucherId.voucher_name,
-        discountType: order.voucherId.discountType,
-        discountValue: order.voucherId.discountValue,
-        discount_percentage: order.voucherId.discount_percentage,
-        discount_amount: order.voucherId.discount_amount,
-      } : null,
+    // Voucher information (if exists)
+    voucher: order.voucherId ? {
+      _id: order.voucherId._id,
+      code: order.voucherId.code,
+      voucher_name: order.voucherId.voucher_name,
+      discountType: order.voucherId.discountType,
+      discountValue: order.voucherId.discountValue,
+      discount_percentage: order.voucherId.discount_percentage,
+      discount_amount: order.voucherId.discount_amount,
+    } : null,
 
-      // Order details with product information
-      orderDetails: order.orderDetails ? order.orderDetails.map(detail => ({
-        _id: detail._id,
-        variant: detail.variantId ? {
-          _id: detail.variantId._id,
-          product: detail.variantId.productId ? {
-            _id: detail.variantId.productId._id,
-            name: detail.variantId.productId.productName
-          } : null,
-          color: detail.variantId.productColorId ? {
-            _id: detail.variantId.productColorId._id,
-            name: detail.variantId.productColorId.productColorName
-          } : null,
-          size: detail.variantId.productSizeId ? {
-            _id: detail.variantId.productSizeId._id,
-            name: detail.variantId.productSizeId.productSizeName
-          } : null,
-          image: detail.variantId.variantImage || null
+    // Order details with product information
+    orderDetails: order.orderDetails ? order.orderDetails.map(detail => ({
+      _id: detail._id,
+      variant: detail.variantId ? {
+        _id: detail.variantId._id,
+        product: detail.variantId.productId ? {
+          _id: detail.variantId.productId._id,
+          name: detail.variantId.productId.productName
         } : null,
-        unitPrice: detail.unitPrice,
-        quantity: detail.Quantity,
-        totalPrice: detail.unitPrice * detail.Quantity,
-        feedback: detail.feedback ? {
-          rating: detail.feedback.rating,
-          content: detail.feedback.isDeleted
-            ? 'This feedback has been deleted by staff/admin'
-            : detail.feedback.content,
-          createdAt: detail.feedback.createdAt,
-          updatedAt: detail.feedback.updatedAt,
-          isDeleted: detail.feedback.isDeleted,
-          has_rating: detail.feedback.rating !== null && detail.feedback.rating !== undefined,
-          has_content: detail.feedback.isDeleted
-            ? true  // Show content flag as true so the deletion message displays
-            : (detail.feedback.content && detail.feedback.content.trim() !== '')
-        } : null
-      })) : [],
+        color: detail.variantId.productColorId ? {
+          _id: detail.variantId.productColorId._id,
+          name: detail.variantId.productColorId.productColorName
+        } : null,
+        size: detail.variantId.productSizeId ? {
+          _id: detail.variantId.productSizeId._id,
+          name: detail.variantId.productSizeId.productSizeName
+        } : null,
+        image: detail.variantId.variantImage || null
+      } : null,
+      unitPrice: detail.unitPrice,
+      quantity: detail.Quantity,
+      totalPrice: detail.unitPrice * detail.Quantity,
+      feedback: detail.feedback ? {
+        rating: detail.feedback.rating,
+        content: detail.feedback.isDeleted
+          ? 'This feedback has been deleted by staff/admin'
+          : detail.feedback.content,
+        createdAt: detail.feedback.createdAt,
+        updatedAt: detail.feedback.updatedAt,
+        isDeleted: detail.feedback.isDeleted,
+        has_rating: detail.feedback.rating !== null && detail.feedback.rating !== undefined,
+        has_content: detail.feedback.isDeleted
+          ? true  // Show content flag as true so the deletion message displays
+          : (detail.feedback.content && detail.feedback.content.trim() !== '')
+      } : null
+    })) : [],
 
-      // Summary
-      summary: {
-        totalItems: order.orderDetails ? order.orderDetails.length : 0,
-        totalQuantity: order.orderDetails ? order.orderDetails.reduce((sum, detail) => sum + detail.Quantity, 0) : 0,
-        hasVoucher: !!order.voucherId,
-        hasFeedback: false
-      }
-    };
+    // Summary
+    summary: {
+      totalItems: order.orderDetails ? order.orderDetails.length : 0,
+      totalQuantity: order.orderDetails ? order.orderDetails.reduce((sum, detail) => sum + detail.Quantity, 0) : 0,
+      hasVoucher: !!order.voucherId,
+      hasFeedback: false
+    }
+  };
 
-    res.status(200).json({
+  res.status(200).json({
+    success: true,
+    message: 'Order retrieved successfully',
+    data: formattedOrder
+  });
+});
+
+exports.updateOrderByAdmin = catchAsync(async (req, res) => {
+  // Only admin and staff can update order
+  if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+    throw new AppError('Access denied: Admin/Staff role required', 403);
+  }
+
+  // Validate orderId
+  const { orderId } = req.params;
+  if (!orderId || !orderId.match(/^[0-9a-fA-F]{24}$/)) {
+    throw new AppError('Invalid order ID format', 400);
+  }
+
+  const { orderStatus, payStatus, refundStatus, refundProof, cancelReason } = req.body;
+
+  // Validate enums
+  if (orderStatus && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(orderStatus)) {
+    throw new AppError('Invalid order status', 400);
+  }
+  if (payStatus && !['unpaid', 'paid'].includes(payStatus)) {
+    throw new AppError('Invalid pay status', 400);
+  }
+  if (refundStatus && !['not_applicable', 'pending_refund', 'refunded'].includes(refundStatus)) {
+    throw new AppError('Invalid refund status', 400);
+  }
+  if (cancelReason && typeof cancelReason === 'string' && cancelReason.length > 500) {
+    throw new AppError('Cancel reason cannot exceed 500 characters', 400);
+  }
+
+  // Only allow updating basic fields, feedback not included
+  const allowedFields = { orderStatus, payStatus, refundStatus, refundProof, cancelReason };
+  const filteredData = Object.fromEntries(
+    Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
+  );
+
+  // Get old order status before update for notification logic
+  const oldOrder = await orderService.getOrderByIdService(orderId, req.user);
+  const oldOrderStatus = oldOrder?.orderStatus;
+  const oldPayStatus = oldOrder?.payStatus;
+
+  const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
+  const io = req.app.get('io');
+
+  // Determine notification type
+  const newOrderStatus = updatedOrder.orderStatus;
+  const newPayStatus   = updatedOrder.payStatus;
+  let notifType = 'status_changed';
+  if (oldPayStatus !== newPayStatus && newPayStatus) notifType = 'payment_changed';
+  else if (newOrderStatus === 'delivered' && oldOrderStatus !== 'delivered') notifType = 'delivered';
+
+  await emitOrderUpdate(io, updatedOrder, notifType);
+  res.status(200).json({
+    success: true,
+    message: 'Order updated successfully by admin',
+    data: updatedOrder
+  });
+});
+
+exports.deleteOrder = catchAsync(async (req, res) => {
+  const result = await orderService.deleteOrderService(req.params.id, req.user);
+  res.status(200).json(result);
+});
+
+exports.createVnpayPaymentUrl = catchAsync(async (req, res) => {
+  const { orderId, bankCode, language } = req.body;
+
+  if (!orderId) {
+    throw new AppError('Order ID is required', 400);
+  }
+
+  const paymentUrl = await vnpayService.createPaymentUrl(orderId, bankCode, language, req.user, req);
+
+  res.status(200).json({
+    success: true,
+    message: 'Payment URL created successfully',
+    paymentUrl
+  });
+});
+
+exports.vnpayReturn = catchAsync(async (req, res) => {
+  if (!req.query || Object.keys(req.query).length === 0) {
+    throw new AppError('Invalid return data from VNPay', 400);
+  }
+
+  const result = await vnpayService.handleReturn(req.query);
+  const orderId = req.query.vnp_TxnRef;
+  const amount = req.query.vnp_Amount ? Number(req.query.vnp_Amount) / 100 : 0;
+  const paymentMethod = "VNPay";
+
+  const io = req.app.get('io');
+  if (io && orderId) {
+    const updatedOrder = await orderService.getOrderForEmitService(orderId);
+    if (updatedOrder && updatedOrder.accountId) {
+      await emitOrderUpdate(io, updatedOrder, 'payment_changed');
+    }
+  }
+
+  if (result.code === "00") {
+    return res.status(200).json({
       success: true,
-      message: 'Order retrieved successfully',
-      data: formattedOrder
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Error retrieving order'
-    });
-  }
-};
-
-exports.updateOrderByAdmin = async (req, res) => {
-  try {
-    // Only admin and staff can update order
-    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
-      return res.status(403).json({ message: 'Access denied: Admin/Staff role required' });
-    }
-
-    // Validate orderId
-    const { orderId } = req.params;
-    if (!orderId || !orderId.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({ message: 'Invalid order ID format' });
-    }
-
-    const { orderStatus, payStatus, refundStatus, refundProof, cancelReason } = req.body;
-
-    // Validate enums
-    if (orderStatus && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(orderStatus)) {
-      return res.status(400).json({ message: 'Invalid order status' });
-    }
-    if (payStatus && !['unpaid', 'paid'].includes(payStatus)) {
-      return res.status(400).json({ message: 'Invalid pay status' });
-    }
-    if (refundStatus && !['not_applicable', 'pending_refund', 'refunded'].includes(refundStatus)) {
-      return res.status(400).json({ message: 'Invalid refund status' });
-    }
-    if (cancelReason && typeof cancelReason === 'string' && cancelReason.length > 500) {
-      return res.status(400).json({ message: 'Cancel reason cannot exceed 500 characters' });
-    }
-
-    // Only allow updating basic fields, feedback not included
-    const allowedFields = { orderStatus, payStatus, refundStatus, refundProof, cancelReason };
-    const filteredData = Object.fromEntries(
-      Object.entries(allowedFields).filter(([key, value]) => value !== undefined)
-    );
-
-    // Get old order status before update for notification logic
-    const oldOrder = await orderService.getOrderByIdService(orderId, req.user);
-    const oldOrderStatus = oldOrder?.orderStatus;
-    const oldPayStatus = oldOrder?.payStatus;
-
-    const updatedOrder = await orderService.updateOrderService(orderId, filteredData, req.user);
-    const io = req.app.get('io');
-
-    // Determine notification type
-    const newOrderStatus = updatedOrder.orderStatus;
-    const newPayStatus   = updatedOrder.payStatus;
-    let notifType = 'status_changed';
-    if (oldPayStatus !== newPayStatus && newPayStatus) notifType = 'payment_changed';
-    else if (newOrderStatus === 'delivered' && oldOrderStatus !== 'delivered') notifType = 'delivered';
-
-    await emitOrderUpdate(io, updatedOrder, notifType);
-    res.status(200).json({
-      success: true,
-      message: 'Order updated successfully by admin',
-      data: updatedOrder
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Error updating order'
-    });
-  }
-};
-
-exports.deleteOrder = async (req, res) => {
-  try {
-    const result = await orderService.deleteOrderService(req.params.id, req.user);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error deleting order' });
-  }
-};
-
-exports.createVnpayPaymentUrl = async (req, res) => {
-  try {
-    const { orderId, bankCode, language } = req.body;
-
-    if (!orderId) {
-      return res.status(400).json({ message: 'Order ID is required' });
-    }
-
-    const paymentUrl = await vnpayService.createPaymentUrl(orderId, bankCode, language, req.user, req);
-
-    res.status(200).json({
-      success: true,
-      message: 'Payment URL created successfully',
-      paymentUrl
-    });
-  } catch (error) {
-    console.error("Payment URL creation error:", error);
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Error creating payment URL',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-};
-
-exports.vnpayReturn = async (req, res) => {
-  try {
-    if (!req.query || Object.keys(req.query).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid return data from VNPay'
-      });
-    }
-
-    const result = await vnpayService.handleReturn(req.query);
-    const orderId = req.query.vnp_TxnRef;
-    const amount = req.query.vnp_Amount ? Number(req.query.vnp_Amount) / 100 : 0;
-    const paymentMethod = "VNPay";
-
-    const io = req.app.get('io');
-    if (io && orderId) {
-      const updatedOrder = await orderService.getOrderForEmitService(orderId);
-      if (updatedOrder && updatedOrder.accountId) {
-        await emitOrderUpdate(io, updatedOrder, 'payment_changed');
+      message: result.message,
+      data: {
+        ...result,
+        orderId,
+        amount,
+        paymentMethod
       }
-    }
-
-    if (result.code === "00") {
-      return res.status(200).json({
-        success: true,
-        message: result.message,
-        data: {
-          ...result,
-          orderId,
-          amount,
-          paymentMethod
-        }
-      });
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: result.message,
-        data: {
-          ...result,
-          orderId,
-          amount,
-          paymentMethod
-        }
-      });
-    }
-  } catch (error) {
-    console.error("VNPay return error:", error);
-    res.status(error.status || 400).json({
-      success: false,
-      message: error.message || 'Payment verification failed',
-      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
+  } else {
+    throw new AppError(result.message, 400);
   }
-};
+});
 
-exports.vnpayIpn = async (req, res) => {
-  try {
-    if (!req.query || Object.keys(req.query).length === 0) {
-      return res.status(400).json({
-        RspCode: '99',
-        Message: 'Invalid IPN data'
-      });
-    }
-
-    const result = await vnpayService.handleIpn(req.query);
-
-    const io = req.app.get('io');
-    if (io && req.query.vnp_TxnRef) {
-      const orderId = req.query.vnp_TxnRef;
-      const updatedOrder = await orderService.getOrderForEmitService(orderId);
-      if (updatedOrder && updatedOrder.accountId) {
-        await emitOrderUpdate(io, updatedOrder, 'payment_changed');
-      }
-    }
-
-    res.status(200).json(result);
-  } catch (error) {
-    console.error("VNPay IPN error:", error);
-    res.status(200).json({
+exports.vnpayIpn = catchAsync(async (req, res) => {
+  if (!req.query || Object.keys(req.query).length === 0) {
+    return res.status(400).json({
       RspCode: '99',
-      Message: 'Internal server error'
+      Message: 'Invalid IPN data'
     });
   }
-};
 
-exports.checkout = async (req, res) => {
-  try {
-    const io = req.app.get('io');
-    const result = await orderService.checkoutService(req.user.id, req.body, io);
-    
-    return res.status(201).json({
-      success: true,
-      message: 'Order created successfully with details, cart cleared',
-      data: result
-    });
-  } catch (error) {
-    console.error('Checkout error:', error);
-    res.status(error.status || 500).json({ 
-      success: false, 
-      message: error.message || 'Error creating order' 
-    });
-  }
-};
+  const result = await vnpayService.handleIpn(req.query);
 
-exports.getOrderByIdForUser = async (req, res) => {
-  try {
-    const order = await orderService.getOrderByIdForUserService(req.params.id, req.user);
-    return res.status(200).json({ success: true, order });
-  } catch (error) {
-    return res.status(error.status || 500).json({ success: false, message: error.message || 'Error retrieving order' });
-  }
-};
-
-exports.cancelOrder = async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    const { cancelReason } = req.body;
-    const io = req.app.get('io');
-    
-    const result = await orderService.cancelOrderService(orderId, cancelReason, req.user, io);
-
-    res.status(200).json({
-      message: 'Order cancelled successfully',
-      ...result
-    });
-  } catch (error) {
-    res
-      .status(error.status || 500)
-      .json({ message: error.message || 'Error cancelling order' });
-  }
-};
-
-exports.addFeedbackProduct = async (req, res) => {
-  try {
-    const { orderId, variantId } = req.params;
-    const { rating, content } = req.body;
-
-    if (!mongoose.isValidObjectId(orderId) || !mongoose.isValidObjectId(variantId)) {
-      return res.status(400).json({ success: false, message: 'Invalid order or variant ID' });
+  const io = req.app.get('io');
+  if (io && req.query.vnp_TxnRef) {
+    const orderId = req.query.vnp_TxnRef;
+    const updatedOrder = await orderService.getOrderForEmitService(orderId);
+    if (updatedOrder && updatedOrder.accountId) {
+      await emitOrderUpdate(io, updatedOrder, 'payment_changed');
     }
-
-    const { savedOrderDetail, order } = await feedbackService.addFeedbackProductService(orderId, variantId, rating, content, req.user);
-
-    res.status(200).json({
-      success: true,
-      message: 'Product feedback added successfully',
-      feedback: savedOrderDetail.feedback,
-      orderDetail: {
-        _id: savedOrderDetail._id,
-        orderId: savedOrderDetail.orderId,
-        variantId: savedOrderDetail.variantId,
-        feedback: savedOrderDetail.feedback
-      },
-      order: {
-        _id: order._id
-      }
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Error adding product feedback',
-    });
   }
-};
 
-exports.editFeedbackProduct = async (req, res) => {
-  try {
-    const { orderId, variantId } = req.params;
-    const { rating, content } = req.body;
+  res.status(200).json(result);
+});
 
-    if (!mongoose.isValidObjectId(orderId) || !mongoose.isValidObjectId(variantId)) {
-      return res.status(400).json({ success: false, message: 'Invalid order or variant ID' });
+exports.checkout = catchAsync(async (req, res) => {
+  const io = req.app.get('io');
+  const result = await orderService.checkoutService(req.user.id, req.body, io);
+  
+  return res.status(201).json({
+    success: true,
+    message: 'Order created successfully with details, cart cleared',
+    data: result
+  });
+});
+
+exports.getOrderByIdForUser = catchAsync(async (req, res) => {
+  const order = await orderService.getOrderByIdForUserService(req.params.id, req.user);
+  return res.status(200).json({ success: true, order });
+});
+
+exports.cancelOrder = catchAsync(async (req, res) => {
+  const orderId = req.params.id;
+  const { cancelReason } = req.body;
+  const io = req.app.get('io');
+  
+  const result = await orderService.cancelOrderService(orderId, cancelReason, req.user, io);
+
+  res.status(200).json({
+    message: 'Order cancelled successfully',
+    ...result
+  });
+});
+
+exports.addFeedbackProduct = catchAsync(async (req, res) => {
+  const { orderId, variantId } = req.params;
+  const { rating, content } = req.body;
+
+  if (!mongoose.isValidObjectId(orderId) || !mongoose.isValidObjectId(variantId)) {
+    throw new AppError('Invalid order or variant ID', 400);
+  }
+
+  const { savedOrderDetail, order } = await feedbackService.addFeedbackProductService(orderId, variantId, rating, content, req.user);
+
+  res.status(200).json({
+    success: true,
+    message: 'Product feedback added successfully',
+    feedback: savedOrderDetail.feedback,
+    orderDetail: {
+      _id: savedOrderDetail._id,
+      orderId: savedOrderDetail.orderId,
+      variantId: savedOrderDetail.variantId,
+      feedback: savedOrderDetail.feedback
+    },
+    order: {
+      _id: order._id
     }
+  });
+});
 
-    const { savedOrderDetail, order } = await feedbackService.editFeedbackProductService(orderId, variantId, rating, content, req.user);
+exports.editFeedbackProduct = catchAsync(async (req, res) => {
+  const { orderId, variantId } = req.params;
+  const { rating, content } = req.body;
 
-    res.status(200).json({
-      success: true,
-      message: 'Product feedback updated successfully',
-      feedback: savedOrderDetail.feedback,
-      orderDetail: {
-        _id: savedOrderDetail._id,
-        orderId: savedOrderDetail.orderId,
-        variantId: savedOrderDetail.variantId,
-        feedback: savedOrderDetail.feedback
-      }
-    });
-  } catch (error) {
-    console.error('Edit feedback product error:', error);
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Error updating product feedback',
-    });
+  if (!mongoose.isValidObjectId(orderId) || !mongoose.isValidObjectId(variantId)) {
+    throw new AppError('Invalid order or variant ID', 400);
   }
-};
 
-exports.deleteFeedbackProduct = async (req, res) => {
-  try {
+  const { savedOrderDetail, order } = await feedbackService.editFeedbackProductService(orderId, variantId, rating, content, req.user);
+
+  res.status(200).json({
+    success: true,
+    message: 'Product feedback updated successfully',
+    feedback: savedOrderDetail.feedback,
+    orderDetail: {
+      _id: savedOrderDetail._id,
+      orderId: savedOrderDetail.orderId,
+      variantId: savedOrderDetail.variantId,
+      feedback: savedOrderDetail.feedback
+    }
+  });
+});
+
+exports.deleteFeedbackProduct = catchAsync(async (req, res) => {
     const { orderId, variantId } = req.params;
 
     // Validate IDs
@@ -567,17 +478,9 @@ exports.deleteFeedbackProduct = async (req, res) => {
         }
       }
     });
-  } catch (error) {
-    console.error('Delete feedback product error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error deleting product feedback',
-    });
-  }
-};
+});
 
-exports.getAllFeedbackOfProduct = async (req, res) => {
-  try {
+exports.getAllFeedbackOfProduct = catchAsync(async (req, res) => {
     const { productId } = req.params;
     const currentUserId = req.user ? req.user.id : null; // Get current user if logged in
 
@@ -751,143 +654,38 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
       },
       feedbacks: formattedFeedbacks
     });
+});
 
-  } catch (error) {
-    console.error('Get all feedback of product error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Error retrieving product feedbacks'
-    });
+exports.getAllOrderForAdmin = catchAsync(async (req, res) => {
+  // Access check
+  if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+    throw new AppError('Access denied: Admin/Manager role required', 403);
   }
-};
 
-exports.getAllOrderForAdmin = async (req, res) => {
-  try {
-    // Access check
-    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
-      return res.status(403).json({ message: 'Access denied: Admin/Manager role required' });
-    }
+  const orders = await orderService.getAllOrdersForAdminService();
+  res.status(200).json({
+    success: true,
+    data: orders,
+    message: 'All orders retrieved successfully for admin'
+  });
+});
 
-    const orders = await orderService.getAllOrdersForAdminService();
-    res.status(200).json({
-      success: true,
-      data: orders,
-      message: 'All orders retrieved successfully for admin'
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Error retrieving all orders for admin'
-    });
+
+
+exports.getUserOrders = catchAsync(async (req, res) => {
+  const { accountId } = req.params;
+  // Validate account ID
+  if (!mongoose.isValidObjectId(accountId)) {
+    throw new AppError('Invalid account ID', 400);
   }
-};
-
-exports.cancelOrder = async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    const { cancelReason } = req.body; // Added cancelReason from request body
-
-    // Validate cancelReason
-    if (cancelReason && (typeof cancelReason !== 'string' || cancelReason.length > 500)) {
-      return res.status(400).json({
-        message: 'Invalid cancel reason. Must be a string up to 500 characters.'
-      });
-    }
-
-    // Get current order information with voucher
-    const order = await orderService.getOrderByIdService(orderId, req.user);
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-
-    // Only allow cancelling when status is pending
-    if (order.orderStatus !== 'pending') {
-      return res.status(400).json({ message: 'Only pending orders can be cancelled' });
-    }
-
-    // Handle voucher if order used a voucher
-    if (order.voucherId) {
-      const voucher = await Voucher.findById(order.voucherId);
-      if (voucher) {
-        // Decrease usedCount of voucher (restore usage count)
-        if (voucher.usedCount > 0) {
-          voucher.usedCount -= 1;
-          await voucher.save();
-        }
-      }
-    }
-
-    // Restore product stock quantity to warehouse
-    if (order.orderDetails && order.orderDetails.length > 0) {
-      for (const orderDetail of order.orderDetails) {
-        if (orderDetail.variantId) {
-          const variant = await ProductVariant.findById(orderDetail.variantId);
-          if (variant) {
-            // Save stockQuantity before restoring for validation
-            const oldStockQuantity = variant.stockQuantity;
-            // Add purchased quantity back to stock
-            variant.stockQuantity += orderDetail.Quantity;
-            // If transition from 0 to > 0, set variantStatus = active
-            if (oldStockQuantity === 0 && variant.stockQuantity > 0) {
-              variant.variantStatus = 'active';
-            }
-            await variant.save();
-          }
-        }
-      }
-    }
-
-    // Update status to cancelled and save cancelReason
-    let updateData = {
-      orderStatus: 'cancelled',
-      cancelReason
-    };
-
-    // If it's a paid VNPAY order, automatically start refund process
-    if (order.paymentMethod === 'VNPAY' && order.payStatus === 'paid') {
-      updateData.refundStatus = 'pending_refund';
-    }
-
-    const updatedOrder = await orderService.updateOrderService(orderId, updateData, req.user);
-
-    // Emit real-time update and notification
-    const io = req.app.get('io');
-    await emitOrderUpdate(io, updatedOrder, 'cancelled');
-
-    res.status(200).json({
-      message: 'Order cancelled successfully',
-      order: updatedOrder,
-      voucherRefunded: !!order.voucherId,
-      stockRestored: order.orderDetails ? order.orderDetails.length : 0,
-    });
-  } catch (error) {
-    res
-      .status(error.status || 500)
-      .json({ message: error.message || 'Error cancelling order' });
+  // Check authorization: only admin, manager, or the user themselves can access
+  if (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.id !== accountId) {
+    throw new AppError('Access denied: Can only view own orders', 403);
   }
-};
-
-exports.getUserOrders = async (req, res) => {
-  try {
-    const { accountId } = req.params;
-    // Validate account ID
-    if (!mongoose.isValidObjectId(accountId)) {
-      return res.status(400).json({ message: 'Invalid account ID' });
-    }
-    // Check authorization: only admin, manager, or the user themselves can access
-    if (req.user.role !== 'admin' && req.user.role !== 'manager' && req.user.id !== accountId) {
-      return res.status(403).json({ message: 'Access denied: Can only view own orders' });
-    }
-    const orders = await orderService.getUserOrdersService(accountId);
-    res.status(200).json({
-      success: true,
-      message: 'Orders retrieved successfully',
-      data: orders
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      success: false,
-      message: error.message || 'Error retrieving user orders'
-    });
-  }
-};
+  const orders = await orderService.getUserOrdersService(accountId);
+  res.status(200).json({
+    success: true,
+    message: 'Orders retrieved successfully',
+    data: orders
+  });
+});

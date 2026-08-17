@@ -14,6 +14,21 @@ exports.addComment = async (liveId, senderId, commentText) => {
             };
         }
 
+        const livestream = await Livestream.findById(liveId);
+        if (!livestream) {
+            return {
+                success: false,
+                message: 'Livestream not found'
+            };
+        }
+
+        if (livestream.status === 'ended') {
+            return {
+                success: false,
+                message: 'Cannot comment on ended livestream'
+            };
+        }
+
         // Create new live comment
         const liveComment = new LiveComment({
             liveId,
