@@ -1,32 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
-const { validateRequest } = require('../middleware/validateRequest');
+const { validateRequest } = require('../middleware/validationMiddleware');
 const { checkoutSchema, updateOrderSchema, cancelOrderSchema } = require('../validations/orderValidation');
 const {
-  getAllOrderForAdmin,
-  searchOrders,
-  getOrderById,
-  updateOrderByAdmin,
-  deleteOrder,
+  checkout,
   createVnpayPaymentUrl,
   vnpayReturn,
-  // vnpayIpn,
   cancelOrder,
-  getUserOrders, // New endpoint
+  getOrderById,
+  getUserOrders,
+  getAllOrderForAdmin,
+  updateOrderByAdmin,
 } = require('../controllers/orderController');
-const orderController = require('../controllers/orderController');
-
-// router.post('/', authenticateJWT, createOrder); 
-// router.get('/', authenticateJWT, getAllOrders);
-// router.get('/search', authenticateJWT, searchOrders); 
-// router.get('/vnpay-ipn', vnpayIpn); // User không sử dụng
-// router.put('/:id', authenticateJWT, updateOrder);
-// router.delete('/:id', authenticateJWT, deleteOrder); 
 
 // USER APIs
 // api checkout for user
-router.post('/checkout', authenticateJWT, validateRequest(checkoutSchema), orderController.checkout);
+router.post('/checkout', authenticateJWT, validateRequest(checkoutSchema), checkout);
 
 // api create payment url for vnpay
 router.post('/payment-url', authenticateJWT, createVnpayPaymentUrl);

@@ -1,5 +1,4 @@
 const Order = require('../models/Order');
-const Accounts = require('../models/Accounts');
 const mongoose = require('mongoose');
 
 // Helper function to format Vietnamese currency
@@ -17,58 +16,6 @@ const getMonthName = (monthNumber) => {
   ];
   if (index >= 0 && index < labels.length) return labels[index];
   return '';
-};
-
-
-exports.getCustomerStats = async () => {
-  const totalCustomers = await Accounts.countDocuments();
-  const activeCustomers = await Accounts.countDocuments({ acc_status: 'active' });
-  const inactiveCustomers = await Accounts.countDocuments({ acc_status: 'inactive' });
-  const suspendedCustomers = await Accounts.countDocuments({ acc_status: 'suspended' });
-  const roleCounts = await Accounts.aggregate([
-    { $group: { _id: '$role', count: { $sum: 1 } } }
-  ]);
-  return {
-    totalCustomers,
-    activeCustomers,
-    inactiveCustomers,
-    suspendedCustomers,
-    roleCounts
-  };
-};
-
-exports.getRevenueStats = async () => {
-  const totalRevenue = await Order.aggregate([
-    { $match: { pay_status: 'paid' } },
-    { $group: { _id: null, total: { $sum: '$totalPrice' } } }
-  ]);
-  const averageOrderValue = await Order.aggregate([
-    { $match: { pay_status: 'paid' } },
-    { $group: { _id: null, avg: { $avg: '$totalPrice' } } }
-  ]);
-  return {
-    totalRevenue: totalRevenue[0]?.total || 0,
-    averageOrderValue: averageOrderValue[0]?.avg || 0
-  };
-};
-
-exports.getOrderStats = async () => {
-  const totalOrders = await Order.countDocuments();
-  const statusCounts = await Order.aggregate([
-    { $group: { _id: '$order_status', count: { $sum: 1 } } }
-  ]);
-  const payStatusCounts = await Order.aggregate([
-    { $group: { _id: '$pay_status', count: { $sum: 1 } } }
-  ]);
-  const shippingStatusCounts = await Order.aggregate([
-    { $group: { _id: '$shipping_status', count: { $sum: 1 } } }
-  ]);
-  return {
-    totalOrders,
-    statusCounts,
-    payStatusCounts,
-    shippingStatusCounts
-  };
 };
 
 exports.getRevenueByWeek = async (numWeeks = 4) => {

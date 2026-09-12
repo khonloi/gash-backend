@@ -484,33 +484,6 @@ exports.deleteVoucher = async (id) => {
     }
 };
 
-// Get all vouchers for user (only active)
-// exports.getAllVouchersForUser = async () => {
-//     try {
-//         // Chỉ lấy voucher chưa bị xóa (isDeleted: false)
-//         const vouchers = await Voucher.find({ isDeleted: false })
-//             .sort({ createdAt: -1 });
-
-//         const result = vouchers.map(v => {
-//             const obj = v.toJSON();
-//             obj.status = 'active';
-//             return obj;
-//         });
-
-//         return {
-//             success: true,
-//             message: 'Vouchers retrieved successfully',
-//             data: result
-//         };
-//     } catch (error) {
-//         return {
-//             success: false,
-//             message: 'Failed to retrieve vouchers',
-//             error: error.message
-//         };
-//     }
-// };
-
 // Apply voucher (used in order processing)
 exports.applyVoucher = async (voucherCode, totalPrice) => {
     try {

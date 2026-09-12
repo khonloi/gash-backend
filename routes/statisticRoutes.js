@@ -3,15 +3,6 @@ const router = express.Router();
 const { authenticateJWT, authorizeRole } = require('../middleware/authMiddleware');
 const statisticController = require('../controllers/statisticController');
 
-// View Customer Statistics (Admin/Manager only)
-// router.get('/customers', authenticateJWT, authorizeRole(['admin']), statisticController.viewCustomerStats);
-
-// View Revenue Statistics (Admin/Manager only)
-// router.get('/revenue', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueStats);
-
-// View Order Statistics (Admin/Manager only)
-// router.get('/orders', authenticateJWT, authorizeRole(['admin']), statisticController.viewOrderStats);
-
 // View Revenue by Week (Admin/Manager only)
 router.get('/revenue/revenue-by-week', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByWeek);
 
@@ -25,7 +16,7 @@ router.get('/revenue/revenue-by-year', authenticateJWT, authorizeRole(['admin'])
 router.get('/revenue/revenue-by-day', authenticateJWT, authorizeRole(['admin']), statisticController.viewRevenueByDay);
 
 // ========================================================================
-// 🆕 THÊM CÁC ROUTE MỚI TỪ FILE THỨ HAI (CUSTOMER + PRODUCT STATISTICS)
+// CUSTOMER + PRODUCT STATISTICS
 // ========================================================================
 const {
   getProductStatistics,
@@ -37,10 +28,12 @@ const {
 const {
   getCustomerStatistics,
   exportCustomerStatistics,
+  getTopCustomers,
+  getCustomerSparkline,
 } = require('../controllers/customerStatisticsController');
 
 // ===============================
-// 🧍 CUSTOMER STATISTICS
+// CUSTOMER STATISTICS
 // ===============================
 router.get(
   '/customers',
@@ -56,20 +49,20 @@ router.get(
   exportCustomerStatistics
 );
 
-// 🏆 Top Customers
+// Top Customers
 router.get(
   '/customers/top',
   authenticateJWT,
   authorizeRole(['admin']),
-  require('../controllers/customerStatisticsController').getTopCustomers
+  getTopCustomers
 );
 
-// 📈 Sparkline Data
+// Sparkline Data
 router.get(
   '/customers/sparkline',
   authenticateJWT,
   authorizeRole(['admin']),
-  require('../controllers/customerStatisticsController').getCustomerSparkline
+  getCustomerSparkline
 );
 
 

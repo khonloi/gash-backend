@@ -6,104 +6,6 @@ const ProductVariants = require("../models/ProductVariant");
 const NewCart = require('../models/newCartModel');
 const { applyVoucher } = require('../controllers/voucherController');
 
-async function searchOrdersService(queryParams, user) {
-  const {
-    q,
-    acc_id,
-    order_status,
-    pay_status,
-    dateFrom,
-    dateTo,
-    minPrice,
-    maxPrice,
-  } = queryParams;
-  let query = {};
-  if (user.role !== "admin" && user.role !== "manager") {
-    query.acc_id = user.id;
-  } else if (acc_id) {
-    if (!mongoose.isValidObjectId(acc_id)) {
-      const err = new Error("Invalid account ID");
-      err.status = 400;
-      throw err;
-    }
-    query.acc_id = acc_id;
-  }
-  if (order_status && !['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'].includes(order_status)) {
-    const err = new Error("Invalid order status");
-    err.status = 400;
-    throw err;
-  }
-  if (pay_status && !['unpaid', 'paid'].includes(pay_status)) {
-    const err = new Error("Invalid pay status");
-    err.status = 400;
-    throw err;
-  }
-  if (order_status) query.order_status = order_status;
-  if (pay_status) query.pay_status = pay_status;
-  if (dateFrom || dateTo) {
-    query.orderDate = {};
-    if (dateFrom) {
-      const fromDate = new Date(dateFrom);
-      if (!isNaN(fromDate)) query.orderDate.$gte = fromDate;
-    }
-    if (dateTo) {
-      const toDate = new Date(dateTo);
-      if (!isNaN(toDate)) {
-        toDate.setHours(23, 59, 59, 999);
-        query.orderDate.$lte = toDate;
-      }
-    }
-    if (Object.keys(query.orderDate).length === 0) delete query.orderDate;
-  }
-  if (minPrice || maxPrice) {
-    query.totalPrice = {};
-    if (minPrice && !isNaN(parseFloat(minPrice)))
-      query.totalPrice.$gte = parseFloat(minPrice);
-    if (maxPrice && !isNaN(parseFloat(maxPrice)))
-      query.totalPrice.$lte = parseFloat(maxPrice);
-    if (Object.keys(query.totalPrice).length === 0) delete query.totalPrice;
-  }
-  let orderIdsByProduct = [];
-  if (q && typeof q === "string" && q.trim() !== "") {
-    const trimmedQuery = q.trim();
-    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-    const dateMatch = trimmedQuery.match(dateRegex);
-    if (dateMatch) {
-      const day = parseInt(dateMatch[1], 10);
-      const month = parseInt(dateMatch[2], 10) - 1;
-      const year = parseInt(dateMatch[3], 10);
-      const startDate = new Date(year, month, day, 0, 0, 0, 0);
-      const endDate = new Date(year, month, day, 23, 59, 59, 999);
-      query.orderDate = { $gte: startDate, $lte: endDate };
-    } else {
-      const matchingDetails = await OrderDetail.find().populate({
-        path: "variant_id",
-        populate: {
-          path: "productId",
-          model: "Products",
-          match: { productName: { $regex: trimmedQuery, $options: "i" } },
-        },
-      });
-      orderIdsByProduct = matchingDetails
-        .filter((d) => d.variant_id && d.variant_id.productId)
-        .map((d) => d.order_id.toString());
-      query.$or = [
-        { order_status: { $regex: trimmedQuery, $options: "i" } },
-        { pay_status: { $regex: trimmedQuery, $options: "i" } },
-        { addressReceive: { $regex: trimmedQuery, $options: "i" } },
-        { phone: { $regex: trimmedQuery, $options: "i" } },
-      ];
-      if (mongoose.isValidObjectId(trimmedQuery)) {
-        query.$or.push({ _id: new mongoose.Types.ObjectId(trimmedQuery) });
-      }
-      if (orderIdsByProduct.length > 0) {
-        query.$or.push({ _id: { $in: orderIdsByProduct.map(id => new mongoose.Types.ObjectId(id)) } });
-      }
-    }
-  }
-  return await Order.find(query).populate("acc_id", "username name");
-}
-
 async function getOrderByIdService(id, user) {
   if (!mongoose.isValidObjectId(id)) {
     const err = new Error("Invalid order ID");
@@ -323,31 +225,6 @@ async function updateOrderService(id, updateData, user) {
   return updatedOrder;
 }
 
-async function deleteOrderService(id, user) {
-  const order = await Order.findById(id);
-  if (!order) {
-    const err = new Error("Order not found");
-    err.status = 404;
-    throw err;
-  }
-  if (
-    user.role !== "admin" &&
-    user.role !== "manager" &&
-    order.acc_id.toString() !== user.id
-  ) {
-    const err = new Error("Access denied: Can only delete own order");
-    err.status = 403;
-    throw err;
-  }
-  if (order.order_status !== 'pending') {
-    const err = new Error("Orders can only be deleted when the status is pending");
-    err.status = 400;
-    throw err;
-  }
-  await Order.findByIdAndDelete(id);
-  return { message: "Order deleted successfully" };
-}
-
 async function getAllOrdersForAdminService() {
   const orders = await Order.find()
     .populate("acc_id", "username name email phone")
@@ -517,10 +394,8 @@ async function createOrderService(userId, checkoutData) {
 
 module.exports = {
   getAllOrdersForAdminService,
-  searchOrdersService,
   getOrderByIdService,
   updateOrderService,
-  deleteOrderService,
   getUserOrdersService,
   createOrderService
 };

@@ -1,32 +1,5 @@
 const statisticService = require('../services/statisticService');
 
-// exports.viewCustomerStats = async (req, res) => {
-//   try {
-//     const stats = await statisticService.getCustomerStats();
-//     res.status(200).json(stats);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error retrieving customer statistics', error: error.message });
-//   }
-// };
-
-// exports.viewRevenueStats = async (req, res) => {
-//   try {
-//     const stats = await statisticService.getRevenueStats();
-//     res.status(200).json(stats);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error retrieving revenue statistics', error: error.message });
-//   }
-// };
-
-// exports.viewOrderStats = async (req, res) => {
-//   try {
-//     const stats = await statisticService.getOrderStats();
-//     res.status(200).json(stats);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error retrieving order statistics', error: error.message });
-//   }
-// };
-
 exports.viewRevenueByWeek = async (req, res) => {
   try {
     const numWeeks = parseInt(req.query.weeks) || 4;

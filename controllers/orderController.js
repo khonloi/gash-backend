@@ -5,17 +5,10 @@ const orderDetailService = require('../services/orderDetailService');
 const vnpayService = require('../services/vnpayService');
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
+const OrderDetail = require('../models/OrderDetail');
 const Voucher = require('../models/Voucher');
+const Product = require('../models/Product');
 const ProductVariants = require('../models/ProductVariant');
-
-exports.searchOrders = async (req, res) => {
-  try {
-    const orders = await orderService.searchOrdersService(req.query, req.user);
-    res.status(200).json(orders);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error searching orders' });
-  }
-};
 
 exports.getOrderById = async (req, res) => {
   try {
@@ -59,15 +52,6 @@ exports.updateOrderByAdmin = async (req, res) => {
   }
 };
 
-exports.deleteOrder = async (req, res) => {
-  try {
-    const result = await orderService.deleteOrderService(req.params.id, req.user);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || 'Error deleting order' });
-  }
-};
-
 exports.createVnpayPaymentUrl = async (req, res) => {
   try {
     const { orderId, bankCode, language } = req.body;
@@ -99,24 +83,6 @@ exports.vnpayReturn = async (req, res) => {
   }
 };
 
-exports.vnpayIpn = async (req, res) => {
-  try {
-    if (!req.query || Object.keys(req.query).length === 0) return res.status(400).json({ RspCode: '99', Message: 'Invalid IPN data' });
-    const result = await vnpayService.handleIpn(req.query);
-    
-    const io = req.app.get('io');
-    if (io && req.query.vnp_TxnRef) {
-      const updatedOrder = await Order.findById(req.query.vnp_TxnRef).populate('acc_id', 'username name email phone').lean();
-      if (updatedOrder && updatedOrder.acc_id) {
-        await emitOrderUpdateEvent(io, updatedOrder, 'payment_changed');
-      }
-    }
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(200).json({ RspCode: '99', Message: 'Internal server error' });
-  }
-};
-
 exports.checkout = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -142,21 +108,6 @@ exports.checkout = async (req, res) => {
     });
   } catch (error) {
     res.status(error.statusCode || 500).json({ success: false, message: error.message || 'Internal server error' });
-  }
-};
-
-exports.getOrderByIdForUser = async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    if (!mongoose.isValidObjectId(orderId)) return res.status(400).json({ success: false, message: 'Invalid order ID' });
-    const order = await Order.findById(orderId).populate('acc_id', 'username name').populate('voucher_id', 'code discountType discountValue');
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    if (req.user.role !== 'admin' && req.user.role !== 'manager' && order.acc_id._id.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: 'Access denied: Can only view own order' });
-    }
-    return res.status(200).json({ success: true, order });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || 'Error retrieving order' });
   }
 };
 
@@ -188,6 +139,150 @@ exports.cancelOrder = async (req, res) => {
     res.status(200).json({ message: 'Order cancelled successfully', order: updatedOrder, voucherRefunded: !!order.voucher_id, stockRestored: order.orderDetails?.length || 0 });
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message || 'Error cancelling order' });
+  }
+};
+
+exports.getAllFeedbackOfProduct = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const currentUserId = req.user?.id || null;
+
+    if (!productId) {
+      return res.status(400).json({ success: false, message: 'Product ID is required' });
+    }
+    if (!mongoose.isValidObjectId(productId)) {
+      return res.status(400).json({ success: false, message: 'Invalid product ID format' });
+    }
+
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    const allVariants = await ProductVariants.find({ productId }).select('_id');
+    const variantIds = allVariants.map(v => v._id);
+
+    const query = {
+      variant_id: { $in: variantIds },
+      $or: [
+        { 'feedback.rating': { $exists: true, $ne: null } },
+        { 'feedback.content': { $exists: true, $ne: '' } }
+      ],
+      $and: [
+        {
+          $or: [
+            { 'feedback.is_deleted': { $exists: false } },
+            { 'feedback.is_deleted': false }
+          ]
+        }
+      ]
+    };
+
+    const allFeedbacks = await OrderDetail.find(query)
+      .populate({
+        path: 'order_id',
+        select: 'orderDate order_status acc_id',
+        populate: { path: 'acc_id', select: 'username name image email phone' }
+      })
+      .populate({
+        path: 'variant_id',
+        select: 'productColorId productSizeId variantImage',
+        populate: [
+          { path: 'productColorId', select: 'color_name' },
+          { path: 'productSizeId', select: 'size_name' }
+        ]
+      })
+      .sort({ 'order_id.orderDate': -1 });
+
+    const sortedFeedbacks = allFeedbacks
+      .filter(f => f.order_id?.acc_id?._id)
+      .sort((a, b) => {
+        if (currentUserId) {
+          const aIsCurrentUser = a.order_id?.acc_id?._id?.toString() === currentUserId;
+          const bIsCurrentUser = b.order_id?.acc_id?._id?.toString() === currentUserId;
+          if (aIsCurrentUser && !bIsCurrentUser) return -1;
+          if (bIsCurrentUser && !aIsCurrentUser) return 1;
+        }
+        const aDate = a.order_id?.orderDate ? new Date(a.order_id.orderDate) : new Date(0);
+        const bDate = b.order_id?.orderDate ? new Date(b.order_id.orderDate) : new Date(0);
+        return bDate - aDate;
+      });
+
+    const totalFeedbacks = sortedFeedbacks.length;
+    const feedbacksWithRating = allFeedbacks.filter(f => f.feedback?.rating);
+    const totalRatings = feedbacksWithRating.length;
+    const averageRating = totalRatings > 0
+      ? feedbacksWithRating.reduce((sum, f) => sum + f.feedback.rating, 0) / totalRatings
+      : 0;
+
+    const ratingCounts = {
+      5: feedbacksWithRating.filter(f => f.feedback.rating === 5).length,
+      4: feedbacksWithRating.filter(f => f.feedback.rating === 4).length,
+      3: feedbacksWithRating.filter(f => f.feedback.rating === 3).length,
+      2: feedbacksWithRating.filter(f => f.feedback.rating === 2).length,
+      1: feedbacksWithRating.filter(f => f.feedback.rating === 1).length
+    };
+
+    const ratingPercentage = {
+      5: totalRatings > 0 ? Math.round((ratingCounts[5] / totalRatings) * 100) : 0,
+      4: totalRatings > 0 ? Math.round((ratingCounts[4] / totalRatings) * 100) : 0,
+      3: totalRatings > 0 ? Math.round((ratingCounts[3] / totalRatings) * 100) : 0,
+      2: totalRatings > 0 ? Math.round((ratingCounts[2] / totalRatings) * 100) : 0,
+      1: totalRatings > 0 ? Math.round((ratingCounts[1] / totalRatings) * 100) : 0
+    };
+
+    const formattedFeedbacks = sortedFeedbacks.map(f => ({
+      _id: f._id,
+      order_id: f.order_id._id,
+      order_date: f.order_id.orderDate,
+      order_status: f.order_id.order_status,
+      customer: {
+        user_id: f.order_id.acc_id._id,
+        username: f.order_id.acc_id.username,
+        name: f.order_id.acc_id.name,
+        image: f.order_id.acc_id.image,
+        email: f.order_id.acc_id.email,
+        phone: f.order_id.acc_id.phone,
+        is_current_user: currentUserId ? f.order_id.acc_id._id.toString() === currentUserId : false
+      },
+      variant: f.variant_id ? {
+        variant_id: f.variant_id._id,
+        color: f.variant_id.productColorId ? f.variant_id.productColorId.color_name : null,
+        size: f.variant_id.productSizeId ? f.variant_id.productSizeId.size_name : null,
+        image: f.variant_id.variantImage || null
+      } : null,
+      feedback: {
+        rating: f.feedback.rating,
+        content: f.feedback.content,
+        created_at: f.feedback.created_at,
+        updated_at: f.feedback.updated_at,
+        is_deleted: f.feedback.is_deleted,
+        has_rating: f.feedback.rating !== null,
+        has_content: f.feedback.content && f.feedback.content.trim() !== ''
+      },
+      unit_price: f.UnitPrice,
+      quantity: f.Quantity
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: 'Product feedbacks retrieved successfully',
+      product: {
+        product_id: product._id,
+        product_name: product.productName,
+        total_variants: allVariants.length
+      },
+      statistics: {
+        total_feedbacks: totalFeedbacks,
+        total_ratings: totalRatings,
+        average_rating: Math.round(averageRating * 10) / 10,
+        rating_distribution: ratingCounts,
+        rating_percentage: ratingPercentage
+      },
+      feedbacks: formattedFeedbacks
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message || 'Error retrieving product feedbacks' });
   }
 };
 

@@ -165,25 +165,6 @@ exports.deleteVoucher = async (req, res) => {
     }
 };
 
-// Get all vouchers for user (only active)
-// exports.getAllVouchersForUser = async (req, res) => {
-//     try {
-//         const result = await voucherService.getAllVouchersForUser();
-
-//         if (result.success) {
-//             res.status(200).json(result);
-//         } else {
-//             res.status(400).json(result);
-//         }
-//     } catch (error) {
-//         res.status(500).json({
-//             success: false,
-//             message: 'Internal server error',
-//             error: error.message
-//         });
-//     }
-// };
-
 // Preview voucher (calculate discount without applying)
 exports.previewVoucher = async (req, res) => {
     try {
