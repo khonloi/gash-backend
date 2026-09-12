@@ -24,6 +24,7 @@
     "express-rate-limit": "^6.10.0",
     "google-auth-library": "^10.4.2",
     "helmet": "^7.0.0",
+    "joi": "^18.2.9",
     "jsonwebtoken": "^9.0.2",
     "livekit-client": "^1.15.13",
     "livekit-server-sdk": "^1.2.7",

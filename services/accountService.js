@@ -3,76 +3,42 @@ const Orders = require("../models/Orders");
 const mongoose = require("mongoose");
 
 exports.createAccount = async (data) => {
-  const {
-    username,
-    name,
-    email,
-    phone,
-    address,
-    password,
-    image,
-    gender,
-    dob,
-    role,
-  } = data;
+  const { username, name, email, phone, address, password, image, gender, dob, role } = data;
   const existingAccount = await Accounts.findOne({
     $or: [{ username }, { email }],
   });
   if (existingAccount) {
-    return {
-      status: 400,
-      response: { message: "Username or email already exists" },
-    };
+    throw new Error("Username or email already exists");
   }
   const account = new Accounts({
-    username,
-    name,
-    email,
-    phone,
-    address,
-    password,
-    image: image,
-    gender,
-    dob,
+    username, name, email, phone, address, password,
+    image, gender, dob,
     role: role || "user",
     acc_status: "active",
+    isEmailVerified: true // Admin created accounts are verified
   });
   const savedAccount = await account.save();
   return {
-    status: 201,
-    response: {
-      message: "Account created successfully",
-      account: {
-        _id: savedAccount._id,
-        username: savedAccount.username,
-        name: savedAccount.name,
-        email: savedAccount.email,
-        phone: savedAccount.phone,
-        address: savedAccount.address,
-        image: savedAccount.image,
-        gender: savedAccount.gender,
-        dob: savedAccount.dob,
-        role: savedAccount.role,
-        acc_status: savedAccount.acc_status,
-      },
+    message: "Account created successfully",
+    account: {
+      _id: savedAccount._id, username: savedAccount.username, name: savedAccount.name,
+      email: savedAccount.email, phone: savedAccount.phone, address: savedAccount.address,
+      image: savedAccount.image, gender: savedAccount.gender, dob: savedAccount.dob,
+      role: savedAccount.role, acc_status: savedAccount.acc_status,
     },
   };
 };
 
 exports.getAllAccounts = async () => {
-  const accounts = await Accounts.find().select("-password");
+  const accounts = await Accounts.find().select("-password -refreshTokens");
   return accounts.map((acc) => acc.toObject());
 };
 
 exports.searchAccountsService = async (queryParams) => {
   const { q, role, acc_status, hasImage, dateFrom, dateTo } = queryParams;
   let query = {};
-  if (role) {
-    query.role = role;
-  }
-  if (acc_status) {
-    query.acc_status = acc_status;
-  }
+  if (role) query.role = role;
+  if (acc_status) query.acc_status = acc_status;
   if (hasImage === "true") {
     query.image = { $ne: "http://localhost:4000/default-pfp.jpg" };
   } else if (hasImage === "false") {
@@ -91,9 +57,7 @@ exports.searchAccountsService = async (queryParams) => {
         query.createdAt.$lte = toDate;
       }
     }
-    if (Object.keys(query.createdAt).length === 0) {
-      delete query.createdAt;
-    }
+    if (Object.keys(query.createdAt).length === 0) delete query.createdAt;
   }
   if (q && typeof q === "string" && q.trim() !== "") {
     const trimmedQuery = q.trim();
@@ -111,330 +75,148 @@ exports.searchAccountsService = async (queryParams) => {
     }
   }
   const accounts = await Accounts.find(query)
-    .select("-password")
+    .select("-password -refreshTokens")
     .sort({ username: 1 });
   return accounts.map((acc) => acc.toObject());
 };
 
 exports.getAccountById = async (id, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
-    return {
-      status: 403,
-      response: { message: "Access denied: Can only view own account" },
-    };
+    throw new Error("Access denied: Can only view own account");
   }
-  const account = await Accounts.findById(id).select("-password");
+  const account = await Accounts.findById(id).select("-password -refreshTokens");
   if (!account) {
-    return { status: 404, response: { message: "Account not found" } };
+    throw new Error("Account not found");
   }
-  return { status: 200, response: account.toObject() };
+  return account.toObject();
+};
+
+const validateAndApplyUpdates = async (account, data, excludePassword = true) => {
+  const { username, email, password, ...updateData } = data;
+  if (username || email) {
+    const existingAccount = await Accounts.findOne({
+      $or: [{ username }, { email }],
+      _id: { $ne: account._id },
+    });
+    if (existingAccount) {
+      throw new Error("Username or email already exists");
+    }
+  }
+  if (username) account.username = username;
+  if (email) account.email = email;
+  if (!excludePassword && password) account.password = password; // Should generally use updatePassword instead
+  Object.keys(updateData).forEach((key) => {
+    if (updateData[key] !== undefined) account[key] = updateData[key];
+  });
+  await account.save();
+  const { password: _, refreshTokens: __, ...accountObj } = account.toObject();
+  return accountObj;
 };
 
 exports.updateAccount = async (id, data, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
-    return {
-      status: 403,
-      response: { message: "Access denied: Can only update own account" },
-    };
+    throw new Error("Access denied: Can only update own account");
   }
   const account = await Accounts.findById(id);
-  if (!account) {
-    return { status: 404, response: { message: "Account not found" } };
-  }
-  if (account.is_deleted === true) {
-    return {
-      status: 403,
-      response: { message: "Cannot update a deleted account" },
-    };
-  }
-  const { username, email, ...updateData } = data;
-  if (username || email) {
-    const existingAccount = await Accounts.findOne({
-      $or: [{ username }, { email }],
-      _id: { $ne: id },
-    });
-    if (existingAccount) {
-      return {
-        status: 400,
-        response: { message: "Username or email already exists" },
-      };
-    }
-  }
-  // Update fields
-  if (username) account.username = username;
-  if (email) account.email = email;
-  Object.keys(updateData).forEach((key) => {
-    account[key] = updateData[key];
-  });
-  await account.save(); // This will trigger the pre-save hook for password hashing
-  const { password, ...accountObj } = account.toObject();
-  return {
-    status: 200,
-    response: { message: "Account updated successfully", account: accountObj },
-  };
+  if (!account) throw new Error("Account not found");
+  if (account.is_deleted) throw new Error("Cannot update a deleted account");
+
+  const accountObj = await validateAndApplyUpdates(account, data, true);
+  return { message: "Account updated successfully", account: accountObj };
 };
 
 exports.updateProfile = async (id, data, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
-    return {
-      status: 403,
-      response: { message: "Access denied: Can only update own profile" },
-    };
+    throw new Error("Access denied: Can only update own profile");
   }
-
   const account = await Accounts.findById(id);
-  if (!account) {
-    return { status: 404, response: { message: "Account not found" } };
-  }
+  if (!account) throw new Error("Account not found");
+  if (account.is_deleted) throw new Error("Cannot update a deleted account");
 
-  if (account.is_deleted === true) {
-    return {
-      status: 403,
-      response: { message: "Cannot update a deleted account" },
-    };
-  }
-
-  // Không cho cập nhật trực tiếp password ở đây
-  const { username, email, password, ...updateData } = data;
-
-  if (username || email) {
-    const existingAccount = await Accounts.findOne({
-      $or: [{ username }, { email }],
-      _id: { $ne: id },
-    });
-    if (existingAccount) {
-      return {
-        status: 400,
-        response: { message: "Username or email already exists" },
-      };
-    }
-  }
-
-  if (username) account.username = username;
-  if (email) account.email = email;
-  Object.keys(updateData).forEach((key) => {
-    account[key] = updateData[key];
-  });
-
-  await account.save();
-
-  const { password: _, ...accountObj } = account.toObject();
-  return {
-    status: 200,
-    response: { message: "Profile updated successfully", account: accountObj },
-  };
+  const accountObj = await validateAndApplyUpdates(account, data, true);
+  return { message: "Profile updated successfully", account: accountObj };
 };
 
-// Đổi mật khẩu
 exports.updatePassword = async (id, oldPassword, newPassword, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
-    return {
-      status: 403,
-      response: { message: "Access denied: Can only update own password" },
-    };
+    throw new Error("Access denied: Can only update own password");
   }
-
   const account = await Accounts.findById(id).select("+password");
-  if (!account) {
-    return { status: 404, response: { message: "Account not found" } };
-  }
+  if (!account) throw new Error("Account not found");
+  if (account.is_deleted) throw new Error("Cannot update a deleted account");
 
-  if (account.is_deleted === true) {
-    return {
-      status: 403,
-      response: { message: "Cannot update a deleted account" },
-    };
-  }
-
-  // Nếu không phải admin thì phải check mật khẩu cũ
   if (user.role !== "admin") {
     const isMatch = await account.comparePassword(oldPassword);
-    if (!isMatch) {
-      return {
-        status: 400,
-        response: { message: "Old password is incorrect" },
-      };
-    }
+    if (!isMatch) throw new Error("Old password is incorrect");
   }
 
-  account.password = newPassword; // sẽ được hash bởi pre-save hook
+  account.password = newPassword;
+  account.refreshTokens = []; // Log out from other devices when password changes
   await account.save();
-
-  return {
-    status: 200,
-    response: { message: "Password updated successfully" },
-  };
+  return { message: "Password updated successfully" };
 };
 
 exports.softDeleteAccount = async (id, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
-    return {
-      status: 403,
-      response: { message: "Access denied: Can only soft delete own account" },
-    };
+    throw new Error("Access denied: Can only soft delete own account");
   }
   const account = await Accounts.findById(id);
-  if (!account) {
-    return { status: 404, response: { message: "Account not found" } };
-  }
-  if (account.is_deleted === true) {
-    return {
-      status: 403,
-      response: { message: "Account is already soft-deleted" },
-    };
-  }
+  if (!account) throw new Error("Account not found");
+  if (account.is_deleted) throw new Error("Account is already soft-deleted");
+
   account.is_deleted = true;
   account.role = "user";
   account.acc_status = "deleted";
+  account.refreshTokens = [];
   await account.save();
-  return {
-    status: 200,
-    response: { message: "Account soft deleted successfully" },
-  };
+  return { message: "Account soft deleted successfully" };
 };
 
 exports.disableAccount = async (id, user) => {
-  if (user.role !== "admin") {
-    return {
-      status: 403,
-      response: { message: "Access denied: Admin role required" },
-    };
-  }
+  if (user.role !== "admin") throw new Error("Access denied: Admin role required");
   const account = await Accounts.findById(id);
-  if (!account) {
-    return { status: 404, response: { message: "Account not found" } };
-  }
-  if (account.acc_status === "inactive") {
-    return {
-      status: 403,
-      response: { message: "Account is already disabled" },
-    };
-  }
+  if (!account) throw new Error("Account not found");
+  if (account.acc_status === "inactive") throw new Error("Account is already disabled");
+
   account.acc_status = "inactive";
+  account.refreshTokens = [];
   await account.save();
-  return {
-    status: 200,
-    response: { message: "Account disabled successfully" },
-  };
+  return { message: "Account disabled successfully" };
 };
 
 exports.deleteAccount = async (id, user) => {
   if (user.role !== "admin" && user.id !== id.toString()) {
-    return {
-      status: 403,
-      response: { message: "Access denied: Can only delete own account" },
-    };
+    throw new Error("Access denied: Can only delete own account");
   }
   const account = await Accounts.findById(id);
-  if (!account) {
-    return { status: 404, response: { message: "Account not found" } };
-  }
-  if (account.acc_status === "deleted" && account.is_deleted === true) {
-    return {
-      status: 403,
-      response: { message: "Cannot hard delete a soft-deleted account" },
-    };
+  if (!account) throw new Error("Account not found");
+  if (account.acc_status === "deleted" && account.is_deleted) {
+    throw new Error("Cannot hard delete a soft-deleted account");
   }
   await Accounts.findByIdAndDelete(id);
-  return {
-    status: 200,
-    response: { message: "Account permanently deleted successfully" },
-  };
+  return { message: "Account permanently deleted successfully" };
 };
 
-// Edit Staff Information - Admin only, for staff accounts (manager/admin roles)
 exports.editStaffInformation = async (id, data, user) => {
-  if (user.role !== "admin") {
-    return {
-      status: 403,
-      response: { message: "Access denied: Admin role required" },
-    };
-  }
-
+  if (user.role !== "admin") throw new Error("Access denied: Admin role required");
   const account = await Accounts.findById(id);
-  if (!account) {
-    return { status: 404, response: { message: "Account not found" } };
-  }
-
-  // Check if account is a staff member (manager or admin)
+  if (!account) throw new Error("Account not found");
   if (account.role !== "manager" && account.role !== "admin") {
-    return {
-      status: 403,
-      response: {
-        message: "Can only edit staff information for manager/admin accounts",
-      },
-    };
+    throw new Error("Can only edit staff information for manager/admin accounts");
   }
+  if (account.is_deleted) throw new Error("Cannot edit information of a deleted account");
 
-  if (account.is_deleted === true) {
-    return {
-      status: 403,
-      response: { message: "Cannot edit information of a deleted account" },
-    };
-  }
-
-  const { username, email, password, ...updateData } = data;
-
-  // Check for duplicate username/email
-  if (username || email) {
-    const existingAccount = await Accounts.findOne({
-      $or: [{ username }, { email }],
-      _id: { $ne: id },
-    });
-    if (existingAccount) {
-      return {
-        status: 400,
-        response: { message: "Username or email already exists" },
-      };
-    }
-  }
-
-  // Update fields
-  if (username) account.username = username;
-  if (email) account.email = email;
-  Object.keys(updateData).forEach((key) => {
-    if (updateData[key] !== undefined) {
-      account[key] = updateData[key];
-    }
-  });
-
-  await account.save();
-
-  const { password: _, ...accountObj } = account.toObject();
-  return {
-    status: 200,
-    response: {
-      message: "Staff information updated successfully",
-      account: accountObj,
-    },
-  };
+  const accountObj = await validateAndApplyUpdates(account, data, true);
+  return { message: "Staff information updated successfully", account: accountObj };
 };
 
 exports.getAccountOrderStatistics = async (id) => {
-  if (!mongoose.isValidObjectId(id)) {
-    return {
-      status: 400,
-      response: { message: "Invalid account ID" },
-    };
-  }
+  if (!mongoose.isValidObjectId(id)) throw new Error("Invalid account ID");
 
-  const orders = await Orders.find({ acc_id: id })
-    .select('order_status finalPrice totalPrice');
-
+  const orders = await Orders.find({ acc_id: id }).select("order_status finalPrice totalPrice");
   const totalOrders = orders.length;
-  const totalSpent = orders.reduce((sum, order) => {
-    return sum + (order.finalPrice || order.totalPrice || 0);
-  }, 0);
-  const activeOrders = orders.filter(order =>
-    ['pending', 'confirmed', 'shipping'].includes(order.order_status)
-  ).length;
+  const totalSpent = orders.reduce((sum, order) => sum + (order.finalPrice || order.totalPrice || 0), 0);
+  const activeOrders = orders.filter(order => ['pending', 'confirmed', 'shipping'].includes(order.order_status)).length;
 
-  return {
-    status: 200,
-    response: {
-      totalOrders,
-      totalSpent,
-      activeOrders
-    },
-  };
+  return { totalOrders, totalSpent, activeOrders };
 };

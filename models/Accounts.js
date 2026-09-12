@@ -60,6 +60,20 @@ const accountSchema = new mongoose.Schema({
     default: false,
     index: true
   },
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  failedLoginAttempts: {
+    type: Number,
+    default: 0
+  },
+  lockUntil: {
+    type: Date
+  },
+  refreshTokens: [{
+    type: String
+  }],
 }, {
   timestamps: true
 });

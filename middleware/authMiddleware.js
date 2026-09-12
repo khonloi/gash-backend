@@ -19,6 +19,9 @@ const authenticateJWT = async (req, res, next) => {
     if (account.acc_status !== 'active') {
       return res.status(403).json({ message: 'Account is inactive or suspended' });
     }
+    if (account.lockUntil && account.lockUntil > Date.now()) {
+      return res.status(403).json({ message: 'Account is temporarily locked' });
+    }
     req.user = { id: account._id.toString(), username: account.username, role: account.role }; // Convert ObjectId to string
     next();
   } catch (error) {
@@ -62,6 +65,9 @@ const authenticateLiveKit = async (req, res, next) => {
     if (account.acc_status !== 'active') {
       return res.status(403).json({ message: 'Account is inactive for LiveKit access' });
     }
+    if (account.lockUntil && account.lockUntil > Date.now()) {
+      return res.status(403).json({ message: 'Account is temporarily locked' });
+    }
 
     req.user = { id: account._id.toString(), username: account.username, role: account.role };
     req.livekit = true; // Flag for LiveKit requests
@@ -101,6 +107,9 @@ const authenticateLivestream = async (req, res, next) => {
 
     if (account.acc_status !== 'active') {
       return res.status(403).json({ message: 'Account is inactive for livestream access' });
+    }
+    if (account.lockUntil && account.lockUntil > Date.now()) {
+      return res.status(403).json({ message: 'Account is temporarily locked' });
     }
 
     req.user = { id: account._id.toString(), username: account.username, role: account.role };
