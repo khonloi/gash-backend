@@ -1,4 +1,4 @@
-const Orders = require('../models/Orders');
+const Order = require('../models/Order');
 const Accounts = require('../models/Accounts');
 const mongoose = require('mongoose');
 
@@ -38,11 +38,11 @@ exports.getCustomerStats = async () => {
 };
 
 exports.getRevenueStats = async () => {
-  const totalRevenue = await Orders.aggregate([
+  const totalRevenue = await Order.aggregate([
     { $match: { pay_status: 'paid' } },
     { $group: { _id: null, total: { $sum: '$totalPrice' } } }
   ]);
-  const averageOrderValue = await Orders.aggregate([
+  const averageOrderValue = await Order.aggregate([
     { $match: { pay_status: 'paid' } },
     { $group: { _id: null, avg: { $avg: '$totalPrice' } } }
   ]);
@@ -53,14 +53,14 @@ exports.getRevenueStats = async () => {
 };
 
 exports.getOrderStats = async () => {
-  const totalOrders = await Orders.countDocuments();
-  const statusCounts = await Orders.aggregate([
+  const totalOrders = await Order.countDocuments();
+  const statusCounts = await Order.aggregate([
     { $group: { _id: '$order_status', count: { $sum: 1 } } }
   ]);
-  const payStatusCounts = await Orders.aggregate([
+  const payStatusCounts = await Order.aggregate([
     { $group: { _id: '$pay_status', count: { $sum: 1 } } }
   ]);
-  const shippingStatusCounts = await Orders.aggregate([
+  const shippingStatusCounts = await Order.aggregate([
     { $group: { _id: '$shipping_status', count: { $sum: 1 } } }
   ]);
   return {
@@ -84,7 +84,7 @@ exports.getRevenueByWeek = async (numWeeks = 4) => {
   currentWeekEnd.setHours(23, 59, 59, 999);
 
   // ✅ Query ALL data once with daily grouping
-  const dailyRevenue = await Orders.aggregate([
+  const dailyRevenue = await Order.aggregate([
     {
       $match: {
         pay_status: 'paid',
@@ -287,7 +287,7 @@ exports.getRevenueByMonth = async (numMonths = 24) => {
   endDate.setHours(23, 59, 59, 999);
 
   // ✅ Query ALL data once with monthly grouping
-  const monthlyRevenue = await Orders.aggregate([
+  const monthlyRevenue = await Order.aggregate([
     {
       $match: {
         pay_status: 'paid',
@@ -497,7 +497,7 @@ exports.getRevenueByDay = async (startDate, endDate) => {
   extendedStartDate.setHours(0, 0, 0, 0);
 
   // ✅ Query ALL data once with daily grouping (including 7 days before for comparison)
-  const dailyRevenue = await Orders.aggregate([
+  const dailyRevenue = await Order.aggregate([
     {
       $match: {
         pay_status: 'paid',
@@ -732,7 +732,7 @@ exports.getRevenueByYear = async (numYears = 3) => {
   endDate.setHours(23, 59, 59, 999);
 
   // ✅ Query ALL data once with yearly grouping
-  const yearlyRevenue = await Orders.aggregate([
+  const yearlyRevenue = await Order.aggregate([
     {
       $match: {
         pay_status: 'paid',

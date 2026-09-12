@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const OrderDetails = require('../models/OrderDetails');
-const Orders = require('../models/Orders');
+const OrderDetail = require('../models/OrderDetail');
+const Order = require('../models/Order');
 const Products = require('../models/Product');
 const ProductVariants = require('../models/ProductVariant');
 const ProductColors = require('../models/ProductColors');
@@ -72,7 +72,7 @@ exports.getAllFeedback = async (req, res) => {
     }
 
     if (userId && mongoose.isValidObjectId(userId)) {
-      const orders = await Orders.find({ acc_id: userId }).select('_id');
+      const orders = await Order.find({ acc_id: userId }).select('_id');
       const orderIds = orders.map(o => o._id);
       query.order_id = { $in: orderIds };
     }
@@ -80,7 +80,7 @@ exports.getAllFeedback = async (req, res) => {
     if (orderStatus) {
       const validStatuses = ['pending', 'confirmed', 'shipping', 'delivered', 'cancelled'];
       if (validStatuses.includes(orderStatus)) {
-        const orders = await Orders.find({ order_status: orderStatus }).select('_id');
+        const orders = await Order.find({ order_status: orderStatus }).select('_id');
         const orderIds = orders.map(o => o._id);
         query.order_id = { $in: orderIds };
       }
@@ -112,7 +112,7 @@ exports.getAllFeedback = async (req, res) => {
       sortObj[`feedback.${sortField}`] = sortDirection;
     }
 
-    const feedbacks = await OrderDetails.find(query)
+    const feedbacks = await OrderDetail.find(query)
       .populate({
         path: 'order_id',
         select: 'orderDate order_status acc_id',
@@ -264,7 +264,7 @@ exports.getFeedbackById = async (req, res) => {
       });
     }
 
-    const feedback = await OrderDetails.findById(feedbackId)
+    const feedback = await OrderDetail.findById(feedbackId)
       .populate({
         path: 'order_id',
         select: 'orderDate order_status acc_id finalPrice',
@@ -382,7 +382,7 @@ exports.getFeedbackStatistics = async (req, res) => {
     }
 
     // Get all feedbacks for statistics
-    const allFeedbacks = await OrderDetails.find(baseQuery);
+    const allFeedbacks = await OrderDetail.find(baseQuery);
 
     // Calculate comprehensive statistics
     const stats = {
@@ -471,7 +471,7 @@ exports.deleteFeedback = async (req, res) => {
       });
     }
 
-    const feedback = await OrderDetails.findById(feedbackId);
+    const feedback = await OrderDetail.findById(feedbackId);
     if (!feedback) {
       return res.status(404).json({
         success: false,
@@ -515,7 +515,7 @@ exports.restoreFeedback = async (req, res) => {
       });
     }
 
-    const feedback = await OrderDetails.findById(feedbackId);
+    const feedback = await OrderDetail.findById(feedbackId);
     if (!feedback) {
       return res.status(404).json({
         success: false,

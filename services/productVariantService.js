@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 const ProductVariant = require("../models/ProductVariant");
 const Product = require("../models/Product");
-const OrderDetails = require("../models/OrderDetails");
-const Orders = require("../models/Orders");
+const OrderDetail = require('../models/OrderDetail');
+const Order = require('../models/Order');
 
 // HELPER: Update product status based on its variants
 // Rule: If product has at least 1 variant → status = "active"
@@ -283,7 +283,7 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Invalid variant ID");
     }
 
-    const orderDetails = await OrderDetails.find({ variantId }).populate({
+    const orderDetails = await OrderDetail.find({ variantId }).populate({
       path: "orderId",
       select: "orderStatus",
     });

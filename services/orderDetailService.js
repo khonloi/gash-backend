@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const OrderDetails = require('../models/OrderDetails');
-const Orders = require('../models/Orders');
+const OrderDetail = require('../models/OrderDetail');
+const Order = require('../models/Order');
 const ProductVariants = require('../models/ProductVariant');
 const Accounts = require('../models/Accounts');
 
@@ -22,8 +22,8 @@ exports.searchOrderDetails = async (queryParams, user) => {
   };
 
   if (user.role !== 'admin' && user.role !== 'manager') {
-    const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
-    const userOrderIds = userOrders.map(order => order._id);
+    const userOrders = await Order.find({ acc_id: user.id }).select('_id');
+    const userOrderIds = userOrder.map(order => order._id);
     query.order_id = { $in: userOrderIds };
   }
 
@@ -58,8 +58,8 @@ exports.searchOrderDetails = async (queryParams, user) => {
   if (username) {
     const userDoc = await Accounts.findOne({ username }).select('_id');
     if (!userDoc) return [];
-    const userOrders = await Orders.find({ acc_id: userDoc._id }).select('_id');
-    const userOrderIds = userOrders.map(order => order._id);
+    const userOrders = await Order.find({ acc_id: userDoc._id }).select('_id');
+    const userOrderIds = userOrder.map(order => order._id);
     query.order_id = query.order_id
       ? { $in: userOrderIds.filter(id => query.order_id.$in ? query.order_id.$in.includes(id) : id === query.order_id) }
       : { $in: userOrderIds };
@@ -73,7 +73,7 @@ exports.searchOrderDetails = async (queryParams, user) => {
       toDate.setHours(23, 59, 59, 999);
       dateQuery.$lte = toDate;
     }
-    const orders = await Orders.find({ orderDate: dateQuery }).select('_id');
+    const orders = await Order.find({ orderDate: dateQuery }).select('_id');
     const orderIds = orders.map(order => order._id);
     query.order_id = query.order_id
       ? { $in: orderIds.filter(id => query.order_id.$in ? query.order_id.$in.includes(id) : id === query.order_id) }
@@ -91,7 +91,7 @@ exports.searchOrderDetails = async (queryParams, user) => {
     ];
   }
 
-  return await OrderDetails.find(query)
+  return await OrderDetail.find(query)
     .populate({
       path: 'order_id',
       select: 'orderDate totalPrice acc_id feedback_order',
@@ -131,7 +131,7 @@ exports.createOrderDetail = async (data, user) => {
     return { status: 400, response: { message: 'Rating must be between 1 and 5' } };
   }
 
-  const order = await Orders.findById(order_id);
+  const order = await Order.findById(order_id);
   if (!order) {
     return { status: 404, response: { message: 'Order not found' } };
   }
@@ -142,7 +142,7 @@ exports.createOrderDetail = async (data, user) => {
   if (!variant) {
     return { status: 404, response: { message: 'Product variant not found' } };
   }
-  const orderDetail = new OrderDetails({
+  const orderDetail = new OrderDetail({
     order_id,
     variant_id,
     UnitPrice,
@@ -163,8 +163,8 @@ exports.getAllOrderDetails = async (user, order_id) => {
   const query = {};
 
   if (user.role !== 'admin' && user.role !== 'manager') {
-    const userOrders = await Orders.find({ acc_id: user.id }).select('_id');
-    const userOrderIds = userOrders.map(order => order._id);
+    const userOrders = await Order.find({ acc_id: user.id }).select('_id');
+    const userOrderIds = userOrder.map(order => order._id);
     query.order_id = { $in: userOrderIds };
   }
 
@@ -177,7 +177,7 @@ exports.getAllOrderDetails = async (user, order_id) => {
     query.order_id = order_id;
   }
 
-  return await OrderDetails.find(query)
+  return await OrderDetail.find(query)
     .populate({
       path: 'order_id',
       select: 'orderDate totalPrice feedback_order',
@@ -202,12 +202,12 @@ exports.updateOrderDetail = async (id, data, user) => {
   if (!mongoose.isValidObjectId(id)) {
     return { status: 400, response: { message: 'Invalid order detail ID' } };
   }
-  const orderDetail = await OrderDetails.findOne({ _id: id });
+  const orderDetail = await OrderDetail.findOne({ _id: id });
   if (!orderDetail) {
     return { status: 404, response: { message: 'Order detail not found' } };
   }
   if (user.role !== 'admin' && user.role !== 'manager') {
-    const order = await Orders.findById(orderDetail.order_id);
+    const order = await Order.findById(orderDetail.order_id);
     if (order.acc_id.toString() !== user.id) {
       return { status: 403, response: { message: 'Access denied: Can only update own order detail' } };
     }
@@ -230,7 +230,7 @@ exports.updateOrderDetail = async (id, data, user) => {
     if (!mongoose.isValidObjectId(order_id)) {
       return { status: 400, response: { message: 'Invalid order ID' } };
     }
-    const order = await Orders.findById(order_id);
+    const order = await Order.findById(order_id);
     if (!order) {
       return { status: 404, response: { message: 'Order not found' } };
     }
@@ -258,7 +258,7 @@ exports.updateOrderDetail = async (id, data, user) => {
     if (feedback.is_deleted !== undefined) updateData['feedback.is_deleted'] = feedback.is_deleted;
   }
 
-  const updatedOrderDetail = await OrderDetails.findByIdAndUpdate(
+  const updatedOrderDetail = await OrderDetail.findByIdAndUpdate(
     id,
     { $set: updateData },
     { new: true, runValidators: true }
@@ -288,17 +288,17 @@ exports.deleteOrderDetail = async (id, user) => {
   if (!mongoose.isValidObjectId(id)) {
     return { status: 400, response: { message: 'Invalid order detail ID' } };
   }
-  const orderDetail = await OrderDetails.findOne({ _id: id });
+  const orderDetail = await OrderDetail.findOne({ _id: id });
   if (!orderDetail) {
     return { status: 404, response: { message: 'Order detail not found' } };
   }
   if (user.role !== 'admin' && user.role !== 'manager') {
-    const order = await Orders.findById(orderDetail.order_id);
+    const order = await Order.findById(orderDetail.order_id);
     if (order.acc_id.toString() !== user.id) {
       return { status: 403, response: { message: 'Access denied: Can only delete own order detail' } };
     }
   }
-  await OrderDetails.findByIdAndDelete(id);
+  await OrderDetail.findByIdAndDelete(id);
   return { status: 200, response: { message: 'Order detail deleted successfully' } };
 };
 
@@ -310,7 +310,7 @@ exports.getOrderDetailsByProduct = async (productId) => {
   }
   const variants = await ProductVariants.find({ productId }).select('_id');
   const variantIds = variants.map(variant => variant._id);
-  return await OrderDetails.find({
+  return await OrderDetail.find({
     variant_id: { $in: variantIds },
     'feedback.content': { $nin: ['', null] },
   })
@@ -332,4 +332,110 @@ exports.getOrderDetailsByProduct = async (productId) => {
         { path: 'productSizeId', select: 'size_name' },
       ],
     });
+};
+exports.addFeedbackService = async (orderId, variantId, rating, content, user) => {
+  const orderService = require('./orderService');
+  const order = await orderService.getOrderByIdService(orderId, user);
+  if (!order) {
+    const err = new Error('Order not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (order.order_status !== 'delivered') {
+    const err = new Error('Feedback can only be added when the order is delivered');
+    err.statusCode = 400;
+    throw err;
+  }
+  const orderDetail = await OrderDetail.findOne({ order_id: orderId, variant_id: variantId });
+  if (!orderDetail) {
+    const err = new Error('Product not found in this order');
+    err.statusCode = 404;
+    throw err;
+  }
+  const updateData = {};
+  if (rating !== undefined) updateData['feedback.rating'] = rating;
+  if (content !== undefined) updateData['feedback.content'] = content === null ? null : content.trim();
+  updateData['feedback.is_deleted'] = false;
+  updateData['feedback.created_at'] = new Date();
+  updateData['feedback.updated_at'] = new Date();
+
+  const savedOrderDetail = await OrderDetail.findByIdAndUpdate(
+    orderDetail._id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
+  return { savedOrderDetail, order };
+};
+
+exports.editFeedbackService = async (orderId, variantId, rating, content, user) => {
+  const orderService = require('./orderService');
+  const order = await orderService.getOrderByIdService(orderId, user);
+  if (!order) {
+    const err = new Error('Order not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (order.order_status !== 'delivered') {
+    const err = new Error('Feedback can only be edited when the order is delivered');
+    err.statusCode = 400;
+    throw err;
+  }
+  const orderDetail = await OrderDetail.findOne({ order_id: orderId, variant_id: variantId });
+  if (!orderDetail) {
+    const err = new Error('Product not found in this order');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (orderDetail.feedback && orderDetail.feedback.is_deleted === true) {
+    const err = new Error('Cannot edit deleted feedback');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const updateData = {};
+  if (rating !== undefined) updateData['feedback.rating'] = rating;
+  if (content !== undefined) updateData['feedback.content'] = content === null ? null : content.trim();
+  updateData['feedback.updated_at'] = new Date();
+
+  const savedOrderDetail = await OrderDetail.findByIdAndUpdate(
+    orderDetail._id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
+  return { savedOrderDetail, order };
+};
+
+exports.deleteFeedbackService = async (orderId, variantId, user) => {
+  const orderService = require('./orderService');
+  const order = await orderService.getOrderByIdService(orderId, user);
+  if (!order) {
+    const err = new Error('Order not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  const orderDetail = await OrderDetail.findOne({ order_id: orderId, variant_id: variantId });
+  if (!orderDetail) {
+    const err = new Error('Product not found in this order');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!orderDetail.feedback || !orderDetail.feedback.rating) {
+    const err = new Error('Feedback not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const savedOrderDetail = await OrderDetail.findByIdAndUpdate(
+    orderDetail._id,
+    {
+      $set: {
+        'feedback.content': '',
+        'feedback.rating': null,
+        'feedback.is_deleted': true,
+        'feedback.updated_at': new Date(),
+      },
+    },
+    { new: true }
+  );
+  return { savedOrderDetail, order };
 };

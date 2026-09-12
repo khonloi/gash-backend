@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const OrderDetailsSchema = new mongoose.Schema({
   order_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Orders',
+    ref: 'Order',
     required: [true, 'Order ID is required'],
   },
   variant_id: {
@@ -49,4 +49,4 @@ const OrderDetailsSchema = new mongoose.Schema({
   },
 });
 
-module.exports = mongoose.model('OrderDetails', OrderDetailsSchema);
+module.exports = mongoose.model('OrderDetail', OrderDetailsSchema);

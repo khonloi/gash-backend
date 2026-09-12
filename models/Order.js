@@ -97,11 +97,11 @@ const OrdersSchema = new mongoose.Schema(
     orderDetails: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'OrderDetails',
+        ref: 'OrderDetail',
       },
     ],
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Orders', OrdersSchema);
+module.exports = mongoose.model('Order', OrdersSchema);

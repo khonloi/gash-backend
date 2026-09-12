@@ -1,14 +1,14 @@
 // controllers/orderStatisticsController.js
-const Orders = require("../../models/Orders"); // Adjust path as needed
+const Order = require('../../models/Order'); // Adjust path as needed
 const NewCart = require("../../models/newCartModel"); // Adjust path as needed
 
 async function getOrderStatistics(req, res) {
   try {
     // Total Orders
-    const totalOrders = await Orders.countDocuments();
+    const totalOrders = await Order.countDocuments();
 
     // Orders per Day
-    const ordersPerDay = await Orders.aggregate([
+    const ordersPerDay = await Order.aggregate([
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$orderDate" } },
@@ -19,7 +19,7 @@ async function getOrderStatistics(req, res) {
     ]);
 
     // Orders per Month
-    const ordersPerMonth = await Orders.aggregate([
+    const ordersPerMonth = await Order.aggregate([
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m", date: "$orderDate" } },
@@ -30,7 +30,7 @@ async function getOrderStatistics(req, res) {
     ]);
 
     // Orders per Year
-    const ordersPerYear = await Orders.aggregate([
+    const ordersPerYear = await Order.aggregate([
       {
         $group: {
           _id: { $dateToString: { format: "%Y", date: "$orderDate" } },
@@ -41,7 +41,7 @@ async function getOrderStatistics(req, res) {
     ]);
 
     // Order Status Summary
-    const statusSummary = await Orders.aggregate([
+    const statusSummary = await Order.aggregate([
       {
         $group: {
           _id: "$order_status",
@@ -61,7 +61,7 @@ async function getOrderStatistics(req, res) {
     });
 
     // Average Order Value (AOV)
-    const revenueAggregate = await Orders.aggregate([
+    const revenueAggregate = await Order.aggregate([
       {
         $group: {
           _id: null,
@@ -74,7 +74,7 @@ async function getOrderStatistics(req, res) {
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
     // Average Processing Time (in hours, for delivered orders)
-    const processingTimes = await Orders.aggregate([
+    const processingTimes = await Order.aggregate([
       { $match: { order_status: "delivered" } },
       {
         $project: {
@@ -94,14 +94,14 @@ async function getOrderStatistics(req, res) {
       processingTimes.length > 0 ? processingTimes[0].avgDuration : 0;
 
     // Refund / Return Rate (% of refunded orders)
-    const totalRefunded = await Orders.countDocuments({
+    const totalRefunded = await Order.countDocuments({
       refund_status: "refunded",
     });
     const refundRate =
       totalOrders > 0 ? (totalRefunded / totalOrders) * 100 : 0;
 
     // Top Payment Methods
-    const topPaymentMethods = await Orders.aggregate([
+    const topPaymentMethods = await Order.aggregate([
       {
         $group: {
           _id: "$payment_method",
@@ -113,7 +113,7 @@ async function getOrderStatistics(req, res) {
     ]);
 
     // Top Shipping Regions (grouped by addressReceive, assuming it represents regions/addresses)
-    const topShippingRegions = await Orders.aggregate([
+    const topShippingRegions = await Order.aggregate([
       {
         $group: {
           _id: "$addressReceive",
@@ -126,9 +126,9 @@ async function getOrderStatistics(req, res) {
 
     // Cart Abandonment Rate (% of users with carts but no orders)
     const usersWithCarts = await NewCart.distinct("accountId");
-    const usersWithOrders = await Orders.distinct("acc_id");
+    const usersWithOrders = await Order.distinct("acc_id");
     const abandonedUsers = usersWithCarts.filter(
-      (id) => !usersWithOrders.includes(id.toString())
+      (id) => !usersWithOrder.includes(id.toString())
     );
     const totalUsersWithCarts = usersWithCarts.length;
     const cartAbandonmentRate =

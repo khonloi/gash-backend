@@ -1,5 +1,5 @@
-const Orders = require('../models/Orders');
-const OrderDetails = require('../models/OrderDetails');
+const Order = require('../models/Order');
+const OrderDetail = require('../models/OrderDetail');
 const Accounts = require('../models/Accounts');
 const ProductVariants = require('../models/ProductVariant');
 const Products = require('../models/Product');
@@ -21,7 +21,7 @@ exports.exportBill = async (req, res) => {
         }
 
         // Lấy thông tin order với populate
-        const order = await Orders.findById(orderId)
+        const order = await Order.findById(orderId)
             .populate({
                 path: 'acc_id',
                 select: 'username name email phone address'
@@ -49,7 +49,7 @@ exports.exportBill = async (req, res) => {
 
 
         // Lấy tất cả order details của order này
-        const orderDetails = await OrderDetails.find({ order_id: orderId })
+        const orderDetails = await OrderDetail.find({ order_id: orderId })
             .populate({
                 path: 'variant_id',
                 select: 'productId productColorId productSizeId variantImage',

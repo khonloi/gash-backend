@@ -1,4 +1,4 @@
-const Orders = require('../models/Orders');
+const Order = require('../models/Order');
 const config = require('config');
 const moment = require('moment');
 const crypto = require('crypto');
@@ -40,7 +40,7 @@ exports.createPaymentUrl = async (orderId, bankCode, language, user, req) => {
   try {
     if (!orderId) throw new Error('Order ID is required');
 
-    const order = await Orders.findById(orderId);
+    const order = await Order.findById(orderId);
     if (!order) {
       const error = new Error('Order not found');
       error.status = 404;
@@ -121,7 +121,7 @@ exports.handleReturn = async (vnp_Params) => {
     const orderId = vnp_Params['vnp_TxnRef'];
     const rspCode = vnp_Params['vnp_ResponseCode'];
     
-    const order = await Orders.findById(orderId);
+    const order = await Order.findById(orderId);
     if (!order) {
       const error = new Error('Order not found');
       error.status = 404;
@@ -174,7 +174,7 @@ exports.handleIpn = async (vnp_Params) => {
     const rspCode = vnp_Params['vnp_ResponseCode'];
     const amount = parseInt(vnp_Params['vnp_Amount'], 10) / 100;
 
-    const order = await Orders.findById(orderId);
+    const order = await Order.findById(orderId);
     if (!order) {
       return { RspCode: '01', Message: 'Order not found' };
     }

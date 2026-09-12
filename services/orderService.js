@@ -1,7 +1,10 @@
-const Orders = require("../models/Orders");
+const Order = require('../models/Order');
 const Accounts = require("../models/Accounts");
 const mongoose = require("mongoose");
-const OrderDetails = require("../models/OrderDetails");
+const OrderDetail = require('../models/OrderDetail');
+const ProductVariants = require("../models/ProductVariant");
+const NewCart = require('../models/newCartModel');
+const { applyVoucher } = require('../controllers/voucherController');
 
 async function searchOrdersService(queryParams, user) {
   const {
@@ -73,7 +76,7 @@ async function searchOrdersService(queryParams, user) {
       const endDate = new Date(year, month, day, 23, 59, 59, 999);
       query.orderDate = { $gte: startDate, $lte: endDate };
     } else {
-      const matchingDetails = await OrderDetails.find().populate({
+      const matchingDetails = await OrderDetail.find().populate({
         path: "variant_id",
         populate: {
           path: "productId",
@@ -98,7 +101,7 @@ async function searchOrdersService(queryParams, user) {
       }
     }
   }
-  return await Orders.find(query).populate("acc_id", "username name");
+  return await Order.find(query).populate("acc_id", "username name");
 }
 
 async function getOrderByIdService(id, user) {
@@ -108,7 +111,7 @@ async function getOrderByIdService(id, user) {
     throw err;
   }
 
-  const order = await Orders.findById(id)
+  const order = await Order.findById(id)
     .populate({
       path: 'acc_id',
       select: 'username name email phone address image'
@@ -160,7 +163,7 @@ async function getOrderByIdService(id, user) {
 }
 
 async function updateOrderService(id, updateData, user) {
-  const order = await Orders.findById(id);
+  const order = await Order.findById(id);
   if (!order) {
     const err = new Error("Order not found");
     err.status = 404;
@@ -311,7 +314,7 @@ async function updateOrderService(id, updateData, user) {
   rest.pay_status = newPayStatus;
   rest.refund_status = newRefund;
 
-  const updatedOrder = await Orders.findByIdAndUpdate(
+  const updatedOrder = await Order.findByIdAndUpdate(
     id,
     { ...rest },
     { new: true, runValidators: true }
@@ -321,7 +324,7 @@ async function updateOrderService(id, updateData, user) {
 }
 
 async function deleteOrderService(id, user) {
-  const order = await Orders.findById(id);
+  const order = await Order.findById(id);
   if (!order) {
     const err = new Error("Order not found");
     err.status = 404;
@@ -341,12 +344,12 @@ async function deleteOrderService(id, user) {
     err.status = 400;
     throw err;
   }
-  await Orders.findByIdAndDelete(id);
+  await Order.findByIdAndDelete(id);
   return { message: "Order deleted successfully" };
 }
 
 async function getAllOrdersForAdminService() {
-  const orders = await Orders.find()
+  const orders = await Order.find()
     .populate("acc_id", "username name email phone")
     .sort({ orderDate: -1 });
 
@@ -359,7 +362,7 @@ async function getUserOrdersService(acc_id) {
     err.status = 400;
     throw err;
   }
-  const orders = await Orders.find({ acc_id })
+  const orders = await Order.find({ acc_id })
     .populate({
       path: 'acc_id',
       select: 'username name email phone address image'
@@ -394,11 +397,130 @@ async function getUserOrdersService(acc_id) {
   return orders;
 }
 
+async function createOrderService(userId, checkoutData) {
+  const { name, addressReceive, phone, totalPrice, payment_method, voucherCode, items } = checkoutData;
+
+  const account = await Accounts.findById(userId);
+  if (!account) {
+    const err = new Error("Account not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // tính toán voucher (nếu có)
+  let voucher = null;
+  let discountAmount = 0;
+  let finalPrice = totalPrice;
+
+  if (voucherCode) {
+    try {
+      const result = await applyVoucher(voucherCode, totalPrice);
+      if (result.success && result.data) {
+        voucher = result.data.voucher;
+        discountAmount = result.data.discountAmount;
+        finalPrice = result.data.finalPrice;
+      }
+    } catch (err) {
+      // bỏ qua voucher, giữ nguyên giá gốc
+    }
+  }
+
+  // tạo order
+  const newOrder = new Order({
+    acc_id: userId,
+    name,
+    addressReceive,
+    phone,
+    totalPrice,
+    voucher_id: voucher ? voucher._id : null,
+    discountAmount,
+    finalPrice,
+    order_status: 'pending',
+    pay_status: 'unpaid',
+    payment_method,
+  });
+
+  const savedOrder = await newOrder.save();
+
+  if (voucher) {
+    voucher.usedCount += 1;
+    await voucher.save();
+  }
+
+  // tạo order details từ items
+  const orderDetailsToSave = [];
+  const boughtVariantIds = [];
+  for (const item of items) {
+    const { variant_id, UnitPrice, Quantity, feedback_details } = item;
+
+    const variant = await ProductVariants.findById(variant_id);
+    if (!variant) {
+      const err = new Error(`Product variant not found: ${variant_id}`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (variant.stockQuantity < Quantity) {
+      const err = new Error(`Insufficient stock for variant ${variant_id}. Available: ${variant.stockQuantity}, Requested: ${Quantity}`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const orderDetail = new OrderDetail({
+      order_id: savedOrder._id,
+      variant_id,
+      UnitPrice,
+      Quantity,
+      feedback: {
+        content: feedback_details || '',
+        rating: null,
+        created_at: null,
+        updated_at: null,
+        is_deleted: false
+      },
+    });
+    const savedDetail = await orderDetail.save();
+    orderDetailsToSave.push(savedDetail);
+    boughtVariantIds.push(variant_id.toString());
+  }
+
+  const orderDetailsIds = orderDetailsToSave.map(detail => detail._id);
+  savedOrder.orderDetails = orderDetailsIds;
+  await savedOrder.save();
+
+  // Trừ số lượng sản phẩm khỏi kho
+  for (const item of items) {
+    const { variant_id, Quantity } = item;
+    const variant = await ProductVariants.findById(variant_id);
+    if (variant) {
+      variant.stockQuantity -= Quantity;
+      await variant.save();
+    }
+  }
+
+  // XÓA CÁC SẢN PHẨM ĐÃ MUA KHỎI CART
+  const objectUserId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+  const objectVariantIds = boughtVariantIds.map(id => mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id);
+
+  await NewCart.deleteMany({
+    accountId: objectUserId,
+    variantId: { $in: objectVariantIds }
+  });
+
+  return {
+    savedOrder,
+    orderDetailsToSave,
+    orderDetailsIds,
+    voucher
+  };
+}
+
 module.exports = {
   getAllOrdersForAdminService,
   searchOrdersService,
   getOrderByIdService,
   updateOrderService,
   deleteOrderService,
-  getUserOrdersService
+  getUserOrdersService,
+  createOrderService
 };
