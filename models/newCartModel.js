@@ -9,7 +9,7 @@ const newCartSchema = new mongoose.Schema(
     },
     variantId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "newProductVariants", // Reference to newProductVariants collection/model
+      ref: "ProductVariants", // Reference to ProductVariants collection/model
       required: true,
     },
     productQuantity: {

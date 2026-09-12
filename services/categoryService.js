@@ -1,5 +1,5 @@
 const Categories = require('../models/Categories');
-const newProduct = require('../models/newProduct');
+const Product = require('../models/Product');
 const mongoose = require('mongoose');
 
 // Create category
@@ -158,7 +158,7 @@ exports.updateCategoryService = async (id, { cat_name }) => {
 
     // Prevent update if any product belongs to this category
     const objectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
-    const productCount = await newProduct.countDocuments({
+    const productCount = await Product.countDocuments({
       $or: [
         ...(objectId ? [{ categoryId: objectId }] : []),
         { categoryId: id }
@@ -265,7 +265,7 @@ exports.deleteCategoryService = async (id, user) => {
 
     // Check if any product is using this category
     const objectId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
-    const productCount = await newProduct.countDocuments({
+    const productCount = await Product.countDocuments({
       $or: [
         ...(objectId ? [{ categoryId: objectId }] : []),
         { categoryId: id }

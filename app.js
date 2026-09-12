@@ -74,10 +74,10 @@ app.use('/messages', messageRoutes);
 app.use('/feedback', feedbackRoutes);
 
 // ===== New Product and Variant Routes =====
-const newProductRoutes = require('./routes/newProductRoutes');
-const newProductVariantRoutes = require('./routes/newProductVariantRoutes');
-app.use('/new-products', newProductRoutes);
-app.use('/new-variants', newProductVariantRoutes);
+const ProductRoutes = require('./routes/ProductRoutes');
+const ProductVariantRoutes = require('./routes/ProductVariantRoutes');
+app.use('/new-products', ProductRoutes);
+app.use('/new-variants', ProductVariantRoutes);
 
 // ===== New Stat Routes =====
 const newStatisticsRoutes = require('./routes/statRoutes');

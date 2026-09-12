@@ -1,4 +1,4 @@
-const productVariantService = require('../services/newProductVariantService');
+const productVariantService = require('../services/ProductVariantService');
 
 const createProductVariant = async (req, res) => {
   try {
@@ -23,7 +23,8 @@ const createProductVariant = async (req, res) => {
       });
     }
   } catch (error) {
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({
       success: false,
       message: error.message
     });
@@ -56,7 +57,8 @@ const getProductVariantById = async (req, res) => {
       message: 'Product variant retrieved successfully'
     });
   } catch (error) {
-    res.status(404).json({
+    const statusCode = error.statusCode || 404;
+    res.status(statusCode).json({
       success: false,
       message: error.message
     });

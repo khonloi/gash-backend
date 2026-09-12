@@ -1,4 +1,4 @@
-const productService = require("../services/newProductService");
+const productService = require("../services/ProductService");
 
 const createProduct = async (req, res) => {
   try {
@@ -11,7 +11,8 @@ const createProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("Create product error:", error.message);
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });
@@ -31,7 +32,8 @@ const getAllProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("Get all products error:", error.message);
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });
@@ -52,7 +54,8 @@ const getProductById = async (req, res) => {
     });
   } catch (error) {
     console.error("getProductById error:", error.message, "ID:", req.params.id); // Debug log
-    res.status(404).json({
+    const statusCode = error.statusCode || 404;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });
@@ -70,7 +73,8 @@ const updateProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("Update product error:", error.message);
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });
@@ -87,7 +91,8 @@ const deleteProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete product error:", error.message);
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });
@@ -105,7 +110,8 @@ const addProductImage = async (req, res) => {
     });
   } catch (error) {
     console.error("Add product image error:", error.message);
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });
@@ -122,7 +128,8 @@ const deleteProductImage = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete product image error:", error.message);
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });
@@ -144,7 +151,8 @@ const searchProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("Search error:", error.message); // Debug log
-    res.status(400).json({
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({
       success: false,
       message: error.message,
     });

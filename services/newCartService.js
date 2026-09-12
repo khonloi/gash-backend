@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const NewCart = require("../models/newCartModel");
-const newProductVariant = require("../models/newProductVariant");
+const ProductVariant = require("../models/ProductVariant");
 
 class NewCartService {
   // Create a new cart item or update existing one
@@ -19,8 +19,8 @@ class NewCartService {
         throw new Error('Invalid productQuantity: Must be a positive number');
       }
 
-      // Fetch variantPrice and stockQuantity from referenced newProductVariant
-      const variant = await newProductVariant.findById(variantId);
+      // Fetch variantPrice and stockQuantity from referenced ProductVariant
+      const variant = await ProductVariant.findById(variantId);
       if (!variant) {
         throw new Error('Invalid variantId: Variant not found');
       }
@@ -151,7 +151,7 @@ class NewCartService {
       // If productQuantity is being updated, check against stockQuantity
       const { productQuantity, selected } = updateData;
       if (productQuantity) {
-        const variant = await newProductVariant.findById(cartItem.variantId);
+        const variant = await ProductVariant.findById(cartItem.variantId);
         if (!variant) {
           throw new Error('Invalid variantId: Variant not found');
         }

@@ -1,4 +1,4 @@
-const NewProduct = require("../models/newProduct");
+const NewProduct = require("../models/Product");
 const Category = require("../models/Categories");
 const ExcelJS = require("exceljs");
 
@@ -55,7 +55,7 @@ exports.getProductStatistics = async (req, res) => {
     });
 
     // --- Sản phẩm mới trong 30 ngày ---
-    const newProducts = await NewProduct.countDocuments({
+    const Products = await NewProduct.countDocuments({
       ...filter,
       createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
     });
@@ -69,7 +69,7 @@ exports.getProductStatistics = async (req, res) => {
         inactiveProducts,
         pendingProducts,
         discontinuedProducts,
-        newProducts,
+        Products,
       },
     });
   } catch (error) {

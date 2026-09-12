@@ -8,7 +8,7 @@ const FavoritesSchema = new mongoose.Schema({
   },
   pro_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "newProducts",
+    ref: "Products",
     required: [true, "Product ID is required"],
   },
 });

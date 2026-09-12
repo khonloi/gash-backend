@@ -1,7 +1,7 @@
 const ProductSizes = require("../models/ProductSizes");
 const ProductColors = require("../models/ProductColors");
-const newProductImage = require("../models/newProductImage");
-const newProductVariant = require('../models/newProductVariant');
+const ProductImage = require("../models/ProductImage");
+const ProductVariant = require('../models/ProductVariant');
 const mongoose = require("mongoose");
 
 // --- Product Colors ---
@@ -190,7 +190,7 @@ exports.updateProductColorService = async (id, { color_name }) => {
         }
 
         // 3. Prevent update if any variant is using this color
-        const inUseCount = await newProductVariant.countDocuments({ productColorId: id });
+        const inUseCount = await ProductVariant.countDocuments({ productColorId: id });
         if (inUseCount > 0) {
             return {
                 success: false,
@@ -257,7 +257,7 @@ exports.deleteProductColorService = async (id) => {
         }
 
         // Prevent delete if any variant is using this color
-        const inUseCount = await newProductVariant.countDocuments({ productColorId: id });
+        const inUseCount = await ProductVariant.countDocuments({ productColorId: id });
         if (inUseCount > 0) {
             return {
                 success: false,
@@ -484,7 +484,7 @@ exports.updateProductSizeService = async (id, { size_name }) => {
         }
 
         // 3. Prevent update if any variant is using this size
-        const inUseCount = await newProductVariant.countDocuments({ productSizeId: id });
+        const inUseCount = await ProductVariant.countDocuments({ productSizeId: id });
         if (inUseCount > 0) {
             return {
                 success: false,
@@ -551,7 +551,7 @@ exports.deleteProductSizeService = async (id) => {
         }
 
         // Prevent delete if any variant is using this size
-        const inUseCount = await newProductVariant.countDocuments({ productSizeId: id });
+        const inUseCount = await ProductVariant.countDocuments({ productSizeId: id });
         if (inUseCount > 0) {
             return {
                 success: false,
@@ -621,7 +621,7 @@ exports.searchSpecificationsService = async ({ q, type }) => {
             results.push(...sizes.map(size => ({ ...size.toObject(), type: "size" })));
         }
         if (!type || type === "image") {
-            const images = await newProductImage.find(query).populate("productId", "productName");
+            const images = await ProductImage.find(query).populate("productId", "productName");
             results.push(...images.map(image => ({ ...image.toObject(), type: "image" })));
         }
         return {

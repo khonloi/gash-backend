@@ -1,10 +1,10 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const newProductVariantSchema = new Schema({
+const ProductVariantSchema = new Schema({
   productId: {
     type: Schema.Types.ObjectId,
-    ref: 'newProducts',
+    ref: 'Products',
     required: true
   },
   productColorId: {
@@ -23,31 +23,23 @@ const newProductVariantSchema = new Schema({
   },
   variantPrice: {
     type: Number,
-    required: true
+    required: [true, 'Variant price is required'],
+    min: [0, 'Variant price cannot be negative']
   },
   stockQuantity: {
     type: Number,
-    required: true
+    required: [true, 'Stock quantity is required'],
+    min: [0, 'Stock quantity cannot be negative']
   },
   variantStatus: {
     type: String,
     enum: ['active', 'inactive', 'discontinued'],
     default: 'active'
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
+}, {
+  timestamps: true
 });
 
-// Update updatedAt timestamp before saving
-newProductVariantSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
 
-module.exports = mongoose.model('newProductVariants', newProductVariantSchema);
+
+module.exports = mongoose.model('ProductVariants', ProductVariantSchema);

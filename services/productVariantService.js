@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const newProductVariant = require("../models/newProductVariant");
-const newProduct = require("../models/newProduct");
+const ProductVariant = require("../models/ProductVariant");
+const Product = require("../models/Product");
 const OrderDetails = require("../models/OrderDetails");
 const Orders = require("../models/Orders");
 
@@ -11,13 +11,13 @@ const Orders = require("../models/Orders");
 const updateProductStatusBasedOnVariants = async (productId) => {
   try {
     // Find all non-deleted variants (exclude discontinued)
-    const variants = await newProductVariant.find({
+    const variants = await ProductVariant.find({
       productId,
       variantStatus: { $ne: "discontinued" }
     });
 
     // Get current product to check previous status
-    const currentProduct = await newProduct.findById(productId);
+    const currentProduct = await Product.findById(productId);
     if (!currentProduct) {
       return;
     }
@@ -26,14 +26,14 @@ const updateProductStatusBasedOnVariants = async (productId) => {
     if (variants.length === 0) {
       // If product was previously active (had variants), set to "inactive"
       if (currentProduct.productStatus === "active") {
-        await newProduct.findByIdAndUpdate(
+        await Product.findByIdAndUpdate(
           productId,
           { productStatus: "inactive", updatedAt: Date.now() },
           { new: true }
         );
       } else {
         // If product was never active (new product), keep as "pending"
-        await newProduct.findByIdAndUpdate(
+        await Product.findByIdAndUpdate(
           productId,
           { productStatus: "pending", updatedAt: Date.now() },
           { new: true }
@@ -43,7 +43,7 @@ const updateProductStatusBasedOnVariants = async (productId) => {
     }
 
     // If at least 1 variant exists, set status to "active"
-    await newProduct.findByIdAndUpdate(
+    await Product.findByIdAndUpdate(
       productId,
       { productStatus: "active", updatedAt: Date.now() },
       { new: true }
@@ -66,35 +66,9 @@ const createProductVariant = async (variantData) => {
       stockQuantity,
     } = variantData;
 
-    if (
-      !productId ||
-      !productColorId ||
-      !productSizeId ||
-      !variantImage ||
-      variantPrice == null ||
-      stockQuantity == null
-    ) {
-      throw new Error("Please fill in all required fields");
-    }
+    // Validation is now handled by Joi middleware, so we can trust the data format here.
 
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("Invalid product ID");
-    }
-    if (!mongoose.Types.ObjectId.isValid(productColorId)) {
-      throw new Error("Invalid product color ID");
-    }
-    if (!mongoose.Types.ObjectId.isValid(productSizeId)) {
-      throw new Error("Invalid product size ID");
-    }
-
-    if (variantPrice < 0) {
-      throw new Error("Variant price cannot be negative");
-    }
-    if (stockQuantity < 0) {
-      throw new Error("Stock quantity cannot be negative");
-    }
-
-    const product = await newProduct.findById(productId);
+    const product = await Product.findById(productId);
     if (!product) {
       throw new Error("Product not found");
     }
@@ -103,7 +77,7 @@ const createProductVariant = async (variantData) => {
     }
 
     // Check for existing variant (excluding discontinued ones)
-    const existingVariant = await newProductVariant.findOne({
+    const existingVariant = await ProductVariant.findOne({
       productId,
       productColorId,
       productSizeId,
@@ -140,14 +114,14 @@ const createProductVariant = async (variantData) => {
 
     // Create new variant if it doesn't exist
     const variantStatus = stockQuantity > 0 ? "active" : "inactive";
-    const variant = new newProductVariant({
+    const variant = new ProductVariant({
       ...variantData,
       variantStatus
     });
     await variant.save();
 
     // Add variant to product
-    const updatedProduct = await newProduct.findByIdAndUpdate(
+    const updatedProduct = await Product.findByIdAndUpdate(
       productId,
       {
         $addToSet: { productVariantIds: variant._id },
@@ -198,7 +172,7 @@ const getAllProductVariants = async (filters = {}) => {
       query.productSizeId = productSizeId;
     }
 
-    return await newProductVariant
+    return await ProductVariant
       .find(query)
       .populate("productId")
       .populate("productColorId")
@@ -215,7 +189,7 @@ const getProductVariantById = async (variantId) => {
       throw new Error("Invalid variant ID");
     }
 
-    const variant = await newProductVariant
+    const variant = await ProductVariant
       .findById(variantId)
       .populate("productId")
       .populate("productColorId")
@@ -245,23 +219,9 @@ const updateProductVariant = async (variantId, updateData) => {
       stockQuantity,
     } = updateData;
 
-    if (productId && !mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("Invalid product ID");
-    }
-    if (productColorId && !mongoose.Types.ObjectId.isValid(productColorId)) {
-      throw new Error("Invalid product color ID");
-    }
-    if (productSizeId && !mongoose.Types.ObjectId.isValid(productSizeId)) {
-      throw new Error("Invalid product size ID");
-    }
-    if (variantPrice != null && variantPrice < 0) {
-      throw new Error("Variant price cannot be negative");
-    }
-    if (stockQuantity != null && stockQuantity < 0) {
-      throw new Error("Stock quantity cannot be negative");
-    }
+    // Validation is now handled by Joi middleware, so we can trust the data format here.
 
-    const existingVariant = await newProductVariant.findById(variantId);
+    const existingVariant = await ProductVariant.findById(variantId);
     if (!existingVariant) {
       throw new Error("Product variant not found");
     }
@@ -270,7 +230,7 @@ const updateProductVariant = async (variantId, updateData) => {
       throw new Error("Cannot update a discontinued variant");
     }
 
-    const product = await newProduct.findById(existingVariant.productId);
+    const product = await Product.findById(existingVariant.productId);
     if (!product) {
       throw new Error("Associated product not found");
     }
@@ -279,7 +239,7 @@ const updateProductVariant = async (variantId, updateData) => {
     }
 
     if (productId || productColorId || productSizeId) {
-      const existingDuplicate = await newProductVariant.findOne({
+      const existingDuplicate = await ProductVariant.findOne({
         productId: productId || existingVariant.productId,
         productColorId: productColorId || existingVariant.productColorId,
         productSizeId: productSizeId || existingVariant.productSizeId,
@@ -297,7 +257,7 @@ const updateProductVariant = async (variantId, updateData) => {
       updatedData.variantStatus = stockQuantity > 0 ? "active" : "inactive";
     }
 
-    const variant = await newProductVariant.findByIdAndUpdate(
+    const variant = await ProductVariant.findByIdAndUpdate(
       variantId,
       updatedData,
       { new: true, runValidators: true }
@@ -335,7 +295,7 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Cannot delete variant with active orders");
     }
 
-    const variant = await newProductVariant.findByIdAndUpdate(
+    const variant = await ProductVariant.findByIdAndUpdate(
       variantId,
       { variantStatus: "discontinued", updatedAt: Date.now() },
       { new: true }
@@ -345,7 +305,7 @@ const deleteProductVariant = async (variantId) => {
       throw new Error("Product variant not found");
     }
 
-    const updatedProduct = await newProduct.findByIdAndUpdate(
+    const updatedProduct = await Product.findByIdAndUpdate(
       variant.productId,
       {
         $pull: { productVariantIds: variant._id },
@@ -379,40 +339,9 @@ const bulkCreateProductVariants = async (bulkData) => {
       sizeIds, // Array of size IDs
     } = bulkData;
 
-    if (
-      !productId ||
-      !productColorId ||
-      !variantImage ||
-      variantPrice == null ||
-      stockQuantity == null ||
-      !Array.isArray(sizeIds) ||
-      sizeIds.length === 0
-    ) {
-      throw new Error("Please fill in all required fields");
-    }
+    // Validation is now handled by Joi middleware, so we can trust the data format here.
 
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("Invalid product ID");
-    }
-    if (!mongoose.Types.ObjectId.isValid(productColorId)) {
-      throw new Error("Invalid product color ID");
-    }
-
-    // Validate all size IDs
-    for (const sizeId of sizeIds) {
-      if (!mongoose.Types.ObjectId.isValid(sizeId)) {
-        throw new Error(`Invalid product size ID: ${sizeId}`);
-      }
-    }
-
-    if (variantPrice < 0) {
-      throw new Error("Variant price cannot be negative");
-    }
-    if (stockQuantity < 0) {
-      throw new Error("Stock quantity cannot be negative");
-    }
-
-    const product = await newProduct.findById(productId);
+    const product = await Product.findById(productId);
     if (!product) {
       throw new Error("Product not found");
     }
@@ -421,7 +350,7 @@ const bulkCreateProductVariants = async (bulkData) => {
     }
 
     // Check for existing variants to avoid duplicates
-    const existingVariants = await newProductVariant.find({
+    const existingVariants = await ProductVariant.find({
       productId,
       productColorId,
       productSizeId: { $in: sizeIds },
@@ -450,11 +379,11 @@ const bulkCreateProductVariants = async (bulkData) => {
     }));
 
     // Insert all variants
-    const createdVariants = await newProductVariant.insertMany(variants);
+    const createdVariants = await ProductVariant.insertMany(variants);
 
     // Update product with all variant IDs
     const variantIds = createdVariants.map((v) => v._id);
-    const updatedProduct = await newProduct.findByIdAndUpdate(
+    const updatedProduct = await Product.findByIdAndUpdate(
       productId,
       {
         $addToSet: { productVariantIds: { $each: variantIds } },

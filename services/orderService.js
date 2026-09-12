@@ -77,7 +77,7 @@ async function searchOrdersService(queryParams, user) {
         path: "variant_id",
         populate: {
           path: "productId",
-          model: "newProducts",
+          model: "Products",
           match: { productName: { $regex: trimmedQuery, $options: "i" } },
         },
       });

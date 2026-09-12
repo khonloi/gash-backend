@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 const OrderDetails = require('../models/OrderDetails');
 const Orders = require('../models/Orders');
-const newProducts = require('../models/newProduct');
-const newProductVariants = require('../models/newProductVariant');
+const Products = require('../models/Product');
+const ProductVariants = require('../models/ProductVariant');
 const ProductColors = require('../models/ProductColors');
 const ProductSizes = require('../models/ProductSizes');
 const Accounts = require('../models/Accounts');
@@ -62,7 +62,7 @@ exports.getAllFeedback = async (req, res) => {
     }
 
     if (productId && mongoose.isValidObjectId(productId)) {
-      const variants = await newProductVariants.find({ productId }).select('_id');
+      const variants = await ProductVariants.find({ productId }).select('_id');
       const variantIds = variants.map(v => v._id);
       query.variant_id = { $in: variantIds };
     }
@@ -376,7 +376,7 @@ exports.getFeedbackStatistics = async (req, res) => {
 
     // Filter by product
     if (productId && mongoose.isValidObjectId(productId)) {
-      const variants = await newProductVariants.find({ productId }).select('_id');
+      const variants = await ProductVariants.find({ productId }).select('_id');
       const variantIds = variants.map(v => v._id);
       baseQuery.variant_id = { $in: variantIds };
     }

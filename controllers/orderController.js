@@ -426,9 +426,9 @@ const mongoose = require("mongoose");
 const Accounts = require("../models/Accounts");
 const Orders = require("../models/Orders");
 const OrderDetails = require("../models/OrderDetails");
-const newProductVariants = require("../models/newProductVariant");
-const newProducts = require("../models/newProduct");
-const newProductImages = require("../models/newProductImage");
+const ProductVariants = require("../models/ProductVariant");
+const Products = require("../models/Product");
+const ProductImages = require("../models/ProductImage");
 const ProductColors = require("../models/ProductColors");
 const ProductSizes = require("../models/ProductSizes");
 const Voucher = require("../models/Voucher");
@@ -517,7 +517,7 @@ exports.checkout = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Feedback cannot exceed 500 characters' });
       }
 
-      const variant = await newProductVariants.findById(variant_id);
+      const variant = await ProductVariants.findById(variant_id);
       if (!variant) {
         return res.status(404).json({ success: false, message: `Product variant not found: ${variant_id}` });
       }
@@ -552,7 +552,7 @@ exports.checkout = async (req, res) => {
     // Trừ số lượng sản phẩm khỏi kho
     for (const item of items) {
       const { variant_id, Quantity } = item;
-      const variant = await newProductVariants.findById(variant_id);
+      const variant = await ProductVariants.findById(variant_id);
       if (variant) {
         variant.stockQuantity -= Quantity;
         await variant.save();
@@ -758,7 +758,7 @@ exports.cancelOrder = async (req, res) => {
     if (order.orderDetails && order.orderDetails.length > 0) {
       for (const orderDetail of order.orderDetails) {
         if (orderDetail.variant_id) {
-          const variant = await newProductVariants.findById(orderDetail.variant_id);
+          const variant = await ProductVariants.findById(orderDetail.variant_id);
           if (variant) {
             // Cộng lại số lượng đã mua vào stock
             variant.stockQuantity += orderDetail.Quantity;
@@ -1211,7 +1211,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     }
 
     // Kiểm tra product có tồn tại không
-    const product = await newProducts.findById(productId);
+    const product = await Products.findById(productId);
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -1220,7 +1220,7 @@ exports.getAllFeedbackOfProduct = async (req, res) => {
     }
 
     // Lấy tất cả variants của product này
-    const allVariantsOfProduct = await newProductVariants.find({
+    const allVariantsOfProduct = await ProductVariants.find({
       productId: productId
     }).select('_id');
 

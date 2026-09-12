@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
-const newProductImage = require("../models/newProductImage");
-const newProduct = require("../models/newProduct");
-const newProductVariant = require("../models/newProductVariant");
+const ProductImage = require("../models/ProductImage");
+const Product = require("../models/Product");
+const ProductVariant = require("../models/ProductVariant");
 
 // Create a new product with validation
 const createProduct = async (productData) => {
@@ -14,61 +14,18 @@ const createProduct = async (productData) => {
       productImageIds,
       productVariantIds,
     } = productData;
-    if (!productName || !categoryId || !description) {
-      throw new Error(
-        "Please fill in all required fields"
-      );
-    }
-
-    // Validate product name format
-    const trimmedProductName = productName.trim();
-    const productNamePattern = /^[a-zA-ZÀ-ỹ0-9\s\-]+$/;
-    if (trimmedProductName.length < 3 || trimmedProductName.length > 100 || !productNamePattern.test(trimmedProductName)) {
-      throw new Error("Product name must be 3 to 100 characters long and contain only letters, numbers, spaces, and hyphens");
-    }
-
-    // Validate description length
-    const trimmedDescription = description.trim();
-    if (trimmedDescription.length < 50 || trimmedDescription.length > 10000) {
-      throw new Error("Description must be between 50 and 10000 characters long");
-    }
-
-    if (
-      !productImageIds ||
-      !Array.isArray(productImageIds) ||
-      productImageIds.length === 0
-    ) {
-      throw new Error("Please fill in all required fields");
-    }
-
-    // Validate exactly one image has isMain: true
-    const mainImageCount = productImageIds.filter((img) => img.isMain).length;
-    if (mainImageCount !== 1) {
-      throw new Error("Exactly one product image must have isMain set to true");
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-      throw new Error("Invalid category ID");
-    }
-    if (
-      productStatus &&
-      !["active", "inactive", "pending"].includes(productStatus)
-    ) {
-      throw new Error(
-        'Product status must be either "active", "inactive", or "pending"'
-      );
-    }
-    const existingProduct = await newProduct.findOne({ productName: trimmedProductName });
+    // Validation is now handled by Joi middleware, so we can trust the data format here.
+    const existingProduct = await Product.findOne({ productName: productName.trim() });
     if (existingProduct) {
-      throw new Error("Product with this name already exists");
+      const error = new Error("Product with this name already exists");
+      error.statusCode = 409;
+      throw error;
     }
 
     let savedImageIds = [];
     for (const imageData of productImageIds) {
-      if (!imageData.imageUrl) {
-        throw new Error("Please fill in all required fields");
-      }
-      const image = new newProductImage({
+
+      const image = new ProductImage({
         imageUrl: imageData.imageUrl,
         isMain: imageData.isMain || false,
       });
@@ -83,7 +40,7 @@ const createProduct = async (productData) => {
         if (!mongoose.Types.ObjectId.isValid(variantId)) {
           throw new Error("Invalid product variant ID");
         }
-        const variant = await newProductVariant.findById(variantId);
+        const variant = await ProductVariant.findById(variantId);
         if (!variant) {
           throw new Error(`Product variant with ID ${variantId} not found`);
         }
@@ -94,10 +51,10 @@ const createProduct = async (productData) => {
     // Set product status to "pending" if no variants, otherwise allow provided status or default to "pending"
     const finalProductStatus = validatedVariantIds.length > 0 ? (productStatus || "active") : "pending";
 
-    const product = new newProduct({
+    const product = new Product({
       ...productData,
-      productName: trimmedProductName,
-      description: trimmedDescription,
+      productName: productName.trim(),
+      description: description.trim(),
       productImageIds: savedImageIds,
       productVariantIds: validatedVariantIds,
       productStatus: finalProductStatus,
@@ -105,13 +62,13 @@ const createProduct = async (productData) => {
     const savedProduct = await product.save();
 
     if (savedImageIds.length > 0) {
-      await newProductImage.updateMany(
+      await ProductImage.updateMany(
         { _id: { $in: savedImageIds } },
         { productId: savedProduct._id }
       );
     }
 
-    return await newProduct
+    return await Product
       .findById(savedProduct._id)
       .populate("categoryId")
       .populate("productImageIds")
@@ -142,7 +99,7 @@ const getAllProducts = async (filters = {}, userRole = "customer") => {
       query.productStatus = { $ne: "pending" };
     }
 
-    return await newProduct
+    return await Product
       .find(query)
       .populate("categoryId")
       .populate("productImageIds")
@@ -177,7 +134,7 @@ const searchProducts = async (searchParams = {}, userRole = "customer") => {
       query.productStatus = { $ne: "pending" };
     }
 
-    return await newProduct
+    return await Product
       .find(query)
       .populate("categoryId")
       .populate("productImageIds")
@@ -197,7 +154,7 @@ const getProductById = async (productId, userRole = "customer") => {
       throw new Error("Invalid product ID");
     }
 
-    const product = await newProduct
+    const product = await Product
       .findById(productId)
       .populate("categoryId")
       .populate("productImageIds")
@@ -234,42 +191,9 @@ const updateProduct = async (productId, updateData) => {
       productImageIds,
       productVariantIds,
     } = updateData;
-    if (productName && productName.trim() === "") {
-      throw new Error("Please fill in all required fields");
-    }
+    // Validation is now handled by Joi middleware, so we can trust the data format here.
 
-    // Validate product name format if provided
-    let trimmedProductName = null;
-    if (productName) {
-      trimmedProductName = productName.trim();
-      const productNamePattern = /^[a-zA-ZÀ-ỹ0-9\s\-]+$/;
-      if (trimmedProductName.length < 3 || trimmedProductName.length > 100 || !productNamePattern.test(trimmedProductName)) {
-        throw new Error("Product name must be 3 to 100 characters long and contain only letters, numbers, spaces, and hyphens");
-      }
-    }
-
-    // Validate description length if provided
-    let trimmedDescription = null;
-    if (description !== undefined) {
-      trimmedDescription = description.trim();
-      if (trimmedDescription.length < 50 || trimmedDescription.length > 10000) {
-        throw new Error("Description must be between 50 and 10000 characters long");
-      }
-    }
-    if (categoryId && !mongoose.Types.ObjectId.isValid(categoryId)) {
-      throw new Error("Invalid category ID");
-    }
-    if (productStatus && !["active", "pending", "inactive"].includes(productStatus)) {
-      throw new Error('Product status must be either "active", "inactive" or "pending"');
-    }
-    if (
-      productImageIds &&
-      (!Array.isArray(productImageIds) || productImageIds.length === 0)
-    ) {
-      throw new Error("Please fill in all required fields");
-    }
-
-    const existingProduct = await newProduct.findById(productId);
+    const existingProduct = await Product.findById(productId);
     if (!existingProduct) {
       throw new Error("Product not found");
     }
@@ -277,40 +201,34 @@ const updateProduct = async (productId, updateData) => {
       throw new Error("Cannot update a discontinued product");
     }
 
-    if (productName && trimmedProductName) {
-      const duplicateProduct = await newProduct.findOne({
-        productName: trimmedProductName,
+    if (productName) {
+      const duplicateProduct = await Product.findOne({
+        productName: productName.trim(),
         _id: { $ne: productId },
       });
       if (duplicateProduct) {
-        throw new Error("Product with this name already exists");
+        const error = new Error("Product with this name already exists");
+        error.statusCode = 409;
+        throw error;
       }
     }
 
     let updatedImageIds = existingProduct.productImageIds;
     if (productImageIds && Array.isArray(productImageIds)) {
-      // Validate exactly one image has isMain: true
-      const mainImageCount = productImageIds.filter((img) => img.isMain).length;
-      if (mainImageCount !== 1) {
-        throw new Error(
-          "Exactly one product image must have isMain set to true"
-        );
-      }
+
 
       updatedImageIds = [];
       for (const imageData of productImageIds) {
-        if (!imageData.imageUrl) {
-          throw new Error("Please fill in all required fields");
-        }
+
         if (imageData._id && mongoose.Types.ObjectId.isValid(imageData._id)) {
-          await newProductImage.findByIdAndUpdate(
+          await ProductImage.findByIdAndUpdate(
             imageData._id,
             { imageUrl: imageData.imageUrl, isMain: imageData.isMain || false },
             { new: true }
           );
           updatedImageIds.push(imageData._id);
         } else {
-          const image = new newProductImage({
+          const image = new ProductImage({
             productId,
             imageUrl: imageData.imageUrl,
             isMain: imageData.isMain || false,
@@ -329,7 +247,7 @@ const updateProduct = async (productId, updateData) => {
         if (!mongoose.Types.ObjectId.isValid(variantId)) {
           throw new Error("Invalid product variant ID");
         }
-        const variant = await newProductVariant.findById(variantId);
+        const variant = await ProductVariant.findById(variantId);
         if (!variant) {
           throw new Error(`Product variant with ID ${variantId} not found`);
         }
@@ -371,17 +289,15 @@ const updateProduct = async (productId, updateData) => {
       updatedAt: Date.now(),
     };
 
-    // Use trimmed product name if provided
-    if (trimmedProductName) {
-      updatePayload.productName = trimmedProductName;
+    if (productName) {
+      updatePayload.productName = productName.trim();
     }
 
-    // Use trimmed description if provided
-    if (trimmedDescription) {
-      updatePayload.description = trimmedDescription;
+    if (description) {
+      updatePayload.description = description.trim();
     }
 
-    const product = await newProduct
+    const product = await Product
       .findByIdAndUpdate(
         productId,
         updatePayload,
@@ -408,7 +324,7 @@ const deleteProduct = async (productId) => {
       throw new Error("Invalid product ID");
     }
 
-    const product = await newProduct.findById(productId).populate("productVariantIds");
+    const product = await Product.findById(productId).populate("productVariantIds");
     if (!product) {
       throw new Error("Product not found");
     }
@@ -418,7 +334,7 @@ const deleteProduct = async (productId) => {
     }
 
     // Step 1: Discontinue the product
-    await newProduct.findByIdAndUpdate(
+    await Product.findByIdAndUpdate(
       productId,
       {
         productStatus: "discontinued",
@@ -431,7 +347,7 @@ const deleteProduct = async (productId) => {
     if (product.productVariantIds && product.productVariantIds.length > 0) {
       const variantIds = product.productVariantIds.map(v => v._id);
 
-      await newProductVariant.updateMany(
+      await ProductVariant.updateMany(
         { _id: { $in: variantIds } },
         {
           variantStatus: "discontinued",
@@ -456,7 +372,7 @@ const addProductImage = async (productId, imageData) => {
       throw new Error("Please fill in all required fields");
     }
 
-    const product = await newProduct
+    const product = await Product
       .findById(productId)
       .populate("productImageIds");
     if (!product) {
@@ -468,7 +384,7 @@ const addProductImage = async (productId, imageData) => {
 
     // If new image is isMain: true, set existing isMain to false
     if (imageData.isMain) {
-      await newProductImage.updateMany(
+      await ProductImage.updateMany(
         { productId, isMain: true },
         { isMain: false }
       );
@@ -484,7 +400,7 @@ const addProductImage = async (productId, imageData) => {
       }
     }
 
-    const image = new newProductImage({
+    const image = new ProductImage({
       productId,
       imageUrl: imageData.imageUrl,
       isMain: imageData.isMain || false,
@@ -510,7 +426,7 @@ const deleteProductImage = async (productId, imageId) => {
       throw new Error("Invalid product or image ID");
     }
 
-    const product = await newProduct
+    const product = await Product
       .findById(productId)
       .populate("productImageIds");
     if (!product) {
@@ -525,7 +441,7 @@ const deleteProductImage = async (productId, imageId) => {
       );
     }
 
-    const image = await newProductImage.findById(imageId);
+    const image = await ProductImage.findById(imageId);
     if (!image) {
       throw new Error("Image not found");
     }
@@ -536,13 +452,13 @@ const deleteProductImage = async (productId, imageId) => {
         (img) => img._id.toString() !== imageId
       );
       if (otherImages.length > 0) {
-        await newProductImage.findByIdAndUpdate(otherImages[0]._id, {
+        await ProductImage.findByIdAndUpdate(otherImages[0]._id, {
           isMain: true,
         });
       }
     }
 
-    await newProductImage.findByIdAndDelete(imageId);
+    await ProductImage.findByIdAndDelete(imageId);
     product.productImageIds = product.productImageIds.filter(
       (id) => id.toString() !== imageId
     );

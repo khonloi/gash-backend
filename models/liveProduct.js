@@ -10,7 +10,7 @@ const LiveProductSchema = new Schema(
     },
     productId: {
       type: Schema.Types.ObjectId,
-      ref: "newProducts",
+      ref: "Products",
       required: true,
     },
     addedAt: {
