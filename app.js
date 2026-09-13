@@ -53,7 +53,6 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const voucherRoutes = require('./routes/voucherRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
 const messageRoutes = require('./routes/messageRoutes');
-const billRoutes = require('./routes/billRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 
 // ===== Mount routes =====
@@ -69,7 +68,6 @@ app.use('/upload', uploadRoutes);
 app.use('/vouchers', voucherRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/conversations', messageRoutes);
-app.use('/bills', billRoutes);
 app.use('/messages', messageRoutes);
 app.use('/feedback', feedbackRoutes);
 

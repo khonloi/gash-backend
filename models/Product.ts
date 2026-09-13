@@ -1,15 +1,33 @@
 import mongoose, { Document, Model, Schema, Types } from 'mongoose';
 
+export interface IProductImageItem extends Document {
+  imageUrl: string;
+  isMain: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface IProduct extends Document {
   productName: string;
   categoryId: Types.ObjectId;
-  productImageIds: Types.ObjectId[];
+  images: IProductImageItem[];
   productVariantIds: Types.ObjectId[];
   description: string;
   productStatus: 'active' | 'inactive' | 'pending' | 'discontinued';
   createdAt: Date;
   updatedAt: Date;
 }
+
+const ProductImageSchema = new Schema<IProductImageItem>({
+  imageUrl: {
+    type: String,
+    required: true
+  },
+  isMain: {
+    type: Boolean,
+    default: false
+  }
+}, { timestamps: true });
 
 const ProductSchema = new Schema<IProduct>({
   productName: {
@@ -25,12 +43,7 @@ const ProductSchema = new Schema<IProduct>({
     ref: "Categories",
     required: true,
   },
-  productImageIds: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "ProductImages",
-    },
-  ],
+  images: [ProductImageSchema],
   productVariantIds: [
     {
       type: Schema.Types.ObjectId,

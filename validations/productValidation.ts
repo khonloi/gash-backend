@@ -19,7 +19,7 @@ export const createProductSchema = z.object({
     .min(50, 'Description must be at least 50 characters long')
     .max(10000, 'Description cannot exceed 10000 characters'),
   productStatus: z.enum(['active', 'inactive', 'pending']).optional(),
-  productImageIds: z.array(imageSchema).min(1, 'At least one product image is required')
+  images: z.array(imageSchema).min(1, 'At least one product image is required')
     .refine((images) => {
       const mainImages = images.filter((img) => img.isMain);
       return mainImages.length === 1;
@@ -39,7 +39,7 @@ export const updateProductSchema = z.object({
     .max(10000, 'Description cannot exceed 10000 characters')
     .optional(),
   productStatus: z.enum(['active', 'inactive', 'pending']).optional(),
-  productImageIds: z.array(imageSchema).min(1, 'At least one product image is required')
+  images: z.array(imageSchema).min(1, 'At least one product image is required')
     .refine((images) => {
       const mainImages = images.filter((img) => img.isMain);
       return mainImages.length === 1;
