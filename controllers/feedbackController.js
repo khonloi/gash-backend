@@ -5,7 +5,7 @@ const Products = require('../models/Product');
 const ProductVariants = require('../models/ProductVariant');
 const ProductColors = require('../models/ProductColors');
 const ProductSizes = require('../models/ProductSizes');
-const Accounts = require('../models/Accounts');
+const Accounts = require('../models/Account');
 
 // Hàm lấy tất cả feedback cho admin và staff
 exports.getAllFeedback = async (req, res) => {

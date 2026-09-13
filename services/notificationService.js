@@ -1,5 +1,5 @@
 const Notification = require("../models/Notification");
-const Accounts = require("../models/Accounts");
+const Accounts = require("../models/Account");
 
 /** ====================== CREATE NOTIFICATION ====================== */
 exports.createNotificationService = async (data) => {

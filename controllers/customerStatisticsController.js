@@ -1,4 +1,4 @@
-const Account = require("../models/Accounts");
+const Account = require("../models/Account");
 const ExcelJS = require("exceljs");
 
 // 📊 API lấy thống kê tổng quan

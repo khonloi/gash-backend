@@ -74,8 +74,8 @@ app.use('/messages', messageRoutes);
 app.use('/feedback', feedbackRoutes);
 
 // ===== New Product and Variant Routes =====
-const ProductRoutes = require('./routes/ProductRoutes');
-const ProductVariantRoutes = require('./routes/ProductVariantRoutes');
+const ProductRoutes = require('./routes/productRoutes');
+const ProductVariantRoutes = require('./routes/productVariantRoutes');
 app.use('/new-products', ProductRoutes);
 app.use('/new-variants', ProductVariantRoutes);
 

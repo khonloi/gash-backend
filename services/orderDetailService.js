@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const OrderDetail = require('../models/OrderDetail');
 const Order = require('../models/Order');
 const ProductVariants = require('../models/ProductVariant');
-const Accounts = require('../models/Accounts');
+const Accounts = require('../models/Account');
 
 exports.searchOrderDetails = async (queryParams, user) => {
   const {

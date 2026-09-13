@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 const notificationService = require("../services/notificationService");
 const { connectedUsers } = require("../sockets/notificationSocket");
-const User = require("../models/Accounts");
+const User = require("../models/Account");
 
 /** ====================== ADMIN ====================== */
 exports.createNotification = async (req, res) => {

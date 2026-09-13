@@ -60,3 +60,10 @@ accountSchema.methods.comparePassword = async function (candidatePassword: strin
 
 const Account: Model<IAccount> = mongoose.model<IAccount>('Accounts', accountSchema);
 export default Account;
+
+// Ensure CommonJS interop for existing services/controllers
+// @ts-ignore
+module.exports = Account;
+// @ts-ignore
+module.exports.default = Account;
+
