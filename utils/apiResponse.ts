@@ -1,3 +1,13 @@
+export class AppError extends Error {
+  constructor(
+    public message: string,
+    public statusCode: number,
+  ) {
+    super(message);
+    this.name = "AppError";
+  }
+}
+
 export const successResponse = (res: any, statusCode: number, data: any, message = 'Success') => {
   return res.status(statusCode).json({
     status: 'success',

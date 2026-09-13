@@ -1,7 +1,18 @@
-const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
+import mongoose, { Document, Model, Schema, Types } from 'mongoose';
 
-const ProductVariantSchema = new Schema({
+export interface IProductVariant extends Document {
+  productId: Types.ObjectId;
+  productColorId: Types.ObjectId;
+  productSizeId: Types.ObjectId;
+  variantImage: string;
+  variantPrice: number;
+  stockQuantity: number;
+  variantStatus: 'active' | 'inactive' | 'discontinued';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const ProductVariantSchema = new Schema<IProductVariant>({
   productId: {
     type: Schema.Types.ObjectId,
     ref: 'Products',
@@ -40,6 +51,12 @@ const ProductVariantSchema = new Schema({
   timestamps: true
 });
 
+const ProductVariant: Model<IProductVariant> = mongoose.model<IProductVariant>('ProductVariants', ProductVariantSchema);
 
+export default ProductVariant;
 
-module.exports = mongoose.model('ProductVariants', ProductVariantSchema);
+// Ensure CommonJS interop
+// @ts-ignore
+module.exports = ProductVariant;
+// @ts-ignore
+module.exports.default = ProductVariant;

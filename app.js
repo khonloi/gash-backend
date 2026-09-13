@@ -47,7 +47,7 @@ const categoriesRoutes = require('./routes/categoryRoutes');
 const ordersRoutes = require('./routes/orderRoutes');
 const orderDetailsRoutes = require('./routes/orderDetailRoutes');
 const favoritesRoutes = require('./routes/favoriteRoutes');
-const productSpecRoutes = require('./routes/specificationRoutes');
+const productSpecRoutes = require('./routes/specificationRoutes').default || require('./routes/specificationRoutes');
 const statisticsRoutes = require('./routes/statisticRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const voucherRoutes = require('./routes/voucherRoutes');
@@ -74,8 +74,8 @@ app.use('/messages', messageRoutes);
 app.use('/feedback', feedbackRoutes);
 
 // ===== New Product and Variant Routes =====
-const ProductRoutes = require('./routes/productRoutes');
-const ProductVariantRoutes = require('./routes/productVariantRoutes');
+const ProductRoutes = require('./routes/productRoutes').default || require('./routes/productRoutes');
+const ProductVariantRoutes = require('./routes/productVariantRoutes').default || require('./routes/productVariantRoutes');
 app.use('/new-products', ProductRoutes);
 app.use('/new-variants', ProductVariantRoutes);
 

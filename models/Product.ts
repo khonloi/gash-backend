@@ -1,7 +1,17 @@
-const mongoose = require("mongoose");
-const Schema = mongoose.Schema;
+import mongoose, { Document, Model, Schema, Types } from 'mongoose';
 
-const ProductSchema = new Schema({
+export interface IProduct extends Document {
+  productName: string;
+  categoryId: Types.ObjectId;
+  productImageIds: Types.ObjectId[];
+  productVariantIds: Types.ObjectId[];
+  description: string;
+  productStatus: 'active' | 'inactive' | 'pending' | 'discontinued';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const ProductSchema = new Schema<IProduct>({
   productName: {
     type: String,
     required: [true, 'Product name is required'],
@@ -43,6 +53,12 @@ const ProductSchema = new Schema({
   timestamps: true
 });
 
+const Product: Model<IProduct> = mongoose.model<IProduct>("Products", ProductSchema);
 
+export default Product;
 
-module.exports = mongoose.model("Products", ProductSchema);
+// Ensure CommonJS interop
+// @ts-ignore
+module.exports = Product;
+// @ts-ignore
+module.exports.default = Product;
