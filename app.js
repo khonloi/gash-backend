@@ -41,8 +41,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ===== Routes =====
-const authRoutes = require('./routes/authRoutes');
-const accountsRoutes = require('./routes/accountRoutes');
+const authRoutes = require('./routes/authRoutes').default || require('./routes/authRoutes');
+const accountsRoutes = require('./routes/accountRoutes').default || require('./routes/accountRoutes');
 const categoriesRoutes = require('./routes/categoryRoutes');
 const ordersRoutes = require('./routes/orderRoutes');
 const orderDetailsRoutes = require('./routes/orderDetailRoutes');
